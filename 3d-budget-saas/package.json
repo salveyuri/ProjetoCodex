@@ -1,0 +1,27 @@
+{
+  "name": "3d-budget-saas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SaaS para calculo de orcamentos de impressao 3D.",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "shared"
+  ],
+  "scripts": {
+    "dev:frontend": "npm --workspace @3d-budget/frontend run dev",
+    "dev:backend": "npm --workspace @3d-budget/backend run dev",
+    "build": "npm --workspace @3d-budget/shared run build && npm --workspace @3d-budget/backend run build && npm --workspace @3d-budget/frontend run build",
+    "lint": "npm --workspace @3d-budget/shared run lint && npm --workspace @3d-budget/backend run lint && npm --workspace @3d-budget/frontend run lint"
+  },
+  "overrides": {
+    "next": {
+      ".": "^16.2.6",
+      "postcss": "^8.5.10"
+    },
+    "postcss": "^8.5.10"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  }
+}

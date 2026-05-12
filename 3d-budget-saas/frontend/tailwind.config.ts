@@ -5,35 +5,35 @@ const config = {
   theme: {
     extend: {
       colors: {
-        background: "#080A0F",
-        foreground: "#E6EDF7",
-        surface: "#121722",
-        "surface-muted": "#1A2030",
-        border: "#273044",
-        muted: "#8A96AA",
+        background: "#09090B",
+        foreground: "#F4F4F5",
+        surface: "#18181B",
+        "surface-muted": "#27272A",
+        border: "#3F3F46",
+        muted: "#A1A1AA",
         primary: {
-          DEFAULT: "#00D4FF",
-          foreground: "#001018",
+          DEFAULT: "#818CF8",
+          foreground: "#111827",
         },
         secondary: {
-          DEFAULT: "#9EFF7A",
-          foreground: "#061300",
+          DEFAULT: "#34D399",
+          foreground: "#052E1A",
         },
         accent: {
-          DEFAULT: "#FFB86B",
-          foreground: "#1B0D00",
+          DEFAULT: "#FBBF24",
+          foreground: "#1C1603",
         },
         danger: {
-          DEFAULT: "#FF5C7A",
-          foreground: "#210008",
+          DEFAULT: "#FB7185",
+          foreground: "#2B0710",
         },
       },
       boxShadow: {
-        panel: "0 18px 60px rgba(0, 0, 0, 0.32)",
+        panel: "0 18px 60px rgba(0, 0, 0, 0.28)",
       },
       backgroundImage: {
         circuit:
-          "linear-gradient(rgba(0, 212, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(158, 255, 122, 0.06) 1px, transparent 1px)",
+          "linear-gradient(rgba(129, 140, 248, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(52, 211, 153, 0.05) 1px, transparent 1px)",
       },
     },
   },
@@ -41,4 +41,3 @@ const config = {
 } satisfies Config;
 
 export default config;
-

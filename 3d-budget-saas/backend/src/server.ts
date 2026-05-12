@@ -1,5 +1,5 @@
 import { env } from "./config/env";
-import { prisma } from "./config/database";
+import { prisma } from "./config/prisma";
 import { app } from "./app";
 
 const server = app.listen(env.port, () => {
@@ -17,4 +17,3 @@ const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-

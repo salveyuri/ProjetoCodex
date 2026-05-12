@@ -2,7 +2,14 @@
 
 import type { HealthCheckResponse } from "@3d-budget/shared";
 import axios from "axios";
-import { Activity, Database, RefreshCw, Server } from "lucide-react";
+import {
+  Activity,
+  Calculator,
+  Database,
+  HardDrive,
+  RefreshCw,
+  Server,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
@@ -49,6 +56,16 @@ export const SystemStatusCard = () => {
     health?.database.latencyMs === null || health?.database.latencyMs === undefined
       ? "sem sinal"
       : `${health.database.latencyMs} ms`;
+  const calculationLatency =
+    health?.calculation.latencyMs === null ||
+    health?.calculation.latencyMs === undefined
+      ? "sem sinal"
+      : `${health.calculation.latencyMs} ms`;
+  const filesystemLatency =
+    health?.filesystem.latencyMs === null ||
+    health?.filesystem.latencyMs === undefined
+      ? "sem sinal"
+      : `${health.filesystem.latencyMs} ms`;
 
   return (
     <Card className="min-h-80 p-5">
@@ -98,6 +115,24 @@ export const SystemStatusCard = () => {
           </div>
         </div>
         <div className="flex min-h-14 items-center gap-3 rounded-lg border border-border bg-surface-muted px-3">
+          <Calculator className="h-5 w-5 text-accent" />
+          <div>
+            <p className="text-sm text-muted">Query financeira</p>
+            <p className="text-sm font-medium text-foreground">
+              {calculationLatency}
+            </p>
+          </div>
+        </div>
+        <div className="flex min-h-14 items-center gap-3 rounded-lg border border-border bg-surface-muted px-3">
+          <HardDrive className="h-5 w-5 text-warning" />
+          <div>
+            <p className="text-sm text-muted">Filesystem PDF</p>
+            <p className="text-sm font-medium text-foreground">
+              {filesystemLatency}
+            </p>
+          </div>
+        </div>
+        <div className="flex min-h-14 items-center gap-3 rounded-lg border border-border bg-surface-muted px-3">
           <Activity className="h-5 w-5 text-accent" />
           <div>
             <p className="text-sm text-muted">Uptime</p>
@@ -110,4 +145,3 @@ export const SystemStatusCard = () => {
     </Card>
   );
 };
-

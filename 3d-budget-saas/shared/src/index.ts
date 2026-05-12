@@ -1,6 +1,8 @@
 export type OverallServiceStatus = "ok" | "degraded";
 
 export type DatabaseHealthStatus = "connected" | "unavailable";
+export type CalculationHealthStatus = "ok" | "degraded";
+export type FilesystemHealthStatus = "writable" | "unavailable";
 
 export interface HealthCheckResponse {
   status: OverallServiceStatus;
@@ -14,6 +16,17 @@ export interface HealthCheckResponse {
     latencyMs: number | null;
     error?: string;
   };
+  calculation: {
+    status: CalculationHealthStatus;
+    latencyMs: number | null;
+    error?: string;
+  };
+  filesystem: {
+    status: FilesystemHealthStatus;
+    latencyMs: number | null;
+    path: string;
+    error?: string;
+  };
 }
 
 export interface ApiErrorResponse {
@@ -24,3 +37,474 @@ export interface ApiErrorResponse {
   timestamp: string;
 }
 
+export type UserRole = "ADMIN" | "USER";
+
+export type SubscriptionPlan = "FREE" | "PRO" | "ENTERPRISE";
+
+export type SubscriptionStatus = "ACTIVE" | "CANCELED" | "PAST_DUE";
+
+export interface PlanEntitlements {
+  customFormulas: boolean;
+  pdfExport: boolean;
+}
+
+export interface UsageMetric {
+  used: number;
+  limit: number | null;
+}
+
+export interface BillingUsage {
+  machines: UsageMetric;
+  materials: UsageMetric;
+  monthlyQuotes: UsageMetric & {
+    periodStart: string;
+  };
+}
+
+export interface AuthCompany {
+  id: string;
+  name: string;
+  defaultCurrency: string;
+  planType: SubscriptionPlan;
+  subscriptionStatus: SubscriptionStatus;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+  company: AuthCompany | null;
+}
+
+export interface AuthResponse {
+  token: string;
+  tokenType: "Bearer";
+  expiresIn: string;
+  user: AuthUser;
+}
+
+export interface RegisterRequest {
+  fullName: string;
+  email: string;
+  companyName: string;
+  password: string;
+  defaultCurrency?: string;
+  taxRate?: number;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface BillingOverview {
+  companyId: string;
+  companyName: string;
+  planType: SubscriptionPlan;
+  subscriptionStatus: SubscriptionStatus;
+  stripeCustomerId: string | null;
+  usage: BillingUsage;
+  entitlements: PlanEntitlements;
+}
+
+export interface BillingPlanChangeRequest {
+  planType: Exclude<SubscriptionPlan, "FREE">;
+}
+
+export interface BillingPlanChangeResponse {
+  billing: BillingOverview;
+  payment: {
+    provider: "mock";
+    status: "succeeded";
+    transactionId: string;
+    planType: SubscriptionPlan;
+  };
+}
+
+export interface AdminUserResource {
+  id: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  company: {
+    id: string;
+    name: string;
+    planType: SubscriptionPlan;
+    subscriptionStatus: SubscriptionStatus;
+    stripeCustomerId: string | null;
+    usage: BillingUsage;
+  } | null;
+}
+
+export interface AdminUserUpdatePayload {
+  role?: UserRole;
+  isActive?: boolean;
+  planType?: SubscriptionPlan;
+  subscriptionStatus?: SubscriptionStatus;
+}
+
+export interface AnalyticsRange {
+  from: string;
+  to: string;
+}
+
+export interface MonthlyFinancialPoint {
+  month: string;
+  revenue: number;
+  profit: number;
+  baseCost: number;
+}
+
+export interface MaterialMixPoint {
+  materialType: MaterialType;
+  label: string;
+  weightGrams: number;
+  revenue: number;
+  percentage: number;
+}
+
+export interface MachineOccupancyPoint {
+  machineId: string;
+  machineName: string;
+  printedHours: number;
+  capacityHours: number;
+  occupancyPercent: number;
+}
+
+export interface AnalyticsSummary {
+  quotesCount: number;
+  approvedQuotesCount: number;
+  revenue: number;
+  profit: number;
+  averageTicket: number;
+  totalPrintHours: number;
+  totalWeightGrams: number;
+}
+
+export interface UserAnalyticsOverview {
+  range: AnalyticsRange;
+  generatedAt: string;
+  cacheTtlSeconds: number;
+  summary: AnalyticsSummary;
+  monthlyFinancials: MonthlyFinancialPoint[];
+  materialMix: MaterialMixPoint[];
+  machineOccupancy: MachineOccupancyPoint[];
+}
+
+export interface SystemErrorResource {
+  id: string;
+  message: string;
+  code: string | null;
+  severity: string;
+  method: string | null;
+  path: string | null;
+  statusCode: number | null;
+  createdAt: string;
+}
+
+export interface AuditLogResource {
+  id: string;
+  action: string;
+  entityType: string;
+  actorEmail: string | null;
+  targetUserId: string | null;
+  companyId: string | null;
+  metadata: unknown;
+  createdAt: string;
+}
+
+export interface AdminPlanDistributionPoint {
+  planType: SubscriptionPlan;
+  companies: number;
+  activeCompanies: number;
+  mrr: number;
+}
+
+export interface AdminAnalyticsOverview {
+  generatedAt: string;
+  cacheTtlSeconds: number;
+  summary: {
+    totalUsers: number;
+    activeUsers: number;
+    activeCompanies: number;
+    estimatedMrr: number;
+    quotesThisMonth: number;
+    revenueThisMonth: number;
+    systemErrors24h: number;
+  };
+  planDistribution: AdminPlanDistributionPoint[];
+  recentErrors: SystemErrorResource[];
+  recentAuditLogs: AuditLogResource[];
+}
+
+export type MachineType = "FDM" | "RESIN";
+
+export type MaterialType = "FILAMENT" | "RESIN" | "POWDER" | "OTHER";
+
+export interface MachineResource {
+  id: string;
+  name: string;
+  type: MachineType;
+  printVolumeXmm: number;
+  printVolumeYmm: number;
+  printVolumeZmm: number;
+  depreciationCostPerHour: number;
+  powerConsumptionKw: number;
+  powerConsumptionWatts: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MachinePayload {
+  name: string;
+  type: MachineType | "SLA";
+  printVolumeXmm?: number;
+  printVolumeYmm?: number;
+  printVolumeZmm?: number;
+  depreciationCostPerHour: number;
+  powerConsumptionWatts: number;
+}
+
+export interface MaterialResource {
+  id: string;
+  brand: string;
+  type: MaterialType;
+  color: string;
+  totalWeightGrams: number;
+  purchasePrice: number;
+  costPerGram: number;
+  density: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaterialPayload {
+  brand: string;
+  type: MaterialType;
+  color: string;
+  totalWeightGrams: number;
+  purchasePrice: number;
+  density?: number;
+}
+
+export type CustomVariableType = "INTEGER" | "FLOAT" | "PERCENTAGE";
+
+export interface CustomVariableDefinition {
+  value: number;
+  type: CustomVariableType;
+}
+
+export type CustomVariableMap = Record<string, CustomVariableDefinition>;
+
+export interface ProductionSettings {
+  desiredMarginPercent: number;
+  technicalHourRate: number;
+  energyCostPerKwh: number;
+  cardFeePercent: number;
+  administrativeFeePercent: number;
+  customVariables: CustomVariableMap;
+}
+
+export interface CalculationRequest {
+  weightGrams: number;
+  printTimeHours: number;
+  machineId: string;
+  materialId: string;
+  formulaId?: string;
+}
+
+export interface CalculationMoneyBreakdown {
+  materialCost: number;
+  energyCost: number;
+  depreciationCost: number;
+  laborCost: number;
+  baseCost: number;
+  marginAmount: number;
+  subtotalWithMargin: number;
+  cardFeeAmount: number;
+  administrativeFeeAmount: number;
+  feesTotal: number;
+  finalPrice: number;
+}
+
+export interface CalculationResourceSummary {
+  machine: {
+    id: string;
+    name: string;
+    type: MachineType;
+    powerConsumptionWatts: number;
+    depreciationCostPerHour: number;
+  };
+  material: {
+    id: string;
+    brand: string;
+    type: MaterialType;
+    color: string;
+    costPerGram: number;
+  };
+}
+
+export interface CalculationAppliedRates {
+  desiredMarginPercent: number;
+  technicalHourRate: number;
+  energyCostPerKwh: number;
+  cardFeePercent: number;
+  administrativeFeePercent: number;
+  customVariables: CustomVariableMap;
+}
+
+export interface CalculationResponse {
+  input: CalculationRequest;
+  resources: CalculationResourceSummary;
+  rates: CalculationAppliedRates;
+  breakdown: CalculationMoneyBreakdown;
+  formula: {
+    id: string | null;
+    name: string;
+    expression: string;
+    source: "DATABASE" | "SYSTEM_FALLBACK";
+  };
+  variables: Record<string, number>;
+  precision: {
+    internal: "Prisma.Decimal";
+    currencyDecimalPlaces: 2;
+  };
+}
+
+export type QuoteStatus = "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
+
+export interface QuoteItemPayload extends CalculationRequest {
+  modelName?: string;
+}
+
+export interface QuotePayload {
+  customerName: string;
+  validUntil?: string;
+  status?: QuoteStatus;
+  formulaId?: string;
+  items: QuoteItemPayload[];
+}
+
+export interface QuoteUpdatePayload {
+  customerName?: string;
+  validUntil?: string;
+  status?: QuoteStatus;
+  formulaId?: string;
+  items?: QuoteItemPayload[];
+}
+
+export interface FormulaResource {
+  id: string;
+  code: string;
+  name: string;
+  expression: string;
+  isActive: boolean;
+  isDefault: boolean;
+  isSystem: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FormulaPayload {
+  name: string;
+  expression: string;
+  isActive?: boolean;
+  isDefault?: boolean;
+}
+
+export interface FormulaVariable {
+  name: string;
+  label: string;
+  description: string;
+  source: "SYSTEM" | "CUSTOM";
+  type: CustomVariableType;
+  value?: number;
+  runtimeValue?: number;
+}
+
+export interface FormulaPreviewRequest {
+  expression: string;
+  variables?: Record<string, number>;
+}
+
+export interface FormulaPreviewResponse {
+  expression: string;
+  result: number;
+  variables: Record<string, number>;
+}
+
+export interface QuoteItemSnapshot {
+  id: string;
+  modelName: string;
+  machineId: string;
+  materialId: string;
+  machineName: string;
+  materialName: string;
+  materialColor: string;
+  estimatedPrintTimeHours: number;
+  materialWeightGrams: number;
+  calculatedCost: number;
+  materialCost: number;
+  energyCost: number;
+  depreciationCost: number;
+  laborCost: number;
+  baseCost: number;
+  marginAmount: number;
+  feesTotal: number;
+  finalPrice: number;
+  appliedMarginPercent: number;
+  appliedTechnicalHourRate: number;
+  appliedEnergyCostPerKwh: number;
+  appliedCardFeePercent: number;
+  appliedAdministrativeFeePercent: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QuoteResource {
+  id: string;
+  formulaId: string | null;
+  formulaName: string | null;
+  customerName: string;
+  status: QuoteStatus;
+  totalAmount: number;
+  totalPrintHours: number;
+  totalWeightGrams: number;
+  validUntil: string;
+  createdAt: string;
+  updatedAt: string;
+  items: QuoteItemSnapshot[];
+}
+
+export interface QuoteListItem {
+  id: string;
+  formulaId: string | null;
+  formulaName: string | null;
+  customerName: string;
+  status: QuoteStatus;
+  totalAmount: number;
+  totalPrintHours: number;
+  totalWeightGrams: number;
+  validUntil: string;
+  createdAt: string;
+  updatedAt: string;
+  itemsCount: number;
+  firstItem: {
+    modelName: string;
+    machineName: string;
+    materialName: string;
+  } | null;
+}
+
+export interface PaginatedQuoteList {
+  data: QuoteListItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}

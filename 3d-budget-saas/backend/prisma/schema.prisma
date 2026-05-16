@@ -137,6 +137,9 @@ model PricingSettings {
   companyId            String   @unique @map("company_id") @db.Uuid
   desiredMarginPercent Decimal  @default(30) @map("desired_margin_percent") @db.Decimal(7, 4)
   technicalHourRate    Decimal  @default(0) @map("technical_hour_rate") @db.Decimal(10, 2)
+  paintingHourRate     Decimal  @default(0) @map("painting_hour_rate") @db.Decimal(10, 2)
+  finishingHourRate    Decimal  @default(0) @map("finishing_hour_rate") @db.Decimal(10, 2)
+  errorRate            Decimal  @default(0) @map("error_rate") @db.Decimal(10, 4)
   extraFees            Json     @default("{}") @map("extra_fees")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
@@ -177,6 +180,8 @@ model Quote {
   totalAmount      Decimal     @default(0) @map("total_amount") @db.Decimal(12, 2)
   totalPrintHours  Decimal     @default(0) @map("total_print_hours") @db.Decimal(10, 2)
   totalWeightGrams Decimal     @default(0) @map("total_weight_grams") @db.Decimal(10, 2)
+  paintingHours    Decimal     @default(0) @map("painting_hours") @db.Decimal(10, 2)
+  finishingHours   Decimal     @default(0) @map("finishing_hours") @db.Decimal(10, 2)
   validUntil       DateTime    @map("valid_until")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")

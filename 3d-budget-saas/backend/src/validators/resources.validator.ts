@@ -58,6 +58,9 @@ export const materialUpdateSchema = materialSchema.partial().refine(
 export const productionSettingsSchema = z.object({
   desiredMarginPercent: z.coerce.number().finite().min(0).max(100),
   technicalHourRate: z.coerce.number().finite().min(0),
+  paintingHourRate: z.coerce.number().finite().min(0).default(0),
+  finishingHourRate: z.coerce.number().finite().min(0).default(0),
+  errorRate: z.coerce.number().finite().min(0).default(0),
   energyCostPerKwh: z.coerce.number().finite().min(0),
   cardFeePercent: z.coerce.number().finite().min(0).max(100),
   administrativeFeePercent: z.coerce.number().finite().min(0).max(100),

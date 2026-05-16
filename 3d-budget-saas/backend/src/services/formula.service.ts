@@ -124,6 +124,36 @@ const systemVariableMeta: Record<
     type: "FLOAT",
     previewValue: 0.12,
   },
+  horas_pintura: {
+    description: "Horas totais estimadas para pintura do orcamento.",
+    type: "FLOAT",
+    previewValue: 1,
+  },
+  valor_hora_pintura: {
+    description: "Valor monetario cobrado por hora de pintura.",
+    type: "FLOAT",
+    previewValue: 35,
+  },
+  horas_acabamento: {
+    description: "Horas totais estimadas para acabamento ou lixamento.",
+    type: "FLOAT",
+    previewValue: 1.5,
+  },
+  valor_hora_acabamento: {
+    description: "Valor monetario cobrado por hora de acabamento.",
+    type: "FLOAT",
+    previewValue: 30,
+  },
+  quantidade_mesas: {
+    description: "Quantidade de mesas/itens dentro do orcamento.",
+    type: "INTEGER",
+    previewValue: 2,
+  },
+  taxa_erro: {
+    description: "Taxa ou multiplicador de erro configurado pela empresa.",
+    type: "FLOAT",
+    previewValue: 1.2,
+  },
 };
 
 const toRuntimeValue = (value: number, type: CustomVariableType): number =>

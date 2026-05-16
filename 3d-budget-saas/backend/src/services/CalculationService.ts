@@ -55,6 +55,15 @@ const ROUNDING_MODE = Prisma.Decimal.ROUND_HALF_UP;
 
 const decimal = (value: DecimalValue): Prisma.Decimal => new Prisma.Decimal(value);
 
+const toSafeNumber = (value: unknown): number => {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const percentToRate = (percent: number): Prisma.Decimal =>
   decimal(percent).div(100);
 
@@ -94,15 +103,20 @@ const buildFormulaVariables = ({
   const marginRate = settings.desiredMarginPercent / 100;
   const cardFeeRate = settings.cardFeePercent / 100;
   const administrativeFeeRate = settings.administrativeFeePercent / 100;
+  const weightGrams = toSafeNumber(request.weightGrams);
+  const printTimeHours = toSafeNumber(request.printTimeHours);
+  const paintingHours = toSafeNumber(request.paintingHours);
+  const finishingHours = toSafeNumber(request.finishingHours);
+  const quoteItemsCount = toSafeNumber(request.quoteItemsCount ?? 1);
   const runtimeCustomVariables = customVariablesToRuntimeValues(
     settings.customVariables,
   );
 
   return {
-    peso: request.weightGrams,
-    peso_gramas: request.weightGrams,
-    tempo: request.printTimeHours,
-    tempo_horas: request.printTimeHours,
+    peso: weightGrams,
+    peso_gramas: weightGrams,
+    tempo: printTimeHours,
+    tempo_horas: printTimeHours,
     material_cost: Number(materialCost.toString()),
     energia_total: Number(energyCost.toString()),
     depreciacao_maquina: Number(depreciationCost.toString()),
@@ -116,6 +130,12 @@ const buildFormulaVariables = ({
     taxa_administrativa: administrativeFeeRate,
     taxas_percentuais: cardFeeRate + administrativeFeeRate,
     consumo_kw: Number(machine.powerConsumptionKw.toString()),
+    horas_pintura: paintingHours,
+    valor_hora_pintura: settings.paintingHourRate,
+    horas_acabamento: finishingHours,
+    valor_hora_acabamento: settings.finishingHourRate,
+    quantidade_mesas: quoteItemsCount,
+    taxa_erro: settings.errorRate,
     ...runtimeCustomVariables,
   };
 };
@@ -127,8 +147,16 @@ export const calculateQuoteBreakdown = ({
   settings,
   formula,
 }: CalculationFormulaInput): CalculationResponse => {
-  const weightGrams = decimal(request.weightGrams);
-  const printTimeHours = decimal(request.printTimeHours);
+  const safeRequest: CalculationRequest = {
+    ...request,
+    weightGrams: toSafeNumber(request.weightGrams),
+    printTimeHours: toSafeNumber(request.printTimeHours),
+    paintingHours: toSafeNumber(request.paintingHours),
+    finishingHours: toSafeNumber(request.finishingHours),
+    quoteItemsCount: toSafeNumber(request.quoteItemsCount ?? 1),
+  };
+  const weightGrams = decimal(safeRequest.weightGrams);
+  const printTimeHours = decimal(safeRequest.printTimeHours);
   const desiredMarginRate = percentToRate(settings.desiredMarginPercent);
   const cardFeeRate = percentToRate(settings.cardFeePercent);
   const administrativeFeeRate = percentToRate(
@@ -144,7 +172,7 @@ export const calculateQuoteBreakdown = ({
   const laborCost = decimal(settings.technicalHourRate).mul(printTimeHours);
   const baseCost = materialCost.add(energyCost).add(depreciationCost).add(laborCost);
   const formulaVariables = buildFormulaVariables({
-    request,
+    request: safeRequest,
     machine,
     settings,
     materialCost,
@@ -193,7 +221,7 @@ export const calculateQuoteBreakdown = ({
   const powerConsumptionWatts = machine.powerConsumptionKw.mul(1000);
 
   return {
-    input: request,
+    input: safeRequest,
     resources: {
       machine: {
         id: machine.id,
@@ -215,6 +243,9 @@ export const calculateQuoteBreakdown = ({
     rates: {
       desiredMarginPercent: settings.desiredMarginPercent,
       technicalHourRate: settings.technicalHourRate,
+      paintingHourRate: settings.paintingHourRate,
+      finishingHourRate: settings.finishingHourRate,
+      errorRate: settings.errorRate,
       energyCostPerKwh: settings.energyCostPerKwh,
       cardFeePercent: settings.cardFeePercent,
       administrativeFeePercent: settings.administrativeFeePercent,

@@ -17,6 +17,9 @@ interface ExtraFees {
 const DEFAULT_SETTINGS: ProductionSettings = {
   desiredMarginPercent: 30,
   technicalHourRate: 0,
+  paintingHourRate: 0,
+  finishingHourRate: 0,
+  errorRate: 0,
   energyCostPerKwh: 0,
   cardFeePercent: 0,
   administrativeFeePercent: 0,
@@ -119,6 +122,9 @@ const toExtraFeesJson = ({
 const toSettingsResponse = (settings: {
   desiredMarginPercent: Prisma.Decimal;
   technicalHourRate: Prisma.Decimal;
+  paintingHourRate: Prisma.Decimal;
+  finishingHourRate: Prisma.Decimal;
+  errorRate: Prisma.Decimal;
   extraFees: Prisma.JsonValue;
 }): ProductionSettings => {
   const extraFees = parseExtraFees(settings.extraFees);
@@ -126,6 +132,9 @@ const toSettingsResponse = (settings: {
   return {
     desiredMarginPercent: toNumber(settings.desiredMarginPercent),
     technicalHourRate: toNumber(settings.technicalHourRate),
+    paintingHourRate: toNumber(settings.paintingHourRate),
+    finishingHourRate: toNumber(settings.finishingHourRate),
+    errorRate: toNumber(settings.errorRate),
     energyCostPerKwh:
       extraFees.energyCostPerKwh ?? DEFAULT_SETTINGS.energyCostPerKwh,
     cardFeePercent:
@@ -146,6 +155,9 @@ export class SettingsService {
         companyId,
         desiredMarginPercent: DEFAULT_SETTINGS.desiredMarginPercent,
         technicalHourRate: DEFAULT_SETTINGS.technicalHourRate,
+        paintingHourRate: DEFAULT_SETTINGS.paintingHourRate,
+        finishingHourRate: DEFAULT_SETTINGS.finishingHourRate,
+        errorRate: DEFAULT_SETTINGS.errorRate,
         extraFees: toExtraFeesJson(DEFAULT_SETTINGS),
       },
     });
@@ -164,6 +176,9 @@ export class SettingsService {
       update: {
         desiredMarginPercent: input.desiredMarginPercent,
         technicalHourRate: input.technicalHourRate,
+        paintingHourRate: input.paintingHourRate,
+        finishingHourRate: input.finishingHourRate,
+        errorRate: input.errorRate,
         extraFees: toExtraFeesJson({
           energyCostPerKwh: input.energyCostPerKwh,
           cardFeePercent: input.cardFeePercent,
@@ -175,6 +190,9 @@ export class SettingsService {
         companyId,
         desiredMarginPercent: input.desiredMarginPercent,
         technicalHourRate: input.technicalHourRate,
+        paintingHourRate: input.paintingHourRate,
+        finishingHourRate: input.finishingHourRate,
+        errorRate: input.errorRate,
         extraFees: toExtraFeesJson({
           energyCostPerKwh: input.energyCostPerKwh,
           cardFeePercent: input.cardFeePercent,

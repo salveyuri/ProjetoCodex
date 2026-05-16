@@ -82,11 +82,22 @@ const emptyMaterialForm: MaterialFormState = {
 const defaultSettings: ProductionSettings = {
   desiredMarginPercent: 30,
   technicalHourRate: 0,
+  paintingHourRate: 0,
+  finishingHourRate: 0,
+  errorRate: 0,
   energyCostPerKwh: 0,
   cardFeePercent: 0,
   administrativeFeePercent: 0,
   customVariables: {},
 };
+
+const normalizeSettings = (
+  settings: Partial<ProductionSettings> | null | undefined,
+): ProductionSettings => ({
+  ...defaultSettings,
+  ...settings,
+  customVariables: settings?.customVariables ?? {},
+});
 
 const tabs = [
   { id: "machines" as const, label: "Impressoras", icon: Cpu },
@@ -168,7 +179,7 @@ export default function SettingsPage() {
 
       setMachines(machinesResponse.data);
       setMaterials(materialsResponse.data);
-      setSettings(settingsResponse.data);
+      setSettings(normalizeSettings(settingsResponse.data));
     } catch (error) {
       showToast({ tone: "danger", message: getApiErrorMessage(error) });
     } finally {
@@ -320,7 +331,7 @@ export default function SettingsPage() {
 
     try {
       const { data } = await api.put<ProductionSettings>("/settings", settings);
-      setSettings(data);
+      setSettings(normalizeSettings(data));
       showToast({ tone: "success", message: "Custos fixos salvos." });
     } catch (error) {
       showToast({ tone: "danger", message: getApiErrorMessage(error) });
@@ -526,6 +537,26 @@ export default function SettingsPage() {
                 }
               />
               <NumberField
+                label="Hora pintura (R$)"
+                value={settings.paintingHourRate}
+                onChange={(value) =>
+                  setSettings((current) => ({
+                    ...current,
+                    paintingHourRate: value,
+                  }))
+                }
+              />
+              <NumberField
+                label="Hora acabamento (R$)"
+                value={settings.finishingHourRate}
+                onChange={(value) =>
+                  setSettings((current) => ({
+                    ...current,
+                    finishingHourRate: value,
+                  }))
+                }
+              />
+              <NumberField
                 label="Energia kWh (R$)"
                 value={settings.energyCostPerKwh}
                 onChange={(value) =>
@@ -542,6 +573,16 @@ export default function SettingsPage() {
                   setSettings((current) => ({
                     ...current,
                     cardFeePercent: value,
+                  }))
+                }
+              />
+              <NumberField
+                label="Taxa de erro"
+                value={settings.errorRate}
+                onChange={(value) =>
+                  setSettings((current) => ({
+                    ...current,
+                    errorRate: value,
                   }))
                 }
               />
@@ -899,20 +940,27 @@ const NumberField = ({
   label: string;
   value: number;
   onChange: (value: number) => void;
-}) => (
-  <label className="grid gap-2 text-sm font-medium">
-    {label}
-    <input
-      type="number"
-      step="0.01"
-      min="0"
-      value={value}
-      onChange={(event) => onChange(Number(event.target.value))}
-      required
-      className="h-11 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
-    />
-  </label>
-);
+}) => {
+  const safeValue = Number.isFinite(value) ? value : 0;
+
+  return (
+    <label className="grid gap-2 text-sm font-medium">
+      {label}
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        value={safeValue}
+        onChange={(event) => {
+          const nextValue = Number(event.target.value);
+          onChange(Number.isFinite(nextValue) ? nextValue : 0);
+        }}
+        required
+        className="h-11 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+      />
+    </label>
+  );
+};
 
 const SubmitButton = ({ isSaving }: { isSaving: boolean }) => (
   <button

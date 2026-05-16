@@ -302,6 +302,9 @@ export type CustomVariableMap = Record<string, CustomVariableDefinition>;
 export interface ProductionSettings {
   desiredMarginPercent: number;
   technicalHourRate: number;
+  paintingHourRate: number;
+  finishingHourRate: number;
+  errorRate: number;
   energyCostPerKwh: number;
   cardFeePercent: number;
   administrativeFeePercent: number;
@@ -314,6 +317,9 @@ export interface CalculationRequest {
   machineId: string;
   materialId: string;
   formulaId?: string;
+  paintingHours?: number;
+  finishingHours?: number;
+  quoteItemsCount?: number;
 }
 
 export interface CalculationMoneyBreakdown {
@@ -350,6 +356,9 @@ export interface CalculationResourceSummary {
 export interface CalculationAppliedRates {
   desiredMarginPercent: number;
   technicalHourRate: number;
+  paintingHourRate: number;
+  finishingHourRate: number;
+  errorRate: number;
   energyCostPerKwh: number;
   cardFeePercent: number;
   administrativeFeePercent: number;
@@ -385,6 +394,8 @@ export interface QuotePayload {
   validUntil?: string;
   status?: QuoteStatus;
   formulaId?: string;
+  paintingHours?: number;
+  finishingHours?: number;
   items: QuoteItemPayload[];
 }
 
@@ -393,6 +404,8 @@ export interface QuoteUpdatePayload {
   validUntil?: string;
   status?: QuoteStatus;
   formulaId?: string;
+  paintingHours?: number;
+  finishingHours?: number;
   items?: QuoteItemPayload[];
 }
 
@@ -473,6 +486,8 @@ export interface QuoteResource {
   totalAmount: number;
   totalPrintHours: number;
   totalWeightGrams: number;
+  paintingHours: number;
+  finishingHours: number;
   validUntil: string;
   createdAt: string;
   updatedAt: string;
@@ -488,6 +503,8 @@ export interface QuoteListItem {
   totalAmount: number;
   totalPrintHours: number;
   totalWeightGrams: number;
+  paintingHours: number;
+  finishingHours: number;
   validUntil: string;
   createdAt: string;
   updatedAt: string;

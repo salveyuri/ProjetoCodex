@@ -29,6 +29,12 @@ export const INTERNAL_VARIABLES = [
   "taxa_administrativa",
   "taxas_percentuais",
   "consumo_kw",
+  "horas_pintura",
+  "valor_hora_pintura",
+  "horas_acabamento",
+  "valor_hora_acabamento",
+  "quantidade_mesas",
+  "taxa_erro",
 ] as const;
 
 const DANGEROUS_IDENTIFIERS = [

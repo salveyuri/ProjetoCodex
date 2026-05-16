@@ -16,12 +16,14 @@
 - Sistema de Mesas de Impressao implementado: um `Quote` agora contem multiplos `PrintItem`, cada um com maquina, material, peso, tempo e snapshot proprio.
 - Sistema de Formulas Dinamicas implementado: cada empresa pode listar, criar, editar, excluir e marcar formulas de preco como padrao; orcamentos e previews podem selecionar a formula aplicada.
 - Bloco 8.1 implementado: tela de formulas redesenhada com layout profissional, variaveis tipadas, preview em tempo real e conversao automatica de percentuais customizados.
+- Bloco 8.3 implementado: formulas agora recebem variaveis operacionais de pintura/acabamento, quantidade de mesas e taxa de erro configuravel por empresa.
 - Bloco 9 implementado: dashboard principal com KPIs reais, atividade recente, sidebar colapsavel, filtros avancados de orcamentos, toasts, skeletons e empty states padronizados.
 - Bloco 10 implementado: exportacao profissional de orcamentos em PDF com dados da empresa, cliente, mesas de impressao e resumo financeiro.
 - Polimento pos-Bloco 10 aplicado: telas de formulas, novo orcamento e calculadora foram ajustadas para evitar sobreposicoes; o editor de formulas agora abre somente em modo criar/editar.
 - Bloco 11 implementado: camada de planos, limites de uso, RBAC administrativo, billing do usuario e admin de usuarios.
 - Correcao RBAC/Admin aplicada: a tela `/admin/users` agora atualiza a sessao em `/api/auth/me` e deixa a API decidir o acesso, evitando bloqueio por role antiga em `localStorage`.
 - Bloco 12 implementado: Analytics, Performance, Observabilidade e Auditoria com graficos, exports CSV/JSON, cache, logs estruturados e painel global Admin.
+- Correcao de fluxo em orcamentos aplicada: novas mesas iniciam vazias, selects usam placeholders neutros e o preview acumulado ignora mesas incompletas sem quebrar o total.
 
 ## Decisoes de Arquitetura
 
@@ -51,6 +53,7 @@
 - Middlewares de plano consultam a role atual do usuario no banco antes de aplicar bypass ADMIN, evitando que um JWT emitido antes da promocao continue impondo limites do plano Free.
 - O gateway de pagamento foi isolado em `PaymentService` mock para receber Stripe futuramente sem espalhar detalhes de SDK pelos controllers.
 - O Bloco 12 usa snapshots financeiros de `PrintItem` como fonte de verdade para analytics; relatorios nao recalculam orcamentos antigos e preservam historico mesmo apos mudanca de material, maquina ou formula.
+- O formulario de orcamento separa estado parcial de estado persistivel: mesas incompletas podem existir na UI, mas somente mesas completas entram no preview e todas as mesas precisam estar completas para salvar o `Quote`.
 - Analytics usa `node-cache` em memoria com TTL de 5 minutos para metricas da empresa e 10 minutos para metricas globais do Admin; mutacoes de orcamento, maquinas, materiais, erros e auditoria invalidam caches relevantes.
 - Logs HTTP foram migrados de `morgan` para `pino`/`pino-http`, com redaction de credenciais e niveis configuraveis por `LOG_LEVEL`.
 - O middleware global de erro persiste falhas em `SystemError` e tambem emite logs estruturados; rotas 404 nao sao persistidas para evitar ruido operacional.
@@ -72,7 +75,7 @@
 - `Material`: filamentos, resinas ou outros insumos vinculados a uma empresa, com marca, tipo, cor, peso, custo por grama e densidade.
 - `PricingSettings`: configuracao 1:1 da empresa para margem desejada, valor da hora tecnica e taxas extras em JSON.
 - `Formula`: expressoes e coeficientes versionaveis por empresa, identificados por `code` unico dentro da empresa, com `isDefault` para selecionar a formula ativa padrao.
-- `Quote`: orcamentos da empresa, com cliente, status (`DRAFT`, `SENT`, `APPROVED`, `REJECTED`), formula aplicada, valor total, peso total, horas totais e validade.
+- `Quote`: orcamentos da empresa, com cliente, status (`DRAFT`, `SENT`, `APPROVED`, `REJECTED`), formula aplicada, valor total, peso total, horas totais, horas de pintura/acabamento e validade.
 - `PrintItem`: mesas/itens de impressao de um orcamento, cada um ligado obrigatoriamente a uma `Machine` e um `Material`, com snapshots de custos calculados.
 - `SystemConfig`: configuracoes tecnicas/plataforma mantidas da fase inicial.
 - `AuditLog`: trilha de auditoria para acoes sensiveis, com ator, alvo, empresa, entidade, before/after e metadata.
@@ -87,7 +90,7 @@
 - Cada `PrintItem` referencia uma `Machine` e um `Material`; isso permite calcular custo combinando tempo estimado, peso do material, depreciacao da maquina, energia, margem e formulas ativas.
 - Exclusao de `Quote` remove seus `PrintItem` em cascata; exclusao de `Machine` ou `Material` usados em itens e restrita para preservar historico de orcamentos.
 - `PrintItem` salva snapshots de `materialCost`, `energyCost`, `depreciationCost`, `laborCost`, `baseCost`, `marginAmount`, `feesTotal`, `finalPrice` e taxas aplicadas.
-- `Quote.totalAmount`, `Quote.totalPrintHours` e `Quote.totalWeightGrams` sao derivados da soma das mesas vinculadas ao orcamento.
+- `Quote.totalAmount`, `Quote.totalPrintHours` e `Quote.totalWeightGrams` sao derivados da soma das mesas vinculadas ao orcamento; `Quote.paintingHours` e `Quote.finishingHours` pertencem ao projeto/orcamento como dados de pos-processamento.
 - `Company.planType`, `Company.subscriptionStatus`, `maxMachinesAllowed`, `maxMaterialsAllowed`, `maxQuotesPerMonth` e `currentQuotesCount` compoem o estado de assinatura usado pelos middlewares de plano.
 - `AuditLog` e `SystemError` usam `companyId`, `actorUserId` e `targetUserId` como referencias logicas para consultas e filtros, sem bloquear exclusoes futuras por FK nesta fase MVP.
 - Indices de relatorio foram adicionados em `Quote.createdAt`, `Quote.companyId/status/createdAt`, `PrintItem.machineId/createdAt` e `PrintItem.materialId/createdAt`.
@@ -164,6 +167,14 @@
 - `SystemErrorService` registra erros capturados pelo middleware global na tabela `system_errors`, incluindo stack trace, rota, metodo, status, usuario e empresa quando disponiveis.
 - O frontend possui Error Boundary em `frontend/src/app/error.tsx` para falhas inesperadas de UI.
 
+## New Schema Fields
+
+- `PricingSettings.paintingHourRate` -> coluna `painting_hour_rate`.
+- `PricingSettings.finishingHourRate` -> coluna `finishing_hour_rate`.
+- `PricingSettings.errorRate` -> coluna `error_rate`.
+- `Quote.paintingHours` -> coluna `painting_hours`.
+- `Quote.finishingHours` -> coluna `finishing_hours`.
+
 ## Audit System
 
 - `AuditLogService` centraliza a escrita de auditoria e captura o email do ator quando `actorUserId` esta disponivel.
@@ -207,6 +218,9 @@
 - A API tambem retorna `purchasePrice` calculado como `totalWeightGrams * costPerGram` para preencher a interface de edicao.
 - `PricingSettings.desiredMarginPercent` guarda a margem de lucro padrao.
 - `PricingSettings.technicalHourRate` guarda o valor da hora tecnica.
+- `PricingSettings.paintingHourRate` guarda o token global `valor_hora_pintura`.
+- `PricingSettings.finishingHourRate` guarda o token global `valor_hora_acabamento`.
+- `PricingSettings.errorRate` guarda o token global `taxa_erro` como numero bruto configuravel pela empresa.
 - `PricingSettings.extraFees` guarda `energyCostPerKwh`, `cardFeePercent`, `administrativeFeePercent` e `customVariables`.
 - `customVariables` usa objetos `{ value, type }`, onde `type` pode ser `INTEGER`, `FLOAT` ou `PERCENTAGE`.
 
@@ -222,9 +236,9 @@
 ## Calculation Engine
 
 - `backend/src/services/CalculationService.ts` concentra o motor de calculo.
-- `calculateQuoteBreakdown` e uma funcao pura: recebe peso, tempo, maquina, material e settings ja resolvidos e retorna o breakdown sem acessar HTTP ou banco.
+- `calculateQuoteBreakdown` e uma funcao pura: recebe peso, tempo, contexto de orcamento, maquina, material e settings ja resolvidos e retorna o breakdown sem acessar HTTP ou banco.
 - `CalculationService.calculate` e a camada de aplicacao: valida multi-tenancy, busca `Machine`, `Material` e `PricingSettings`, e chama a funcao pura.
-- `POST /api/calculate` aceita payload camelCase (`weightGrams`, `printTimeHours`, `machineId`, `materialId`, `formulaId`) e tambem aliases snake_case (`peso_gramas`, `tempo_horas`, `machine_id`, `material_id`, `formula_id`).
+- `POST /api/calculate` aceita payload camelCase (`weightGrams`, `printTimeHours`, `paintingHours`, `finishingHours`, `quoteItemsCount`, `machineId`, `materialId`, `formulaId`) e tambem aliases snake_case/portugues (`peso_gramas`, `tempo_horas`, `horas_pintura`, `horas_acabamento`, `quantidade_mesas`, `machine_id`, `material_id`, `formula_id`).
 - O preco final agora e produzido por uma formula salva no banco; se nenhuma formula estiver disponivel ou a formula falhar em runtime, o motor usa a formula padrao do sistema.
 
 ## The Math
@@ -233,6 +247,7 @@
 - `energyCost = machine.powerConsumptionKw * printTimeHours * settings.energyCostPerKwh`.
 - `depreciationCost = machine.depreciationCostPerHour * printTimeHours`.
 - `laborCost = settings.technicalHourRate * printTimeHours`.
+- Variaveis de pos-processamento nao alteram o `baseCost` padrao automaticamente; elas entram no parser para uso explicito em formulas como `(horas_pintura * valor_hora_pintura)`.
 - `baseCost = materialCost + energyCost + depreciationCost + laborCost`.
 - `marginAmount = baseCost * (desiredMarginPercent / 100)`.
 - `subtotalWithMargin = baseCost + marginAmount`.
@@ -256,14 +271,51 @@
 - `backend/src/services/formula-engine.ts` encapsula normalizacao, validacao e execucao das expressoes.
 - `FormulaService` garante uma formula padrao por empresa de forma lazy, usando `system_default` quando necessario.
 - `CalculationService` busca `Machine`, `Material`, `PricingSettings` e `Formula` pelo mesmo `companyId` autenticado antes de calcular.
-- O motor continua calculando `materialCost`, `energyCost`, `depreciationCost`, `laborCost` e `baseCost` de forma explicita; a formula dinamica decide apenas o preco final.
-- `QuoteService` passa `formulaId` para cada mesa, salva `Quote.formulaId` e persiste snapshots por `PrintItem`, evitando que alteracoes futuras na formula mudem orcamentos antigos.
+- O motor continua calculando `materialCost`, `energyCost`, `depreciationCost`, `laborCost` e `baseCost` de forma explicita; variaveis globais/dinamicas complementares sao injetadas antes do parser e a formula dinamica decide apenas o preco final.
+- `QuoteService` passa `formulaId`, `paintingHours`, `finishingHours` e `quoteItemsCount` para cada mesa, salva `Quote.formulaId` e persiste snapshots por `PrintItem`, evitando que alteracoes futuras na formula mudem orcamentos antigos.
 
 ## Variable Registry
 
-- Variaveis internas disponiveis para formulas: `peso`, `peso_gramas`, `tempo`, `tempo_horas`, `material_cost`, `energia_total`, `depreciacao_maquina`, `mao_obra`, `custo_base`, `margem_lucro`, `margem_lucro_percentual`, `valor_hora_tecnica`, `custo_kwh`, `taxa_cartao`, `taxa_administrativa`, `taxas_percentuais` e `consumo_kw`.
+- Variaveis internas disponiveis para formulas: `peso`, `peso_gramas`, `tempo`, `tempo_horas`, `material_cost`, `energia_total`, `depreciacao_maquina`, `mao_obra`, `custo_base`, `margem_lucro`, `margem_lucro_percentual`, `valor_hora_tecnica`, `custo_kwh`, `taxa_cartao`, `taxa_administrativa`, `taxas_percentuais`, `consumo_kw`, `horas_pintura`, `valor_hora_pintura`, `horas_acabamento`, `valor_hora_acabamento`, `quantidade_mesas` e `taxa_erro`.
 - Variaveis customizadas ficam em `PricingSettings.extraFees.customVariables` como mapa JSON `{ nome: { value, type } }`.
 - O endpoint `GET /api/formulas/variables` retorna o registro combinado de variaveis internas e customizadas para o editor do frontend, incluindo `type`, `value` e `runtimeValue`.
+
+## Formula Tokens Update
+
+| Token | Origem | Tipo | Observacao |
+| --- | --- | --- | --- |
+| `horas_pintura` | `Quote.paintingHours` | Float | Horas estimadas para pintura no orcamento. |
+| `valor_hora_pintura` | `PricingSettings.paintingHourRate` | Float | Valor por hora de pintura da empresa. |
+| `horas_acabamento` | `Quote.finishingHours` | Float | Horas estimadas para acabamento/lixamento no orcamento. |
+| `valor_hora_acabamento` | `PricingSettings.finishingHourRate` | Float | Valor por hora de acabamento da empresa. |
+| `quantidade_mesas` | `items.length` / `PrintItem[]` | Integer | Contagem dinamica de mesas no orcamento. |
+| `taxa_erro` | `PricingSettings.errorRate` | Float | Numero bruto configurado pela empresa para uso livre na formula. |
+
+## UI Registry
+
+- `/dashboard/settings`: a aba `Custos Fixos` exibe os campos `Hora pintura`, `Hora acabamento` e `Taxa de erro`.
+- `/dashboard/quotes/new` e `/dashboard/quotes/[id]`: o formulario exibe o card `Pos-processamento` abaixo das mesas para capturar `Horas pintura` e `Horas acabamento`.
+- `/dashboard/quotes/new`: novas mesas iniciam com nome, maquina, material, peso e tempo em branco; maquina/material mostram placeholders ate o usuario selecionar recursos.
+- `/dashboard/quotes/new` e `/dashboard/quotes/[id]`: o resumo acumulado soma apenas previews validos e trata mesas incompletas como valor zero durante a edicao.
+- `/dashboard/settings/formulas`: a lista de variaveis disponiveis passa a listar os seis novos tokens do Bloco 8.3 quando o usuario cria ou edita uma formula.
+
+## UI State Fix
+
+- `QuoteForm` nao preenche mais valores arbitrarios como `Modelo 3D`, `120 g`, `4 h` ou a primeira maquina/material disponivel para uma nova mesa.
+- Inputs numericos de nova mesa e pos-processamento iniciam como string vazia na UI; `numberFromInput` interpreta vazio como `0` apenas para soma e preview.
+- O botao de salvar permanece desabilitado ate todas as mesas terem nome, maquina, material, peso e tempo validos.
+
+## Calculation Fallback
+
+- `CalculationService` normaliza `undefined`, `null`, string vazia e valores nao finitos para `0` antes de criar `Prisma.Decimal` e antes de injetar variaveis no parser.
+- `POST /api/calculate` passou a aceitar `weightGrams/peso_gramas` e `printTimeHours/tempo_horas` ausentes ou zero para suportar previews parciais, mantendo `machineId` e `materialId` obrigatorios.
+- `horas_pintura`, `horas_acabamento` e `quantidade_mesas` tambem recebem fallback seguro para preservar compatibilidade com as variaveis operacionais do Bloco 8.3.
+
+## Bug Resolution Log
+
+- Erro corrigido: React alertava que um input estava mudando de uncontrolled para controlled em `frontend/src/app/dashboard/settings/page.tsx`.
+- Causa raiz: campos novos de `ProductionSettings` podiam chegar `undefined` em respostas antigas/intermediarias, fazendo o `NumberField` receber `value={undefined}` e depois um numero.
+- Solucao: `normalizeSettings()` mescla qualquer payload de settings com `defaultSettings`, e o `NumberField` usa `safeValue = 0` quando recebe valor nao finito.
 
 ## Type System
 
@@ -313,8 +365,8 @@
 
 ## Persistence Logic
 
-- `POST /api/quotes` recebe cliente, validade e item tecnico, chama `CalculationService.calculate` no backend e so entao persiste `Quote` e `PrintItem`.
-- `PATCH /api/quotes/:id` altera status/dados comerciais; quando o item tecnico muda, recalcula e atualiza snapshots.
+- `POST /api/quotes` recebe cliente, validade, horas de pos-processamento e itens tecnicos, chama `CalculationService.calculate` no backend para cada mesa e so entao persiste `Quote` e `PrintItem`.
+- `PATCH /api/quotes/:id` altera status/dados comerciais; quando item tecnico, formula ou horas de pos-processamento mudam, recalcula e atualiza snapshots.
 - `GET /api/quotes` lista por `companyId`, com paginacao e filtro opcional por status.
 - `GET /api/quotes/:id` retorna detalhes completos com snapshots e nomes atuais de maquina/material.
 - `DELETE /api/quotes/:id` remove fisicamente o orcamento; `PrintItem` e removido em cascata.
@@ -324,15 +376,16 @@
 
 - `/dashboard`: visao geral protegida com KPIs de orcamentos do mes, taxa de conversao, lucro estimado por snapshots e impressora mais usada.
 - `/dashboard/quotes`: listagem protegida com cliente, item, data, valor total, status e acoes.
-- `/dashboard/quotes/new`: formulario protegido de criacao com live preview via `/api/calculate`.
+- `/dashboard/quotes/new`: formulario protegido de criacao com live preview via `/api/calculate` e card de pos-processamento para pintura/acabamento.
 - `/dashboard/quotes/[id]`: formulario protegido de edicao reutilizando os mesmos campos da criacao.
+- `/dashboard/settings`: aba de custos fixos possui `valor_hora_pintura`, `valor_hora_acabamento` e `taxa_erro`.
 - `/dashboard/settings/formulas`: biblioteca protegida de formulas; editor, tags de variaveis clicaveis e preview aparecem sob demanda em modo criar/editar.
 - `/dashboard/settings/formulas`: mantem CRUD de variaveis customizadas tipadas em card separado de custos fixos.
 - `/dashboard/analytics`: BI financeiro protegido com faturamento vs lucro, mix de materiais, ocupacao de maquinas e export CSV/JSON.
 - `/dashboard/billing`: plano atual, barras de uso, upgrade mock para Pro, cancelamento e placeholder de faturas.
 - `/admin/analytics`: painel ADMIN com usuarios ativos, MRR estimado, planos, erros recentes e auditoria recente.
 - `/admin/users`: tabela administrativa para alterar role, plano, status da assinatura e ativacao da conta.
-- `QuoteForm` agora possui seletor de formula; o live preview envia `formulaId` para `/api/calculate` em cada mesa.
+- `QuoteForm` agora possui seletor de formula e pos-processamento; o live preview envia `formulaId`, `horas_pintura`, `horas_acabamento` e `quantidade_mesas` para `/api/calculate` em cada mesa.
 - Sidebar agora aponta para `/dashboard`, `/dashboard/quotes`, `/dashboard/quotes/new`, `/dashboard/calculator`, `/dashboard/analytics`, `/dashboard/settings/formulas`, `/dashboard/billing`, `/dashboard/settings`, `/admin/analytics` e `/admin/users` quando o usuario e `ADMIN`.
 
 ## UI Components Library
@@ -575,6 +628,11 @@
 - Navegador local validou `/dashboard/analytics` renderizando estado vazio com filtros e export desabilitado quando nao ha dados no periodo.
 - Navegador local validou `/admin/analytics` renderizando KPIs globais, MRR estimado e sem aviso de acesso restrito para usuario ADMIN.
 - `npm audit --omit=dev` apos o Bloco 12 ainda aponta alertas ja conhecidos: `expr-eval` sem fix automatico e `next -> postcss` com sugestao de downgrade quebrante para Next 9.
+- Bloco 8.3 validado com `npm --workspace @3d-budget/shared run build`, `npm --workspace @3d-budget/backend run lint`, `npm --workspace @3d-budget/backend run build`, `npm --workspace @3d-budget/frontend run lint`, `npm --workspace @3d-budget/backend exec -- prisma validate` e `npm --workspace @3d-budget/frontend run build`.
+- `npx prisma migrate deploy` aplicou `20260515153000_operational_formula_variables` no PostgreSQL local.
+- Smoke test direto do `CalculationService` confirmou injecao de `horas_pintura`, `valor_hora_pintura`, `horas_acabamento`, `valor_hora_acabamento`, `quantidade_mesas` e `taxa_erro` no parser.
+- Correcao de estado inicial/preview validada com `npm --workspace @3d-budget/frontend run lint`, `npm --workspace @3d-budget/backend run lint`, `npm --workspace @3d-budget/shared run build`, `npm --workspace @3d-budget/frontend run build` e `npm --workspace @3d-budget/backend exec -- tsc -p tsconfig.json --noEmit`.
+- Smoke test do validador de calculo confirmou que `POST /api/calculate` normaliza `weightGrams` e `printTimeHours` omitidos para `0` quando maquina/material validos sao informados.
 
 ## Mapa de Dependencias
 
@@ -604,6 +662,7 @@
   - `FormulaService` para validar, versionar e selecionar formulas por empresa.
   - `SettingsService.customVariablesToRuntimeValues` para converter variaveis customizadas tipadas antes do parser.
   - `PrintItem[]` como fonte granular para agregacao de totais em `Quote`.
+- `Quote.paintingHours` e `Quote.finishingHours` alimentam variaveis de pos-processamento; `PricingSettings.paintingHourRate`, `finishingHourRate` e `errorRate` alimentam variaveis globais de formula.
 - `shared` nao depende de frontend, backend ou banco; ele deve permanecer livre de runtime especifico.
 - `Machine`, `Material` e `PricingSettings` pertencem a `Company`; `CalculationService` consome esses dados pelo mesmo `companyId` autenticado.
 - `Company` tambem e a fonte de verdade de assinatura: `planType`, `subscriptionStatus`, limites e `currentQuotesCount` alimentam backend e frontend de Billing.
@@ -697,6 +756,14 @@
 - CRIADO: paginas `/dashboard/analytics` e `/admin/analytics` com graficos, skeletons e empty states.
 - CRIADO: `frontend/src/app/error.tsx` como Error Boundary global.
 - ATUALIZADO: `Sidebar` e `SystemStatusCard` com rotas e checks do Bloco 12.
+- CRIADO: migration `20260515153000_operational_formula_variables` com campos globais em `PricingSettings` e horas de pos-processamento em `Quote`.
+- ATUALIZADO: `CalculationService`, `formula-engine` e `FormulaService` para expor tokens `horas_pintura`, `valor_hora_pintura`, `horas_acabamento`, `valor_hora_acabamento`, `quantidade_mesas` e `taxa_erro`.
+- ATUALIZADO: validadores de calculo/orcamento/settings para aceitar os novos campos e aliases em portugues.
+- ATUALIZADO: `/dashboard/settings` com inputs globais de pintura, acabamento e taxa de erro.
+- ATUALIZADO: `QuoteForm` com card de pos-processamento e envio dos novos valores para previews e persistencia.
+- CORRIGIDO: `QuoteForm` para iniciar novas mesas sem valores arbitrarios, manter placeholders em selects e somar previews validos mesmo com mesas incompletas.
+- CORRIGIDO: `CalculationService` e `calculation.validator` para tratar peso, tempo e horas operacionais ausentes/vazios como `0` em previews parciais.
+- CORRIGIDO: `frontend/src/app/dashboard/settings/page.tsx` para normalizar `ProductionSettings` e evitar warning uncontrolled/controlled nos inputs numericos.
 - ATUALIZADO: este `CONTEXT.md` com estado, decisoes, pendencias e mapa de dependencias.
 
 ## Proximo Passo

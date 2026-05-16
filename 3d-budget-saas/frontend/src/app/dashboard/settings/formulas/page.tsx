@@ -53,6 +53,9 @@ interface ToastState {
 const defaultSettings: ProductionSettings = {
   desiredMarginPercent: 30,
   technicalHourRate: 0,
+  paintingHourRate: 0,
+  finishingHourRate: 0,
+  errorRate: 0,
   energyCostPerKwh: 0,
   cardFeePercent: 0,
   administrativeFeePercent: 0,

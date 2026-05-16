@@ -1,20 +1,27 @@
 import { z } from "zod";
 
-const positiveNumber = z.coerce.number().finite().positive();
+const nonNegativeNumber = z.coerce.number().finite().min(0);
+const positiveInteger = z.coerce.number().int().positive();
 const uuid = z.string().trim().uuid();
 
 export const calculationSchema = z
   .object({
-    weightGrams: positiveNumber.optional(),
-    peso_gramas: positiveNumber.optional(),
-    printTimeHours: positiveNumber.optional(),
-    tempo_horas: positiveNumber.optional(),
+    weightGrams: nonNegativeNumber.optional(),
+    peso_gramas: nonNegativeNumber.optional(),
+    printTimeHours: nonNegativeNumber.optional(),
+    tempo_horas: nonNegativeNumber.optional(),
     machineId: uuid.optional(),
     machine_id: uuid.optional(),
     materialId: uuid.optional(),
     material_id: uuid.optional(),
     formulaId: uuid.optional(),
     formula_id: uuid.optional(),
+    paintingHours: nonNegativeNumber.optional(),
+    horas_pintura: nonNegativeNumber.optional(),
+    finishingHours: nonNegativeNumber.optional(),
+    horas_acabamento: nonNegativeNumber.optional(),
+    quoteItemsCount: positiveInteger.optional(),
+    quantidade_mesas: positiveInteger.optional(),
   })
   .transform((value, context) => {
     const weightGrams = value.weightGrams ?? value.peso_gramas;
@@ -22,22 +29,11 @@ export const calculationSchema = z
     const machineId = value.machineId ?? value.machine_id;
     const materialId = value.materialId ?? value.material_id;
     const formulaId = value.formulaId ?? value.formula_id;
-
-    if (weightGrams === undefined) {
-      context.addIssue({
-        code: "custom",
-        path: ["weightGrams"],
-        message: "Weight in grams is required.",
-      });
-    }
-
-    if (printTimeHours === undefined) {
-      context.addIssue({
-        code: "custom",
-        path: ["printTimeHours"],
-        message: "Print time in hours is required.",
-      });
-    }
+    const paintingHours = value.paintingHours ?? value.horas_pintura ?? 0;
+    const finishingHours =
+      value.finishingHours ?? value.horas_acabamento ?? 0;
+    const quoteItemsCount =
+      value.quoteItemsCount ?? value.quantidade_mesas ?? 1;
 
     if (machineId === undefined) {
       context.addIssue({
@@ -61,6 +57,9 @@ export const calculationSchema = z
       machineId: machineId ?? "",
       materialId: materialId ?? "",
       formulaId,
+      paintingHours,
+      finishingHours,
+      quoteItemsCount,
     };
   });
 

@@ -9,6 +9,7 @@ export const quoteStatusSchema = z.enum([
 
 const uuid = z.string().trim().uuid();
 const positiveNumber = z.coerce.number().finite().positive();
+const nonNegativeNumber = z.coerce.number().finite().min(0);
 
 const quoteItemSchema = z.object({
   modelName: z.string().trim().min(2).max(120).default("Modelo 3D"),
@@ -32,6 +33,10 @@ export const quoteCreateSchema = z
     validUntil: z.coerce.date().default(defaultValidUntil),
     status: quoteStatusSchema.default("DRAFT"),
     formulaId: uuid.optional(),
+    paintingHours: nonNegativeNumber.optional(),
+    horas_pintura: nonNegativeNumber.optional(),
+    finishingHours: nonNegativeNumber.optional(),
+    horas_acabamento: nonNegativeNumber.optional(),
     item: quoteItemSchema.optional(),
     items: quoteItemsSchema.optional(),
     printItems: quoteItemsSchema.optional(),
@@ -57,6 +62,8 @@ export const quoteCreateSchema = z
       validUntil: value.validUntil,
       status: value.status,
       formulaId: value.formulaId,
+      paintingHours: value.paintingHours ?? value.horas_pintura ?? 0,
+      finishingHours: value.finishingHours ?? value.horas_acabamento ?? 0,
       items: items ?? [],
     };
   });
@@ -67,6 +74,10 @@ export const quoteUpdateSchema = z
     validUntil: z.coerce.date().optional(),
     status: quoteStatusSchema.optional(),
     formulaId: uuid.optional(),
+    paintingHours: nonNegativeNumber.optional(),
+    horas_pintura: nonNegativeNumber.optional(),
+    finishingHours: nonNegativeNumber.optional(),
+    horas_acabamento: nonNegativeNumber.optional(),
     item: quoteItemSchema.optional(),
     items: quoteItemsSchema.optional(),
     printItems: quoteItemsSchema.optional(),
@@ -80,6 +91,8 @@ export const quoteUpdateSchema = z
     validUntil: value.validUntil,
     status: value.status,
     formulaId: value.formulaId,
+    paintingHours: value.paintingHours ?? value.horas_pintura,
+    finishingHours: value.finishingHours ?? value.horas_acabamento,
     items:
       value.items ??
       value.printItems ??

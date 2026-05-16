@@ -83,6 +83,16 @@ const toQuoteItemInput = (
   printTimeHours: toNumber(item.estimatedPrintTimeHours),
 });
 
+const buildQuoteCalculationContext = (
+  paintingHours: number,
+  finishingHours: number,
+  quoteItemsCount: number,
+) => ({
+  paintingHours,
+  finishingHours,
+  quoteItemsCount,
+});
+
 const toQuoteItemSnapshot = (
   item: QuoteWithItems["printItems"][number],
 ): QuoteItemSnapshot => ({
@@ -124,6 +134,8 @@ const toQuoteResource = (quote: QuoteWithItems): QuoteResource => ({
   totalAmount: toNumber(quote.totalAmount),
   totalPrintHours: toNumber(quote.totalPrintHours),
   totalWeightGrams: toNumber(quote.totalWeightGrams),
+  paintingHours: toNumber(quote.paintingHours),
+  finishingHours: toNumber(quote.finishingHours),
   validUntil: quote.validUntil.toISOString(),
   createdAt: quote.createdAt.toISOString(),
   updatedAt: quote.updatedAt.toISOString(),
@@ -142,6 +154,8 @@ const toQuoteListItem = (quote: QuoteListRow): QuoteListItem => {
     totalAmount: toNumber(quote.totalAmount),
     totalPrintHours: toNumber(quote.totalPrintHours),
     totalWeightGrams: toNumber(quote.totalWeightGrams),
+    paintingHours: toNumber(quote.paintingHours),
+    finishingHours: toNumber(quote.finishingHours),
     validUntil: quote.validUntil.toISOString(),
     createdAt: quote.createdAt.toISOString(),
     updatedAt: quote.updatedAt.toISOString(),
@@ -223,10 +237,16 @@ export class QuoteService {
     companyId: string,
     input: QuoteCreateInput,
   ): Promise<QuoteResource> {
+    const quoteCalculationContext = buildQuoteCalculationContext(
+      input.paintingHours,
+      input.finishingHours,
+      input.items.length,
+    );
     const calculations = await Promise.all(
       input.items.map((item) =>
         calculationService.calculate(companyId, {
           ...item,
+          ...quoteCalculationContext,
           formulaId: input.formulaId,
         }),
       ),
@@ -243,6 +263,8 @@ export class QuoteService {
           totalAmount: aggregation.totalAmount,
           totalPrintHours: aggregation.totalPrintHours,
           totalWeightGrams: aggregation.totalWeightGrams,
+          paintingHours: input.paintingHours,
+          finishingHours: input.finishingHours,
           validUntil: input.validUntil,
           printItems: {
             create: input.items.map((item, index) =>
@@ -269,14 +291,27 @@ export class QuoteService {
   ): Promise<QuoteResource> {
     const existing = await this.findOwnedQuote(companyId, quoteId);
     const shouldRecalculate =
-      input.items !== undefined || input.formulaId !== undefined;
+      input.items !== undefined ||
+      input.formulaId !== undefined ||
+      input.paintingHours !== undefined ||
+      input.finishingHours !== undefined;
     const itemsForCalculation = input.items ?? existing.printItems.map(toQuoteItemInput);
     const formulaId = input.formulaId ?? existing.formulaId ?? undefined;
+    const paintingHours =
+      input.paintingHours ?? toNumber(existing.paintingHours);
+    const finishingHours =
+      input.finishingHours ?? toNumber(existing.finishingHours);
+    const quoteCalculationContext = buildQuoteCalculationContext(
+      paintingHours,
+      finishingHours,
+      itemsForCalculation.length,
+    );
     const calculations = shouldRecalculate
       ? await Promise.all(
           itemsForCalculation.map((item) =>
             calculationService.calculate(companyId, {
               ...item,
+              ...quoteCalculationContext,
               formulaId,
             }),
           ),
@@ -296,6 +331,8 @@ export class QuoteService {
           totalAmount: aggregation?.totalAmount,
           totalPrintHours: aggregation?.totalPrintHours,
           totalWeightGrams: aggregation?.totalWeightGrams,
+          paintingHours: input.paintingHours,
+          finishingHours: input.finishingHours,
         },
       });
 

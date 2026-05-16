@@ -19,11 +19,13 @@ import {
   Download,
   Info,
   Layers3,
+  Paintbrush,
   Plus,
   Save,
   Scale,
   Send,
   Trash2,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -67,6 +69,8 @@ interface QuoteFormState {
   validUntil: string;
   status: QuoteStatus;
   formulaId: string;
+  paintingHours: string;
+  finishingHours: string;
   tables: PrintTableFormState[];
 }
 
@@ -88,11 +92,11 @@ const createPrintTable = (
   overrides: Partial<PrintTableFormState> = {},
 ): PrintTableFormState => ({
   localId: createLocalId(),
-  modelName: "Modelo 3D",
+  modelName: "",
   machineId: "",
   materialId: "",
-  weightGrams: "120",
-  printTimeHours: "4",
+  weightGrams: "",
+  printTimeHours: "",
   ...overrides,
 });
 
@@ -101,10 +105,26 @@ const createEmptyForm = (): QuoteFormState => ({
   validUntil: nextWeek(),
   status: "DRAFT",
   formulaId: "",
+  paintingHours: "",
+  finishingHours: "",
   tables: [createPrintTable()],
 });
 
-const numberFromInput = (value: string): number => Number(value.replace(",", "."));
+const numberFromInput = (value: string | null | undefined): number => {
+  if (value === null || value === undefined || value.trim() === "") {
+    return 0;
+  }
+
+  const parsed = Number(value.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const isPrintTableReadyForPreview = (table: PrintTableFormState): boolean =>
+  Boolean(table.machineId) &&
+  Boolean(table.materialId) &&
+  table.modelName.trim().length >= 2 &&
+  numberFromInput(table.weightGrams) > 0 &&
+  numberFromInput(table.printTimeHours) > 0;
 
 const getApiErrorMessage = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
@@ -127,6 +147,8 @@ const toFormState = (quote: QuoteResource): QuoteFormState => ({
   validUntil: toDateInputValue(quote.validUntil),
   status: quote.status,
   formulaId: quote.formulaId ?? "",
+  paintingHours: String(quote.paintingHours),
+  finishingHours: String(quote.finishingHours),
   tables:
     quote.items.length > 0
       ? quote.items.map((item) =>
@@ -160,22 +182,26 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
-  const validTables = useMemo(
-    () =>
-      form.tables.length > 0 &&
-      form.tables.every(
-        (table) =>
-          Boolean(table.machineId) &&
-          Boolean(table.materialId) &&
-          table.modelName.trim().length >= 2 &&
-          numberFromInput(table.weightGrams) > 0 &&
-          numberFromInput(table.printTimeHours) > 0,
-      ),
+  const previewableTables = useMemo(
+    () => form.tables.filter(isPrintTableReadyForPreview),
     [form.tables],
   );
 
-  const canCalculate = Boolean(token) && validTables;
-  const canSave = canCalculate && form.customerName.trim().length >= 2;
+  const postProcessingIsValid = useMemo(
+    () =>
+      numberFromInput(form.paintingHours) >= 0 &&
+      numberFromInput(form.finishingHours) >= 0,
+    [form.finishingHours, form.paintingHours],
+  );
+
+  const canCalculate =
+    Boolean(token) && postProcessingIsValid && previewableTables.length > 0;
+  const canSave =
+    Boolean(token) &&
+    postProcessingIsValid &&
+    form.tables.length > 0 &&
+    form.tables.every(isPrintTableReadyForPreview) &&
+    form.customerName.trim().length >= 2;
   const missingResources =
     !isLoadingResources && (machines.length === 0 || materials.length === 0);
 
@@ -196,23 +222,22 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
       (total, table) => total + (numberFromInput(table.printTimeHours) || 0),
       0,
     );
-    const previews = form.tables
-      .map((table) => tablePreviews[table.localId])
-      .filter(Boolean);
-    const totalAmount =
-      previews.length === form.tables.length
-        ? previews.reduce(
-            (total, preview) => total + preview.breakdown.finalPrice,
-            0,
-          )
-        : null;
+    const paintingHours = numberFromInput(form.paintingHours) || 0;
+    const finishingHours = numberFromInput(form.finishingHours) || 0;
+    const totalAmount = form.tables.reduce(
+      (total, table) =>
+        total + (tablePreviews[table.localId]?.breakdown.finalPrice ?? 0),
+      0,
+    );
 
     return {
       totalWeightGrams,
       totalPrintHours,
+      paintingHours,
+      finishingHours,
       totalAmount,
     };
-  }, [form.tables, tablePreviews]);
+  }, [form.finishingHours, form.paintingHours, form.tables, tablePreviews]);
 
   const loadInitialData = useCallback(async () => {
     if (!token) {
@@ -235,8 +260,6 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
           api.get<FormulaResource[]>("/formulas"),
           quoteId ? api.get<QuoteResource>(`/quotes/${quoteId}`) : null,
         ]);
-      const firstMachineId = machinesResponse.data[0]?.id ?? "";
-      const firstMaterialId = materialsResponse.data[0]?.id ?? "";
       const defaultFormulaId =
         formulasResponse.data.find((formula) => formula.isDefault)?.id ??
         formulasResponse.data[0]?.id ??
@@ -259,11 +282,6 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
       setForm((current) => ({
         ...current,
         formulaId: current.formulaId || defaultFormulaId,
-        tables: current.tables.map((table) => ({
-          ...table,
-          machineId: table.machineId || firstMachineId,
-          materialId: table.materialId || firstMaterialId,
-        })),
       }));
     } catch (error) {
       const message = getApiErrorMessage(error);
@@ -284,13 +302,16 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
 
     try {
       const results = await Promise.all(
-        form.tables.map(async (table) => {
+        previewableTables.map(async (table) => {
           const payload: CalculationRequest = {
             weightGrams: numberFromInput(table.weightGrams),
             printTimeHours: numberFromInput(table.printTimeHours),
             machineId: table.machineId,
             materialId: table.materialId,
             formulaId: form.formulaId || undefined,
+            paintingHours: numberFromInput(form.paintingHours) || 0,
+            finishingHours: numberFromInput(form.finishingHours) || 0,
+            quoteItemsCount: form.tables.length,
           };
           const response = await api.post<CalculationResponse>(
             "/calculate",
@@ -308,7 +329,14 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
     } finally {
       setIsCalculating(false);
     }
-  }, [canCalculate, form.formulaId, form.tables]);
+  }, [
+    canCalculate,
+    form.finishingHours,
+    form.formulaId,
+    form.paintingHours,
+    form.tables,
+    previewableTables,
+  ]);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -346,13 +374,7 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
   const addTable = () => {
     setForm((current) => ({
       ...current,
-      tables: [
-        ...current.tables,
-        createPrintTable({
-          machineId: machines[0]?.id ?? "",
-          materialId: materials[0]?.id ?? "",
-        }),
-      ],
+      tables: [...current.tables, createPrintTable()],
     }));
   };
 
@@ -381,6 +403,8 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
       validUntil: form.validUntil,
       status: form.status,
       formulaId: form.formulaId || undefined,
+      paintingHours: numberFromInput(form.paintingHours) || 0,
+      finishingHours: numberFromInput(form.finishingHours) || 0,
       items: form.tables.map((table) => ({
         modelName: table.modelName,
         weightGrams: numberFromInput(table.weightGrams),
@@ -584,6 +608,39 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
                 />
               ))}
             </section>
+
+            <Card className="overflow-hidden p-5">
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
+                  <Wrench className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Pos-processamento
+                  </h2>
+                  <p className="mt-1 text-sm text-muted">
+                    Essas horas alimentam os tokens de formula do orcamento inteiro.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-2">
+                <NumberField
+                  icon={Paintbrush}
+                  label="Horas pintura"
+                  suffix="h"
+                  value={form.paintingHours}
+                  onChange={(value) => updateField("paintingHours", value)}
+                />
+                <NumberField
+                  icon={Wrench}
+                  label="Horas acabamento"
+                  suffix="h"
+                  value={form.finishingHours}
+                  onChange={(value) => updateField("finishingHours", value)}
+                />
+              </div>
+            </Card>
           </div>
 
           <aside className="grid content-start gap-4 xl:sticky xl:top-24">
@@ -595,9 +652,7 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
                   isCalculating && "scale-[0.99] opacity-60",
                 )}
               >
-                {aggregate.totalAmount !== null
-                  ? toMoney(aggregate.totalAmount)
-                  : "--"}
+                {toMoney(aggregate.totalAmount)}
               </p>
               <p className="mt-2 text-sm text-muted">
                 {isCalculating ? "Recalculando mesas..." : "Soma dos previews"}
@@ -618,6 +673,16 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
                   label="Tempo total"
                   value={`${aggregate.totalPrintHours.toFixed(2)} h`}
                   icon={Clock3}
+                />
+                <SummaryLine
+                  label="Pintura"
+                  value={`${aggregate.paintingHours.toFixed(2)} h`}
+                  icon={Paintbrush}
+                />
+                <SummaryLine
+                  label="Acabamento"
+                  value={`${aggregate.finishingHours.toFixed(2)} h`}
+                  icon={Wrench}
                 />
                 <SummaryLine
                   label="Valor salvo"
@@ -730,9 +795,11 @@ const PrintTableCard = ({
         onChange={(value) => onChange({ machineId: value })}
         disabled={isLoadingResources || machines.length === 0}
       >
-        {machines.length === 0 ? (
-          <option value="">Cadastre uma maquina primeiro</option>
-        ) : null}
+        <option value="">
+          {machines.length === 0
+            ? "Cadastre uma maquina primeiro"
+            : "Selecione uma maquina..."}
+        </option>
         {machines.map((machine) => (
           <option key={machine.id} value={machine.id}>
             {machine.name} - {machine.type}
@@ -745,9 +812,11 @@ const PrintTableCard = ({
         onChange={(value) => onChange({ materialId: value })}
         disabled={isLoadingResources || materials.length === 0}
       >
-        {materials.length === 0 ? (
-          <option value="">Cadastre um material primeiro</option>
-        ) : null}
+        <option value="">
+          {materials.length === 0
+            ? "Cadastre um material primeiro"
+            : "Selecione um material..."}
+        </option>
         {materials.map((material) => (
           <option key={material.id} value={material.id}>
             {material.brand} - {material.color}

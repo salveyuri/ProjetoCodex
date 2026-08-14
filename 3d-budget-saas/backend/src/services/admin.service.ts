@@ -1,5 +1,5 @@
 import type { AdminUserResource } from "@3d-budget/shared";
-import { SubscriptionPlan, SubscriptionStatus, UserRole } from "@prisma/client";
+import { SubscriptionStatus, UserRole } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
 import type { AdminUserUpdateInput } from "../validators/admin.validator";
@@ -16,9 +16,9 @@ const toAdminUserResource = async (user: {
   company: {
     id: string;
     name: string;
-    planType: SubscriptionPlan;
     subscriptionStatus: SubscriptionStatus;
-    stripeCustomerId: string | null;
+    asaasCustomerId: string | null;
+    plan: { id: string; name: string };
   } | null;
 }): Promise<AdminUserResource> => ({
   id: user.id,
@@ -31,9 +31,10 @@ const toAdminUserResource = async (user: {
     ? {
         id: user.company.id,
         name: user.company.name,
-        planType: user.company.planType,
+        planId: user.company.plan.id,
+        planName: user.company.plan.name,
         subscriptionStatus: user.company.subscriptionStatus,
-        stripeCustomerId: user.company.stripeCustomerId,
+        asaasCustomerId: user.company.asaasCustomerId,
         usage: await billingService.getUsageSnapshot(user.company.id),
       }
     : null,
@@ -44,9 +45,9 @@ const userInclude = {
     select: {
       id: true,
       name: true,
-      planType: true,
       subscriptionStatus: true,
-      stripeCustomerId: true,
+      asaasCustomerId: true,
+      plan: { select: { id: true, name: true } },
     },
   },
 };
@@ -95,10 +96,20 @@ export class AdminService {
 
     if (
       existing.company &&
-      (input.planType !== undefined || input.subscriptionStatus !== undefined)
+      (input.planId !== undefined || input.subscriptionStatus !== undefined)
     ) {
+      if (input.planId !== undefined) {
+        const plan = await prisma.plan.findUnique({
+          where: { id: input.planId },
+        });
+
+        if (!plan) {
+          throw new AppError("Plan not found.", 404, "PLAN_NOT_FOUND");
+        }
+      }
+
       await billingService.updateSubscription(existing.company.id, {
-        planType: input.planType,
+        planId: input.planId,
         subscriptionStatus: input.subscriptionStatus,
       });
     }
@@ -122,13 +133,13 @@ export class AdminService {
       before: {
         role: existing.role,
         isActive: existing.isActive,
-        planType: existing.company?.planType ?? null,
+        planId: existing.company?.plan.id ?? null,
         subscriptionStatus: existing.company?.subscriptionStatus ?? null,
       },
       after: {
         role: updated.role,
         isActive: updated.isActive,
-        planType: updated.company?.planType ?? null,
+        planId: updated.company?.plan.id ?? null,
         subscriptionStatus: updated.company?.subscriptionStatus ?? null,
       },
       metadata: {

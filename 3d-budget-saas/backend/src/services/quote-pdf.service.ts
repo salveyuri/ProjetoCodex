@@ -470,7 +470,8 @@ export class QuotePdfService {
     });
 
     if (!quote) {
-      throw new AppError("Quote not found.", 404, "QUOTE_NOT_FOUND");
+      // "Access denied." on purpose — see Contextos/Conhecimento.md.
+      throw new AppError("Access denied.", 403, "QUOTE_FORBIDDEN");
     }
 
     const doc = new PDFDocument({

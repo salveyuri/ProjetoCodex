@@ -8,16 +8,18 @@ export const quoteStatusSchema = z.enum([
 ]);
 
 const uuid = z.string().trim().uuid();
-const positiveNumber = z.coerce.number().finite().positive();
-const nonNegativeNumber = z.coerce.number().finite().min(0);
+const positiveNumber = z.number().finite().positive();
+const nonNegativeNumber = z.number().finite().min(0);
 
-const quoteItemSchema = z.object({
-  modelName: z.string().trim().min(2).max(120).default("Modelo 3D"),
-  weightGrams: positiveNumber,
-  printTimeHours: positiveNumber,
-  machineId: uuid,
-  materialId: uuid,
-});
+const quoteItemSchema = z
+  .object({
+    modelName: z.string().trim().min(2).max(120).default("Modelo 3D"),
+    weightGrams: positiveNumber,
+    printTimeHours: positiveNumber,
+    machineId: uuid,
+    materialId: uuid,
+  })
+  .strict();
 
 const quoteItemsSchema = z.array(quoteItemSchema).min(1);
 
@@ -42,6 +44,7 @@ export const quoteCreateSchema = z
     printItems: quoteItemsSchema.optional(),
     tables: quoteItemsSchema.optional(),
   })
+  .strict()
   .transform((value, context) => {
     const items =
       value.items ??
@@ -83,6 +86,7 @@ export const quoteUpdateSchema = z
     printItems: quoteItemsSchema.optional(),
     tables: quoteItemsSchema.optional(),
   })
+  .strict()
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required.",
   })
@@ -100,11 +104,13 @@ export const quoteUpdateSchema = z
       (value.item ? [value.item] : undefined),
   }));
 
-export const quoteListQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).default(20),
-  status: quoteStatusSchema.optional(),
-});
+export const quoteListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().positive().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).default(20),
+    status: quoteStatusSchema.optional(),
+  })
+  .strict();
 
 export type QuoteCreateInput = z.infer<typeof quoteCreateSchema>;
 export type QuoteUpdateInput = z.infer<typeof quoteUpdateSchema>;

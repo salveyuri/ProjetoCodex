@@ -3,7 +3,7 @@
 import type {
   AdminUserResource,
   AdminUserUpdatePayload,
-  SubscriptionPlan,
+  PlanResource,
   SubscriptionStatus,
   UserRole,
 } from "@3d-budget/shared";
@@ -22,17 +22,11 @@ import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
 
 const roleOptions: UserRole[] = ["USER", "ADMIN"];
-const planOptions: SubscriptionPlan[] = ["FREE", "PRO", "ENTERPRISE"];
 const statusOptions: SubscriptionStatus[] = ["ACTIVE", "CANCELED", "PAST_DUE"];
-
-const planLabels = {
-  FREE: "Free",
-  PRO: "Pro",
-  ENTERPRISE: "Enterprise",
-} as const;
 
 const statusLabels = {
   ACTIVE: "Ativo",
@@ -40,21 +34,10 @@ const statusLabels = {
   PAST_DUE: "Inadimplente",
 } as const;
 
-const getApiErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return "Nao foi possivel carregar usuarios.";
-};
-
 export default function AdminUsersPage() {
   const { isLoading: isAuthLoading, token, refreshUser } = useAuth();
   const [users, setUsers] = useState<AdminUserResource[]>([]);
+  const [plans, setPlans] = useState<PlanResource[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isAccessDenied, setIsAccessDenied] = useState(false);
@@ -72,13 +55,17 @@ export default function AdminUsersPage() {
     setIsAccessDenied(false);
 
     try {
-      const { data } = await api.get<AdminUserResource[]>("/admin/users");
-      setUsers(data);
+      const [usersResponse, plansResponse] = await Promise.all([
+        api.get<AdminUserResource[]>("/admin/users"),
+        api.get<PlanResource[]>("/admin/plans"),
+      ]);
+      setUsers(usersResponse.data);
+      setPlans(plansResponse.data);
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 403) {
         setIsAccessDenied(true);
       } else {
-        setErrorMessage(getApiErrorMessage(error));
+        setErrorMessage(getApiErrorMessage(error, "Nao foi possivel carregar usuarios."));
       }
     } finally {
       setIsLoading(false);
@@ -115,7 +102,7 @@ export default function AdminUsersPage() {
       );
       setMessage(`Usuario ${data.email} atualizado.`);
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel carregar usuarios."));
     } finally {
       setUpdatingUserId(null);
     }
@@ -154,7 +141,7 @@ export default function AdminUsersPage() {
                   Acesso restrito
                 </h2>
                 <p className="mt-2 text-sm text-muted">
-                  Esta area esta disponivel apenas para usuarios com role ADMIN.
+                  Voce nao tem permissao para acessar esta area.
                 </p>
               </div>
             </div>
@@ -265,17 +252,15 @@ export default function AdminUsersPage() {
                         </td>
                         <td className="px-5 py-4">
                           <SelectControl
-                            value={item.company?.planType ?? "FREE"}
+                            value={item.company?.planId ?? ""}
                             disabled={!item.company || updatingUserId === item.id}
                             onChange={(value) =>
-                              void patchUser(item, {
-                                planType: value as SubscriptionPlan,
-                              })
+                              void patchUser(item, { planId: value })
                             }
                           >
-                            {planOptions.map((plan) => (
-                              <option key={plan} value={plan}>
-                                {planLabels[plan]}
+                            {plans.map((plan) => (
+                              <option key={plan.id} value={plan.id}>
+                                {plan.name}
                               </option>
                             ))}
                           </SelectControl>

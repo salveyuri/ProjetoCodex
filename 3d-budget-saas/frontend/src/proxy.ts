@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const AUTH_COOKIE = "auth_token";
+// httpOnly cookie set by the backend (POST /api/auth/login|register|refresh).
+// Next.js middleware runs server-side, so it can read httpOnly cookies fine
+// — only browser-side `document.cookie` can't see them (that's the point).
+const AUTH_COOKIE = "refresh_token";
 
 export function proxy(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE)?.value;

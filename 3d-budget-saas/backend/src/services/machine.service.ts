@@ -2,7 +2,7 @@ import type { MachineResource } from "@3d-budget/shared";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
-import { cacheService } from "./cache.service";
+import { cacheService, companyAnalyticsCacheKeyPrefix } from "./cache.service";
 import type {
   MachineInput,
   MachineUpdateInput,
@@ -79,6 +79,12 @@ const toMachineUpdateData = (
   return data;
 };
 
+// "Access denied." on purpose: doesn't confirm a company-ownership check
+// is what rejected this — see Contextos/Conhecimento.md.
+const throwMachineForbidden = (): never => {
+  throw new AppError("Access denied.", 403, "MACHINE_FORBIDDEN");
+};
+
 export class MachineService {
   async list(companyId: string): Promise<MachineResource[]> {
     const machines = await prisma.machine.findMany({
@@ -97,7 +103,7 @@ export class MachineService {
       data: toMachineCreateData(companyId, input),
     });
 
-    cacheService.flush();
+    cacheService.delByPrefix(companyAnalyticsCacheKeyPrefix(companyId));
     return toMachineResource(machine);
   }
 
@@ -106,25 +112,39 @@ export class MachineService {
     machineId: string,
     input: MachineUpdateInput,
   ): Promise<MachineResource> {
-    await this.ensureOwnership(companyId, machineId);
+    const [updateResult, machine] = await prisma.$transaction([
+      prisma.machine.updateMany({
+        where: { id: machineId, companyId },
+        data: toMachineUpdateData(input),
+      }),
+      prisma.machine.findFirst({
+        where: { id: machineId, companyId },
+      }),
+    ]);
 
-    const machine = await prisma.machine.update({
-      where: { id: machineId },
-      data: toMachineUpdateData(input),
-    });
+    if (updateResult.count !== 1) {
+      throwMachineForbidden();
+    }
 
-    cacheService.flush();
-    return toMachineResource(machine);
+    if (machine === null) {
+      throwMachineForbidden();
+    }
+
+    cacheService.delByPrefix(companyAnalyticsCacheKeyPrefix(companyId));
+    return toMachineResource(machine as Parameters<typeof toMachineResource>[0]);
   }
 
   async delete(companyId: string, machineId: string): Promise<void> {
-    await this.ensureOwnership(companyId, machineId);
-
     try {
-      await prisma.machine.delete({
-        where: { id: machineId },
+      const result = await prisma.machine.deleteMany({
+        where: { id: machineId, companyId },
       });
-      cacheService.flush();
+
+      if (result.count !== 1) {
+        throwMachineForbidden();
+      }
+
+      cacheService.delByPrefix(companyAnalyticsCacheKeyPrefix(companyId));
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -141,19 +161,6 @@ export class MachineService {
     }
   }
 
-  private async ensureOwnership(
-    companyId: string,
-    machineId: string,
-  ): Promise<void> {
-    const machine = await prisma.machine.findFirst({
-      where: { id: machineId, companyId },
-      select: { id: true },
-    });
-
-    if (!machine) {
-      throw new AppError("Machine not found.", 404, "MACHINE_NOT_FOUND");
-    }
-  }
 }
 
 export const machineService = new MachineService();

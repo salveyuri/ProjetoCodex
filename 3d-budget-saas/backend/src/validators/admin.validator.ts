@@ -1,16 +1,14 @@
 import { z } from "zod";
-import {
-  subscriptionPlanSchema,
-  subscriptionStatusSchema,
-} from "./billing.validator";
+import { subscriptionStatusSchema } from "./billing.validator";
 
 export const adminUserUpdateSchema = z
   .object({
     role: z.enum(["ADMIN", "USER"]).optional(),
-    isActive: z.coerce.boolean().optional(),
-    planType: subscriptionPlanSchema.optional(),
+    isActive: z.boolean().optional(),
+    planId: z.string().trim().uuid().optional(),
     subscriptionStatus: subscriptionStatusSchema.optional(),
   })
+  .strict()
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required.",
   });

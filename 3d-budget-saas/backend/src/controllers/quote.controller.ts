@@ -8,6 +8,7 @@ import { AppError } from "../middlewares/error-handler";
 import { quotePdfService } from "../services/quote-pdf.service";
 import { quoteService } from "../services/quote.service";
 import { getAuthenticatedCompanyId } from "../utils/request-auth";
+import { idParamSchema } from "../validators/common.validator";
 import {
   quoteCreateSchema,
   quoteListQuerySchema,
@@ -42,10 +43,11 @@ export class QuoteController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
-      const quote = await quoteService.show(companyId, request.params.id);
+      const { id } = idParamSchema.parse(request.params);
+      const quote = await quoteService.show(companyId, id);
       response.status(200).json(quote);
     } catch (error) {
-      next(error);
+      next(error instanceof ZodError ? toValidationError(error) : error);
     }
   }
 
@@ -56,7 +58,8 @@ export class QuoteController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
-      const pdf = await quotePdfService.generate(companyId, request.params.id);
+      const { id } = idParamSchema.parse(request.params);
+      const pdf = await quotePdfService.generate(companyId, id);
 
       response
         .status(200)
@@ -68,7 +71,7 @@ export class QuoteController {
         )
         .send(pdf.buffer);
     } catch (error) {
-      next(error);
+      next(error instanceof ZodError ? toValidationError(error) : error);
     }
   }
 
@@ -94,8 +97,9 @@ export class QuoteController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
+      const { id } = idParamSchema.parse(request.params);
       const input = quoteUpdateSchema.parse(request.body);
-      const quote = await quoteService.update(companyId, request.params.id, input);
+      const quote = await quoteService.update(companyId, id, input);
       response.status(200).json(quote);
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);
@@ -109,10 +113,11 @@ export class QuoteController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
-      await quoteService.delete(companyId, request.params.id);
+      const { id } = idParamSchema.parse(request.params);
+      await quoteService.delete(companyId, id);
       response.status(204).send();
     } catch (error) {
-      next(error);
+      next(error instanceof ZodError ? toValidationError(error) : error);
     }
   }
 }

@@ -5,6 +5,7 @@ import type {
   FormulaResource,
   FormulaVariable,
 } from "@3d-budget/shared";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
 import type {
@@ -198,6 +199,12 @@ const createCode = async (companyId: string, name: string): Promise<string> => {
   return code;
 };
 
+// "Access denied." on purpose: doesn't confirm a company-ownership check
+// is what rejected this — see Contextos/Conhecimento.md.
+const throwFormulaForbidden = (): never => {
+  throw new AppError("Access denied.", 403, "FORMULA_FORBIDDEN");
+};
+
 export class FormulaService {
   async list(companyId: string): Promise<FormulaResource[]> {
     await this.ensureDefaultFormula(companyId);
@@ -286,26 +293,43 @@ export class FormulaService {
     );
     const code = await createCode(companyId, input.name);
 
-    const formula = await prisma.$transaction(async (transaction) => {
-      if (input.isDefault) {
-        await transaction.formula.updateMany({
-          where: { companyId },
-          data: { isDefault: false },
+    let formula: FormulaRow;
+
+    try {
+      formula = await prisma.$transaction(async (transaction) => {
+        if (input.isDefault) {
+          await transaction.formula.updateMany({
+            where: { companyId },
+            data: { isDefault: false },
+          });
+        }
+
+        return transaction.formula.create({
+          data: {
+            companyId,
+            code,
+            name: input.name,
+            expression,
+            coefficients: {},
+            isActive: input.isActive,
+            isDefault: input.isDefault,
+          },
         });
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new AppError(
+          "A formula with this name was just created by another request. Try again.",
+          409,
+          "FORMULA_CODE_CONFLICT",
+        );
       }
 
-      return transaction.formula.create({
-        data: {
-          companyId,
-          code,
-          name: input.name,
-          expression,
-          coefficients: {},
-          isActive: input.isActive,
-          isDefault: input.isDefault,
-        },
-      });
-    });
+      throw error;
+    }
 
     await auditLogService.record({
       action: input.isDefault ? "FORMULA_CREATED_AS_DEFAULT" : "FORMULA_CREATED",
@@ -357,8 +381,8 @@ export class FormulaService {
         });
       }
 
-      return transaction.formula.update({
-        where: { id: formulaId },
+      const updateResult = await transaction.formula.updateMany({
+        where: { id: formulaId, companyId },
         data: {
           name: input.name,
           expression,
@@ -366,6 +390,20 @@ export class FormulaService {
           isDefault: input.isDefault,
         },
       });
+
+      if (updateResult.count !== 1) {
+        throwFormulaForbidden();
+      }
+
+      const updated = await transaction.formula.findFirst({
+        where: { id: formulaId, companyId },
+      });
+
+      if (updated === null) {
+        throwFormulaForbidden();
+      }
+
+      return updated as FormulaRow;
     });
 
     await auditLogService.record({
@@ -412,7 +450,14 @@ export class FormulaService {
       );
     }
 
-    await prisma.formula.delete({ where: { id: formulaId } });
+    const result = await prisma.formula.deleteMany({
+      where: { id: formulaId, companyId },
+    });
+
+    if (result.count !== 1) {
+      throwFormulaForbidden();
+    }
+
     await auditLogService.record({
       action: "FORMULA_DELETED",
       entityType: "Formula",
@@ -443,6 +488,8 @@ export class FormulaService {
       if (formula) {
         return formula;
       }
+
+      throwFormulaForbidden();
     }
 
     return prisma.formula.findFirst({
@@ -459,8 +506,8 @@ export class FormulaService {
 
     if (existingDefault) {
       if (!existingDefault.isActive) {
-        await prisma.formula.update({
-          where: { id: existingDefault.id },
+        await prisma.formula.updateMany({
+          where: { id: existingDefault.id, companyId },
           data: { isActive: true },
         });
       }
@@ -474,8 +521,8 @@ export class FormulaService {
     });
 
     if (existingSystem) {
-      await prisma.formula.update({
-        where: { id: existingSystem.id },
+      await prisma.formula.updateMany({
+        where: { id: existingSystem.id, companyId },
         data: { isDefault: true, isActive: true },
       });
       return;
@@ -502,11 +549,11 @@ export class FormulaService {
       where: { id: formulaId, companyId },
     });
 
-    if (!formula) {
-      throw new AppError("Formula not found.", 404, "FORMULA_NOT_FOUND");
+    if (formula === null) {
+      throwFormulaForbidden();
     }
 
-    return formula;
+    return formula as FormulaRow;
   }
 
   private buildPreviewVariables(

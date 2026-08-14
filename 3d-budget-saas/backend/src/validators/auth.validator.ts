@@ -11,26 +11,30 @@ export const registerSchema = z.object({
   fullName: z
     .string()
     .trim()
-    .min(2, "Full name must have at least 2 characters."),
+    .min(2, "Full name must have at least 2 characters.")
+    .max(160, "Full name must have at most 160 characters."),
   email: z.string().trim().toLowerCase().email("Invalid email address."),
   password: passwordSchema,
   companyName: z
     .string()
     .trim()
-    .min(2, "Company name must have at least 2 characters."),
+    .min(2, "Company name must have at least 2 characters.")
+    .max(160, "Company name must have at most 160 characters."),
   defaultCurrency: z
     .string()
     .trim()
     .length(3, "Currency must be an ISO 4217 code.")
     .toUpperCase()
     .default("BRL"),
-  taxRate: z.coerce.number().min(0).max(1).default(0),
-});
+  taxRate: z.number().min(0).max(1).default(0),
+}).strict();
 
-export const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().email("Invalid email address."),
-  password: z.string().min(1, "Password is required."),
-});
+export const loginSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email("Invalid email address."),
+    password: z.string().min(1, "Password is required."),
+  })
+  .strict();
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

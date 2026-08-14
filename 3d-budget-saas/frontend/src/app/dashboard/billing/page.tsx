@@ -2,13 +2,15 @@
 
 import type {
   BillingOverview,
-  BillingPlanChangeResponse,
+  CheckoutResponse,
+  PaymentResource,
+  PlanResource,
   UsageMetric,
 } from "@3d-budget/shared";
-import axios from "axios";
 import {
-  ArrowUpRight,
+  Check,
   CreditCard,
+  ExternalLink,
   FileText,
   History,
   Package,
@@ -18,20 +20,16 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
-import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
-
-const planLabels = {
-  FREE: "Free",
-  PRO: "Pro",
-  ENTERPRISE: "Enterprise",
-} as const;
 
 const statusLabels = {
   ACTIVE: "Ativo",
@@ -39,25 +37,51 @@ const statusLabels = {
   PAST_DUE: "Inadimplente",
 } as const;
 
-const getApiErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
+type NoticeTone = "success" | "warning";
 
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return "Nao foi possivel atualizar o plano.";
+const checkoutBanners: Record<string, { tone: NoticeTone; text: string }> = {
+  success: {
+    tone: "success",
+    text: "Pagamento em processamento no Asaas. A confirmacao chega em instantes assim que eles notificarem — atualize esta pagina daqui a pouco.",
+  },
+  cancelled: {
+    tone: "warning",
+    text: "Checkout cancelado. Nenhuma cobranca foi feita.",
+  },
+  expired: {
+    tone: "warning",
+    text: "O link de checkout expirou. Tente assinar novamente.",
+  },
 };
 
+const formatMoney = (value: number, currency: string): string =>
+  value.toLocaleString("pt-BR", { style: "currency", currency });
+
+const cycleLabel = (cycle: PlanResource["billingCycle"]): string =>
+  cycle === "YEARLY" ? "/ano" : "/mes";
+
 export default function BillingPage() {
+  return (
+    <Suspense fallback={null}>
+      <BillingContent />
+    </Suspense>
+  );
+}
+
+function BillingContent() {
   const { isLoading: isAuthLoading, token } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [billing, setBilling] = useState<BillingOverview | null>(null);
+  const [plans, setPlans] = useState<PlanResource[]>([]);
+  const [payments, setPayments] = useState<PaymentResource[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingPlanId, setSubmittingPlanId] = useState<string | null>(null);
+  const [checkoutNotice, setCheckoutNotice] = useState<
+    { tone: NoticeTone; text: string } | null
+  >(null);
 
   const loadBilling = useCallback(async () => {
     if (!token) {
@@ -68,10 +92,16 @@ export default function BillingPage() {
     setErrorMessage(null);
 
     try {
-      const { data } = await api.get<BillingOverview>("/billing");
-      setBilling(data);
+      const [billingResponse, plansResponse, paymentsResponse] = await Promise.all([
+        api.get<BillingOverview>("/billing"),
+        api.get<PlanResource[]>("/plans"),
+        api.get<PaymentResource[]>("/billing/payments"),
+      ]);
+      setBilling(billingResponse.data);
+      setPlans(plansResponse.data);
+      setPayments(paymentsResponse.data);
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel atualizar o plano."));
     } finally {
       setIsLoading(false);
     }
@@ -82,6 +112,16 @@ export default function BillingPage() {
       void loadBilling();
     }
   }, [isAuthLoading, loadBilling]);
+
+  useEffect(() => {
+    const checkoutParam = searchParams.get("checkout");
+    const banner = checkoutParam ? checkoutBanners[checkoutParam] : undefined;
+
+    if (banner) {
+      setCheckoutNotice(banner);
+      router.replace("/dashboard/billing");
+    }
+  }, [searchParams, router]);
 
   const features = useMemo(
     () =>
@@ -100,27 +140,38 @@ export default function BillingPage() {
     [billing],
   );
 
-  const upgradeToPro = async () => {
-    setIsSubmitting(true);
+  const isSubmitting = submittingPlanId !== null;
+
+  const subscribeToPlan = async (plan: PlanResource) => {
+    setSubmittingPlanId(plan.id);
     setErrorMessage(null);
     setMessage(null);
 
     try {
-      const { data } = await api.post<BillingPlanChangeResponse>(
-        "/billing/upgrade",
-        { planType: "PRO" },
-      );
-      setBilling(data.billing);
-      setMessage(`Upgrade aprovado no gateway mock: ${data.payment.transactionId}`);
+      const { data } = await api.post<CheckoutResponse>("/billing/checkout", {
+        planId: plan.id,
+      });
+
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
+      if (data.billing) {
+        setBilling(data.billing);
+        setMessage(`Plano alterado para ${data.billing.plan.name}.`);
+      }
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+      setErrorMessage(
+        getApiErrorMessage(error, "Nao foi possivel iniciar a assinatura."),
+      );
     } finally {
-      setIsSubmitting(false);
+      setSubmittingPlanId(null);
     }
   };
 
   const cancelPlan = async () => {
-    setIsSubmitting(true);
+    setSubmittingPlanId("cancel");
     setErrorMessage(null);
     setMessage(null);
 
@@ -129,9 +180,9 @@ export default function BillingPage() {
       setBilling(data);
       setMessage("Plano cancelado e limites Free reaplicados.");
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel cancelar o plano."));
     } finally {
-      setIsSubmitting(false);
+      setSubmittingPlanId(null);
     }
   };
 
@@ -145,7 +196,8 @@ export default function BillingPage() {
               Plano e faturamento
             </h1>
             <p className="mt-2 max-w-2xl text-base text-muted">
-              Controle uso, limites e upgrades da empresa antes de integrar o Stripe real.
+              Assine um plano com checkout seguro do Asaas — o cartao de credito
+              e processado inteiramente na pagina deles.
             </p>
           </div>
           <button
@@ -158,6 +210,18 @@ export default function BillingPage() {
           </button>
         </section>
 
+        {checkoutNotice ? (
+          <div
+            className={cn(
+              "rounded-lg border px-4 py-3 text-sm",
+              checkoutNotice.tone === "success"
+                ? "border-secondary/40 bg-secondary/10 text-secondary"
+                : "border-warning/40 bg-warning/10 text-warning",
+            )}
+          >
+            {checkoutNotice.text}
+          </div>
+        ) : null}
         {errorMessage ? (
           <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
             {errorMessage}
@@ -175,106 +239,170 @@ export default function BillingPage() {
             <Skeleton className="min-h-80" />
           </section>
         ) : billing ? (
-          <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <Card className="p-5">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                <div>
-                  <p className="text-sm text-muted">Plano atual</p>
-                  <h2 className="mt-2 text-4xl font-semibold text-foreground">
-                    {planLabels[billing.planType]}
-                  </h2>
-                  <p className="mt-2 text-sm text-muted">
-                    {billing.companyName} - {statusLabels[billing.subscriptionStatus]}
-                  </p>
-                </div>
-                <StatusBadge
-                  tone={billing.subscriptionStatus === "ACTIVE" ? "success" : "warning"}
-                >
-                  {billing.subscriptionStatus}
-                </StatusBadge>
-              </div>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-3">
-                <UsageCard
-                  icon={Printer}
-                  label="Maquinas"
-                  metric={billing.usage.machines}
-                />
-                <UsageCard
-                  icon={Package}
-                  label="Materiais"
-                  metric={billing.usage.materials}
-                />
-                <UsageCard
-                  icon={FileText}
-                  label="Orcamentos/mes"
-                  metric={billing.usage.monthlyQuotes}
-                />
-              </div>
-
-              <div className="mt-6 grid gap-3">
-                {features.map((feature) => (
-                  <div
-                    key={feature.label}
-                    className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border bg-background px-3"
-                  >
-                    <span className="text-sm text-muted">{feature.label}</span>
-                    <StatusBadge tone={feature.enabled ? "success" : "warning"}>
-                      {feature.enabled ? "incluido" : "upgrade"}
-                    </StatusBadge>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            <div className="grid content-start gap-4">
+          <>
+            <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
               <Card className="p-5">
-                <div className="flex items-center gap-3">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-semibold text-foreground">
-                    Upgrade
-                  </h2>
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                  <div>
+                    <p className="text-sm text-muted">Plano atual</p>
+                    <h2 className="mt-2 text-4xl font-semibold text-foreground">
+                      {billing.plan.name}
+                    </h2>
+                    <p className="mt-2 text-sm text-muted">
+                      {billing.companyName} - {statusLabels[billing.subscriptionStatus]}
+                    </p>
+                  </div>
+                  <StatusBadge
+                    tone={billing.subscriptionStatus === "ACTIVE" ? "success" : "warning"}
+                  >
+                    {billing.subscriptionStatus}
+                  </StatusBadge>
                 </div>
-                <p className="mt-3 text-sm text-muted">
-                  Pro libera maquinas, materiais, formulas customizadas e PDF.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void upgradeToPro()}
-                  disabled={isSubmitting || billing.planType === "PRO"}
-                  className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Upgrade para Pro
-                  <ArrowUpRight className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void cancelPlan()}
-                  disabled={isSubmitting || billing.planType === "FREE"}
-                  className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-danger/40 px-4 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Cancelar plano
-                  <XCircle className="h-4 w-4" />
-                </button>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  <UsageCard icon={Printer} label="Maquinas" metric={billing.usage.machines} />
+                  <UsageCard icon={Package} label="Materiais" metric={billing.usage.materials} />
+                  <UsageCard
+                    icon={FileText}
+                    label="Orcamentos/mes"
+                    metric={billing.usage.monthlyQuotes}
+                  />
+                </div>
+
+                <div className="mt-6 grid gap-3">
+                  {features.map((feature) => (
+                    <div
+                      key={feature.label}
+                      className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border bg-background px-3"
+                    >
+                      <span className="text-sm text-muted">{feature.label}</span>
+                      <StatusBadge tone={feature.enabled ? "success" : "warning"}>
+                        {feature.enabled ? "incluido" : "upgrade"}
+                      </StatusBadge>
+                    </div>
+                  ))}
+                </div>
               </Card>
 
-              <Card className="p-5">
+              <Card className="content-start p-5">
                 <div className="flex items-center gap-3">
                   <History className="h-5 w-5 text-secondary" />
                   <h2 className="text-xl font-semibold text-foreground">
                     Historico de faturas
                   </h2>
                 </div>
-                <div className="mt-5 grid gap-3">
-                  <SkeletonText className="w-3/4" />
-                  <SkeletonText className="w-1/2" />
-                  <p className="text-sm text-muted">
-                    Placeholder pronto para webhooks e invoices do Stripe.
+                {payments.length === 0 ? (
+                  <p className="mt-5 text-sm text-muted">
+                    Nenhuma fatura ainda — aparecem aqui assim que a primeira
+                    cobranca do Asaas for confirmada.
                   </p>
-                </div>
+                ) : (
+                  <ul className="mt-5 grid gap-3">
+                    {payments.map((payment) => (
+                      <li
+                        key={payment.id}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground">
+                            {formatMoney(payment.value, billing.plan.currency)}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {payment.paymentDate
+                              ? new Date(payment.paymentDate).toLocaleDateString("pt-BR")
+                              : payment.dueDate
+                                ? new Date(payment.dueDate).toLocaleDateString("pt-BR")
+                                : "—"}
+                            {" · "}
+                            {payment.status}
+                          </p>
+                        </div>
+                        {payment.invoiceUrl ? (
+                          <a
+                            href={payment.invoiceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                          >
+                            Ver <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </Card>
-            </div>
-          </section>
+            </section>
+
+            <section>
+              <div className="mb-4 flex items-center gap-3">
+                <Sparkles className="h-5 w-5 text-primary" />
+                <h2 className="text-xl font-semibold text-foreground">
+                  Planos disponiveis
+                </h2>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {plans.map((plan) => {
+                  const isCurrentPlan = billing.plan.id === plan.id;
+
+                  return (
+                    <Card key={plan.id} className="flex flex-col p-5">
+                      <h3 className="text-lg font-semibold text-foreground">{plan.name}</h3>
+                      <p className="mt-2 text-3xl font-semibold text-foreground">
+                        {formatMoney(plan.price, plan.currency)}
+                        <span className="text-sm font-normal text-muted">
+                          {plan.price > 0 ? cycleLabel(plan.billingCycle) : ""}
+                        </span>
+                      </p>
+                      {plan.description ? (
+                        <p className="mt-2 text-sm text-muted">{plan.description}</p>
+                      ) : null}
+                      <ul className="mt-4 grid gap-2 text-sm text-muted">
+                        <li>
+                          Maquinas: {plan.limits.machines ?? "ilimitado"}
+                        </li>
+                        <li>
+                          Materiais: {plan.limits.materials ?? "ilimitado"}
+                        </li>
+                        <li>
+                          Orcamentos/mes: {plan.limits.monthlyQuotes ?? "ilimitado"}
+                        </li>
+                        {plan.features.customFormulas ? (
+                          <li className="flex items-center gap-2 text-foreground">
+                            <Check className="h-4 w-4 text-secondary" /> Formulas customizadas
+                          </li>
+                        ) : null}
+                        {plan.features.pdfExport ? (
+                          <li className="flex items-center gap-2 text-foreground">
+                            <Check className="h-4 w-4 text-secondary" /> Exportacao PDF
+                          </li>
+                        ) : null}
+                      </ul>
+                      <button
+                        type="button"
+                        onClick={() => void subscribeToPlan(plan)}
+                        disabled={isSubmitting || isCurrentPlan}
+                        className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isCurrentPlan ? "Plano atual" : "Assinar"}
+                      </button>
+                    </Card>
+                  );
+                })}
+              </div>
+              {billing.plan.price > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void cancelPlan()}
+                  disabled={isSubmitting}
+                  className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-danger/40 px-4 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancelar assinatura
+                  <XCircle className="h-4 w-4" />
+                </button>
+              ) : null}
+            </section>
+          </>
         ) : null}
       </div>
     </MainLayout>

@@ -7,7 +7,6 @@ import type {
   MaterialResource,
   ProductionSettings,
 } from "@3d-budget/shared";
-import axios from "axios";
 import {
   Cpu,
   Edit3,
@@ -25,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
 
 type ActiveTab = "machines" | "materials" | "costs";
@@ -105,18 +105,6 @@ const tabs = [
   { id: "costs" as const, label: "Custos Fixos", icon: Zap },
 ];
 
-const getApiErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return "Nao foi possivel concluir a operacao.";
-};
-
 const toMoney = (value: number): string =>
   new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -181,7 +169,7 @@ export default function SettingsPage() {
       setMaterials(materialsResponse.data);
       setSettings(normalizeSettings(settingsResponse.data));
     } catch (error) {
-      showToast({ tone: "danger", message: getApiErrorMessage(error) });
+      showToast({ tone: "danger", message: getApiErrorMessage(error, "Nao foi possivel concluir a operacao.") });
     } finally {
       setIsLoading(false);
     }
@@ -251,7 +239,7 @@ export default function SettingsPage() {
       setModal(null);
       showToast({ tone: "success", message: "Maquina salva." });
     } catch (error) {
-      showToast({ tone: "danger", message: getApiErrorMessage(error) });
+      showToast({ tone: "danger", message: getApiErrorMessage(error, "Nao foi possivel concluir a operacao.") });
     } finally {
       setIsSaving(false);
     }
@@ -287,7 +275,7 @@ export default function SettingsPage() {
       setModal(null);
       showToast({ tone: "success", message: "Material salvo." });
     } catch (error) {
-      showToast({ tone: "danger", message: getApiErrorMessage(error) });
+      showToast({ tone: "danger", message: getApiErrorMessage(error, "Nao foi possivel concluir a operacao.") });
     } finally {
       setIsSaving(false);
     }
@@ -305,7 +293,7 @@ export default function SettingsPage() {
       setMachines((current) => current.filter((item) => item.id !== machine.id));
       showToast({ tone: "success", message: "Maquina excluida." });
     } catch (error) {
-      showToast({ tone: "danger", message: getApiErrorMessage(error) });
+      showToast({ tone: "danger", message: getApiErrorMessage(error, "Nao foi possivel concluir a operacao.") });
     }
   };
 
@@ -321,7 +309,7 @@ export default function SettingsPage() {
       setMaterials((current) => current.filter((item) => item.id !== material.id));
       showToast({ tone: "success", message: "Material excluido." });
     } catch (error) {
-      showToast({ tone: "danger", message: getApiErrorMessage(error) });
+      showToast({ tone: "danger", message: getApiErrorMessage(error, "Nao foi possivel concluir a operacao.") });
     }
   };
 
@@ -334,7 +322,7 @@ export default function SettingsPage() {
       setSettings(normalizeSettings(data));
       showToast({ tone: "success", message: "Custos fixos salvos." });
     } catch (error) {
-      showToast({ tone: "danger", message: getApiErrorMessage(error) });
+      showToast({ tone: "danger", message: getApiErrorMessage(error, "Nao foi possivel concluir a operacao.") });
     } finally {
       setIsSaving(false);
     }
@@ -617,7 +605,7 @@ export default function SettingsPage() {
           title={modal.mode === "edit" ? "Editar Maquina" : "Nova Maquina"}
           onClose={() => setModal(null)}
         >
-          <form className="grid gap-4" onSubmit={handleMachineSubmit}>
+          <form className="grid min-w-0 gap-4" onSubmit={handleMachineSubmit}>
             <TextField
               label="Nome"
               value={machineForm.name}
@@ -625,7 +613,7 @@ export default function SettingsPage() {
                 setMachineForm((current) => ({ ...current, name: value }))
               }
             />
-            <label className="grid gap-2 text-sm font-medium">
+            <label className="grid min-w-0 gap-2 text-sm font-medium">
               Tipo
               <select
                 value={machineForm.type}
@@ -635,13 +623,13 @@ export default function SettingsPage() {
                     type: event.target.value as MachineFormState["type"],
                   }))
                 }
-                className="h-11 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
               >
                 <option value="FDM">FDM</option>
                 <option value="RESIN">SLA/Resina</option>
               </select>
             </label>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2">
               <TextField
                 label="Consumo (Watts)"
                 type="number"
@@ -666,7 +654,7 @@ export default function SettingsPage() {
                 }
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid min-w-0 gap-4 md:grid-cols-3">
               <TextField
                 label="Volume X"
                 type="number"
@@ -711,7 +699,7 @@ export default function SettingsPage() {
           title={modal.mode === "edit" ? "Editar Material" : "Novo Material"}
           onClose={() => setModal(null)}
         >
-          <form className="grid gap-4" onSubmit={handleMaterialSubmit}>
+          <form className="grid min-w-0 gap-4" onSubmit={handleMaterialSubmit}>
             <TextField
               label="Nome/Marca"
               value={materialForm.brand}
@@ -719,8 +707,8 @@ export default function SettingsPage() {
                 setMaterialForm((current) => ({ ...current, brand: value }))
               }
             />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm font-medium">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+              <label className="grid min-w-0 gap-2 text-sm font-medium">
                 Tipo
                 <select
                   value={materialForm.type}
@@ -730,7 +718,7 @@ export default function SettingsPage() {
                       type: event.target.value as MaterialFormState["type"],
                     }))
                   }
-                  className="h-11 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                  className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
                 >
                   <option value="FILAMENT">Filamento</option>
                   <option value="RESIN">Resina</option>
@@ -746,7 +734,7 @@ export default function SettingsPage() {
                 }
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid min-w-0 gap-4 md:grid-cols-3">
               <TextField
                 label="Peso/Volume"
                 type="number"
@@ -887,8 +875,8 @@ const Modal = ({
   onClose: () => void;
   children: React.ReactNode;
 }) => (
-  <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4">
-    <div className="w-full max-w-xl rounded-lg border border-border bg-background p-5 shadow-panel">
+  <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-6">
+    <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-background p-5 shadow-panel sm:p-6">
       <div className="mb-5 flex items-center justify-between gap-4">
         <h2 className="text-xl font-semibold">{title}</h2>
         <button
@@ -919,7 +907,7 @@ const TextField = ({
   type?: "text" | "number";
   step?: string;
 }) => (
-  <label className="grid gap-2 text-sm font-medium">
+  <label className="grid min-w-0 gap-2 text-sm font-medium">
     {label}
     <input
       type={type}
@@ -927,7 +915,7 @@ const TextField = ({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       required
-      className="h-11 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+      className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
     />
   </label>
 );
@@ -944,7 +932,7 @@ const NumberField = ({
   const safeValue = Number.isFinite(value) ? value : 0;
 
   return (
-    <label className="grid gap-2 text-sm font-medium">
+    <label className="grid min-w-0 gap-2 text-sm font-medium">
       {label}
       <input
         type="number"
@@ -956,7 +944,7 @@ const NumberField = ({
           onChange(Number.isFinite(nextValue) ? nextValue : 0);
         }}
         required
-        className="h-11 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+        className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
       />
     </label>
   );

@@ -8,22 +8,28 @@
     "build": "prisma generate && tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
     "start": "node dist/server.js",
     "lint": "eslint \"src/**/*.ts\"",
+    "test": "vitest run",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate:init": "prisma migrate dev --name init_data_model",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@3d-budget/shared": "file:../shared",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "expr-eval": "^2.0.2",
     "express": "^4.18.3",
+    "express-rate-limit": "^8.5.2",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.3",
-    "morgan": "^1.10.0",
     "node-cache": "^5.1.2",
     "pdfkit": "^0.18.0",
     "pino": "^10.3.1",
@@ -32,18 +38,21 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/morgan": "^1.9.9",
     "@types/node": "^20.11.30",
     "@types/pdfkit": "^0.17.6",
+    "@types/supertest": "^7.2.1",
     "eslint": "^10.3.0",
     "globals": "^17.6.0",
     "prisma": "^5.22.0",
+    "supertest": "^7.2.2",
     "tsc-alias": "^1.8.8",
     "tsx": "^4.7.1",
     "typescript": "^5.4.5",
-    "typescript-eslint": "^8.59.2"
+    "typescript-eslint": "^8.59.2",
+    "vitest": "^4.1.10"
   }
 }

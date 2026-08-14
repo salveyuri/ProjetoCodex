@@ -43,7 +43,10 @@ export const authMiddleware = (
     const payload = jwt.verify(token, env.jwtSecret);
 
     if (!isJwtAuthPayload(payload)) {
-      next(new AppError("Invalid token payload.", 401, "AUTH_TOKEN_INVALID"));
+      // Same message/code as a bad signature below — don't give a token
+      // forger a debugging oracle that distinguishes "signature verified
+      // but payload shape was wrong" from "signature/expiry failed".
+      next(new AppError("Invalid or expired token.", 401, "AUTH_TOKEN_INVALID"));
       return;
     }
 

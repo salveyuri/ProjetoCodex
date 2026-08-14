@@ -1,0 +1,54 @@
+# Reference reverse-proxy config — a starting point, not a ready-to-use
+# file. Copy it to wherever your Nginx config lives, fill in the domain,
+# and adapt as needed.
+#
+# WHAT THIS DOES:
+#   - Routes /api/* to the backend (port 3001).
+#   - Routes everything else to the frontend (port 3000).
+#   - Forwards the real client IP via X-Forwarded-For, which the backend
+#     only trusts when TRUST_PROXY_HOPS is set correctly (see SEC-006 in
+#     Contextos/Auditoria.md) — this config assumes Nginx is the ONLY
+#     hop in front of the backend, so TRUST_PROXY_HOPS=1. If you add a
+#     load balancer or CDN in front of Nginx too, bump that number.
+#
+# WHAT THIS DELIBERATELY DOES NOT DO (out of scope for DEVOPS-001 — these
+# depend on where/how you actually deploy, still undecided):
+#   - No TLS/HTTPS. Terminate TLS however fits your setup (certbot +
+#     this same config, a managed load balancer, Cloudflare, etc.) and
+#     redirect :80 -> :443 once you do.
+#   - No specific hostname — replace `your-domain.example` below.
+#
+# This example assumes `docker compose up` is running on the SAME host as
+# Nginx, with backend/frontend ports published to localhost (as
+# docker-compose.yml does by default: 3001 and 3000). If Nginx instead
+# runs as another container on the same Docker network, replace
+# `127.0.0.1:3001` / `127.0.0.1:3000` with the service names
+# `backend:3001` / `frontend:3000` instead.
+
+server {
+    listen 80;
+    server_name your-domain.example;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Next.js dev-time HMR isn't relevant in production, but websocket
+        # upgrade headers are harmless to keep in case a future feature
+        # needs them.
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}

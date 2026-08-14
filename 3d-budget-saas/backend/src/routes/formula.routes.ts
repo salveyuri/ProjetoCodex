@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { formulaController } from "../controllers/formula.controller";
 import { requirePlanFeature } from "../middlewares/plan-middleware";
+import { calculationRateLimiter } from "../middlewares/rate-limit-middleware";
 
 export const formulaRoutes = Router();
 
@@ -16,8 +17,11 @@ formulaRoutes.post("/", requirePlanFeature("CUSTOM_FORMULAS"), (request, respons
   formulaController.create(request, response, next),
 );
 
-formulaRoutes.post("/preview", requirePlanFeature("CUSTOM_FORMULAS"), (request, response, next) =>
-  formulaController.preview(request, response, next),
+formulaRoutes.post(
+  "/preview",
+  requirePlanFeature("CUSTOM_FORMULAS"),
+  calculationRateLimiter,
+  (request, response, next) => formulaController.preview(request, response, next),
 );
 
 formulaRoutes.put("/:id", requirePlanFeature("CUSTOM_FORMULAS"), (request, response, next) =>

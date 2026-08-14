@@ -8,14 +8,9 @@ import type {
   SystemErrorResource,
   UserAnalyticsOverview,
 } from "@3d-budget/shared";
-import {
-  MaterialType,
-  Prisma,
-  SubscriptionPlan,
-  SubscriptionStatus,
-} from "@prisma/client";
+import { MaterialType, Prisma, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../config/prisma";
-import { cacheService } from "./cache.service";
+import { cacheService, companyAnalyticsCacheKeyPrefix } from "./cache.service";
 import type {
   AnalyticsExportQuery,
   AnalyticsQuery,
@@ -25,11 +20,15 @@ const USER_ANALYTICS_TTL_SECONDS = 300;
 const ADMIN_ANALYTICS_TTL_SECONDS = 600;
 const DAILY_MACHINE_CAPACITY_HOURS = 8;
 
-const PLAN_MRR: Record<SubscriptionPlan, number> = {
-  [SubscriptionPlan.FREE]: 0,
-  [SubscriptionPlan.PRO]: 99,
-  [SubscriptionPlan.ENTERPRISE]: 299,
-};
+// A YEARLY plan's sticker price isn't its monthly contribution to MRR —
+// normalize to a monthly-equivalent before summing across companies.
+const monthlyEquivalentPrice = (plan: {
+  price: Prisma.Decimal;
+  billingCycle: string;
+}): number =>
+  plan.billingCycle === "YEARLY"
+    ? toNumber(plan.price) / 12
+    : toNumber(plan.price);
 
 const quoteInclude = {
   printItems: {
@@ -134,7 +133,7 @@ export class AnalyticsService {
     companyId: string,
     query: AnalyticsQuery,
   ): Promise<UserAnalyticsOverview> {
-    const key = `company-analytics:${companyId}:${query.from}:${query.to}`;
+    const key = `${companyAnalyticsCacheKeyPrefix(companyId)}${query.from}:${query.to}`;
 
     return cacheService.getOrSet(
       key,
@@ -362,6 +361,7 @@ export class AnalyticsService {
       activeUsers,
       activeCompanies,
       planRows,
+      plans,
       quotesThisMonth,
       revenueThisMonth,
       systemErrors24h,
@@ -374,9 +374,10 @@ export class AnalyticsService {
         where: { subscriptionStatus: SubscriptionStatus.ACTIVE },
       }),
       prisma.company.groupBy({
-        by: ["planType", "subscriptionStatus"],
+        by: ["planId", "subscriptionStatus"],
         _count: { _all: true },
       }),
+      prisma.plan.findMany(),
       prisma.quote.count({ where: { createdAt: { gte: monthStart } } }),
       prisma.quote.aggregate({
         where: { createdAt: { gte: monthStart } },
@@ -412,11 +413,13 @@ export class AnalyticsService {
         },
       }),
     ]);
-    const distributionMap = new Map<SubscriptionPlan, AdminPlanDistributionPoint>();
+    const distributionMap = new Map<string, AdminPlanDistributionPoint>();
+    const planById = new Map(plans.map((plan) => [plan.id, plan]));
 
-    for (const plan of Object.values(SubscriptionPlan)) {
-      distributionMap.set(plan, {
-        planType: plan,
+    for (const plan of plans) {
+      distributionMap.set(plan.id, {
+        planId: plan.id,
+        planName: plan.name,
         companies: 0,
         activeCompanies: 0,
         mrr: 0,
@@ -424,9 +427,10 @@ export class AnalyticsService {
     }
 
     for (const row of planRows) {
-      const current = distributionMap.get(row.planType);
+      const current = distributionMap.get(row.planId);
+      const plan = planById.get(row.planId);
 
-      if (!current) {
+      if (!current || !plan) {
         continue;
       }
 
@@ -434,14 +438,16 @@ export class AnalyticsService {
 
       if (row.subscriptionStatus === SubscriptionStatus.ACTIVE) {
         current.activeCompanies += row._count._all;
-        current.mrr += row._count._all * PLAN_MRR[row.planType];
+        current.mrr += row._count._all * monthlyEquivalentPrice(plan);
       }
     }
 
-    const planDistribution = [...distributionMap.values()];
-    const estimatedMrr = planDistribution.reduce(
-      (total, plan) => total + plan.mrr,
-      0,
+    const planDistribution = [...distributionMap.values()].map((point) => ({
+      ...point,
+      mrr: roundMoney(point.mrr),
+    }));
+    const estimatedMrr = roundMoney(
+      planDistribution.reduce((total, plan) => total + plan.mrr, 0),
     );
 
     return {

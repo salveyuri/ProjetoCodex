@@ -17,6 +17,10 @@ export const API_BASE_URL = resolveApiBaseUrl();
 export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 5000,
+  // Sends the httpOnly refresh-token cookie automatically on calls to
+  // /auth/refresh, /auth/logout, /auth/logout-all (the cookie is scoped to
+  // /api/auth, so it's never sent on other routes).
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },

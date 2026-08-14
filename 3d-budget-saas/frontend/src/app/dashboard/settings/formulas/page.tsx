@@ -29,6 +29,7 @@ import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
 
 interface FormulaFormState {
@@ -111,18 +112,6 @@ const toMoney = (value: number): string =>
     style: "currency",
     currency: "BRL",
   }).format(value);
-
-const getApiErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return "Nao foi possivel concluir a operacao.";
-};
 
 const toFormulaForm = (formula: FormulaResource): FormulaFormState => ({
   name: formula.name,
@@ -218,7 +207,10 @@ export default function FormulasPage() {
       setSettings(settingsResponse.data);
       setCustomRows(customRowsFromSettings(settingsResponse.data));
     } catch (error) {
-      showToast({ tone: "danger", message: getApiErrorMessage(error) });
+      showToast({
+        tone: "danger",
+        message: getApiErrorMessage(error, "Nao foi possivel carregar formulas."),
+      });
     } finally {
       setIsLoading(false);
     }
@@ -292,7 +284,9 @@ export default function FormulasPage() {
         setPreviewError(null);
       } catch (error) {
         setPreview(null);
-        setPreviewError(getApiErrorMessage(error));
+        setPreviewError(
+          getApiErrorMessage(error, "Nao foi possivel calcular o preview."),
+        );
       } finally {
         setIsPreviewing(false);
       }
@@ -394,7 +388,7 @@ export default function FormulasPage() {
       closeEditor();
       void loadData();
     } catch (error) {
-      const message = getApiErrorMessage(error);
+      const message = getApiErrorMessage(error, "Nao foi possivel salvar a formula.");
       setFormulaError(message);
       showToast({ tone: "danger", message });
     } finally {
@@ -418,7 +412,10 @@ export default function FormulasPage() {
       showToast({ tone: "success", message: "Formula excluida." });
       void loadData();
     } catch (error) {
-      showToast({ tone: "danger", message: getApiErrorMessage(error) });
+      showToast({
+        tone: "danger",
+        message: getApiErrorMessage(error, "Nao foi possivel excluir a formula."),
+      });
     }
   };
 
@@ -528,7 +525,9 @@ export default function FormulasPage() {
       showToast({
         tone: "danger",
         message:
-          error instanceof Error ? error.message : getApiErrorMessage(error),
+          error instanceof Error && !axios.isAxiosError(error)
+            ? error.message
+            : getApiErrorMessage(error, "Nao foi possivel salvar as variaveis."),
       });
     } finally {
       setIsSavingVariables(false);

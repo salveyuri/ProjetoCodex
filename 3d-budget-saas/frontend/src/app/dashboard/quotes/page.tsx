@@ -5,7 +5,6 @@ import type {
   QuoteListItem,
   QuoteStatus,
 } from "@3d-budget/shared";
-import axios from "axios";
 import {
   Download,
   Edit3,
@@ -29,6 +28,7 @@ import {
 } from "@/components/ui/toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
 import { downloadQuotePdf } from "@/lib/download-quote-pdf";
 import {
@@ -38,22 +38,6 @@ import {
   quoteStatusTones,
   toMoney,
 } from "@/components/quotes/quote-ui";
-
-const getApiErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Nao foi possivel carregar os orcamentos.";
-};
 
 export default function QuotesPage() {
   const { isLoading: isAuthLoading, token } = useAuth();
@@ -110,7 +94,9 @@ export default function QuotesPage() {
       });
       setQuotes(response.data.data);
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+      setErrorMessage(
+        getApiErrorMessage(error, "Nao foi possivel carregar os orcamentos."),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -159,7 +145,7 @@ export default function QuotesPage() {
         message: "A lista foi atualizada.",
       });
     } catch (error) {
-      const message = getApiErrorMessage(error);
+      const message = getApiErrorMessage(error, "Nao foi possivel excluir o orcamento.");
       setErrorMessage(message);
       showToast({ tone: "danger", title: "Erro ao excluir", message });
     } finally {
@@ -181,7 +167,7 @@ export default function QuotesPage() {
         message: "O download do orcamento foi iniciado.",
       });
     } catch (error) {
-      const message = getApiErrorMessage(error);
+      const message = getApiErrorMessage(error, "Nao foi possivel gerar o PDF.");
       showToast({ tone: "danger", title: "Erro ao gerar PDF", message });
     } finally {
       setIsDownloading(null);

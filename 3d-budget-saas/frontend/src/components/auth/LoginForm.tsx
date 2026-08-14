@@ -1,6 +1,5 @@
 "use client";
 
-import axios from "axios";
 import { Cpu, Loader2, LogIn } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -9,24 +8,7 @@ import { FormEvent, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
-
-const getErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const code = error.response?.data?.code;
-
-    if (code === "INVALID_CREDENTIALS") {
-      return "E-mail ou senha invalidos.";
-    }
-
-    const message = error.response?.data?.message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return "Nao foi possivel autenticar.";
-};
+import { getApiErrorMessage } from "@/lib/api-error";
 
 export const LoginForm = () => {
   const router = useRouter();
@@ -51,7 +33,7 @@ export const LoginForm = () => {
           : "/dashboard";
       router.replace(targetRoute);
     } catch (loginError) {
-      setError(getErrorMessage(loginError));
+      setError(getApiErrorMessage(loginError, "Nao foi possivel autenticar."));
     } finally {
       setIsSubmitting(false);
     }

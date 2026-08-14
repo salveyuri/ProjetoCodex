@@ -4,10 +4,13 @@ import { constants } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
+import { env } from "../config/env";
 import { prisma } from "../config/prisma";
 
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : "Unknown database error";
+
+const isDetailExposureAllowed = (): boolean => env.nodeEnv !== "production";
 
 export class HealthService {
   async getHealthCheck(): Promise<HealthCheckResponse> {
@@ -50,7 +53,7 @@ export class HealthService {
       return {
         status: "unavailable",
         latencyMs: null,
-        error: getErrorMessage(error),
+        error: isDetailExposureAllowed() ? getErrorMessage(error) : undefined,
       };
     }
   }
@@ -75,7 +78,7 @@ export class HealthService {
       return {
         status: "degraded",
         latencyMs: null,
-        error: getErrorMessage(error),
+        error: isDetailExposureAllowed() ? getErrorMessage(error) : undefined,
       };
     }
   }
@@ -83,6 +86,7 @@ export class HealthService {
   private async checkFilesystem(): Promise<HealthCheckResponse["filesystem"]> {
     const startedAt = performance.now();
     const healthPath = join(tmpdir(), "3d-budget-health.tmp");
+    const path = isDetailExposureAllowed() ? tmpdir() : undefined;
 
     try {
       await access(tmpdir(), constants.W_OK);
@@ -92,14 +96,14 @@ export class HealthService {
       return {
         status: "writable",
         latencyMs: Number((performance.now() - startedAt).toFixed(2)),
-        path: tmpdir(),
+        path,
       };
     } catch (error) {
       return {
         status: "unavailable",
         latencyMs: null,
-        path: tmpdir(),
-        error: getErrorMessage(error),
+        path,
+        error: isDetailExposureAllowed() ? getErrorMessage(error) : undefined,
       };
     }
   }

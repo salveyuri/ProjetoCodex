@@ -1,5 +1,8 @@
 import NodeCache from "node-cache";
 
+export const companyAnalyticsCacheKeyPrefix = (companyId: string): string =>
+  `company-analytics:${companyId}:`;
+
 export class CacheService {
   private readonly cache = new NodeCache({
     stdTTL: 300,
@@ -25,6 +28,11 @@ export class CacheService {
 
   del(key: string): void {
     this.cache.del(key);
+  }
+
+  delByPrefix(prefix: string): void {
+    const matchingKeys = this.cache.keys().filter((key) => key.startsWith(prefix));
+    this.cache.del(matchingKeys);
   }
 
   flush(): void {

@@ -1,0 +1,28 @@
+# Build context is the repo root — keep this in sync with .gitignore, plus
+# a few extra dev-only paths that don't belong in any image.
+node_modules/
+**/node_modules/
+.npm-cache/
+.next/
+**/.next/
+dist/
+**/dist/
+coverage/
+**/coverage/
+
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+.git/
+.gitignore
+*.log
+
+Contextos/
+Notas/
+CLAUDE.md
+*.md
+
+.vscode/
+.idea/

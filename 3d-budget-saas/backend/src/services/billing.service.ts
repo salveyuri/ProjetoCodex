@@ -1,18 +1,14 @@
 import type {
   BillingOverview,
   BillingUsage,
-  PlanEntitlements,
-  SubscriptionPlan as SharedSubscriptionPlan,
   SubscriptionStatus as SharedSubscriptionStatus,
   UsageMetric,
 } from "@3d-budget/shared";
-import {
-  Prisma,
-  SubscriptionPlan,
-  SubscriptionStatus,
-} from "@prisma/client";
+import type { Plan, Prisma } from "@prisma/client";
+import { SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
+import { toPlanResource } from "./plan.service";
 
 export type UsageResource = "MACHINES" | "MATERIALS" | "MONTHLY_QUOTES";
 
@@ -20,51 +16,19 @@ export type PlanFeature = "CUSTOM_FORMULAS" | "PDF_EXPORT";
 
 type CompanyUpdater = Pick<Prisma.TransactionClient, "company">;
 
-interface PlanDefinition {
-  maxMachinesAllowed: number;
-  maxMaterialsAllowed: number;
-  maxQuotesPerMonth: number;
-  entitlements: PlanEntitlements;
+interface CompanyWithPlan {
+  id: string;
+  name: string;
+  subscriptionStatus: SubscriptionStatus;
+  asaasCustomerId: string | null;
+  currentQuotesCount: number;
+  quoteUsagePeriodStart: Date;
+  plan: Plan;
 }
 
-const UNLIMITED = -1;
-
-export const PLAN_DEFINITIONS: Record<SubscriptionPlan, PlanDefinition> = {
-  [SubscriptionPlan.FREE]: {
-    maxMachinesAllowed: 2,
-    maxMaterialsAllowed: 3,
-    maxQuotesPerMonth: 10,
-    entitlements: {
-      customFormulas: false,
-      pdfExport: false,
-    },
-  },
-  [SubscriptionPlan.PRO]: {
-    maxMachinesAllowed: UNLIMITED,
-    maxMaterialsAllowed: UNLIMITED,
-    maxQuotesPerMonth: UNLIMITED,
-    entitlements: {
-      customFormulas: true,
-      pdfExport: true,
-    },
-  },
-  [SubscriptionPlan.ENTERPRISE]: {
-    maxMachinesAllowed: UNLIMITED,
-    maxMaterialsAllowed: UNLIMITED,
-    maxQuotesPerMonth: UNLIMITED,
-    entitlements: {
-      customFormulas: true,
-      pdfExport: true,
-    },
-  },
-};
-
-const toLimit = (value: number): number | null =>
-  value < 0 ? null : value;
-
-const toUsageMetric = (used: number, limit: number): UsageMetric => ({
+const toUsageMetric = (used: number, limit: number | null): UsageMetric => ({
   used,
-  limit: toLimit(limit),
+  limit,
 });
 
 const currentMonthStart = (): Date => {
@@ -76,29 +40,20 @@ const subscriptionStatusLabel = (
   status: SubscriptionStatus,
 ): SharedSubscriptionStatus => status as SharedSubscriptionStatus;
 
-const subscriptionPlanLabel = (
-  plan: SubscriptionPlan,
-): SharedSubscriptionPlan => plan as SharedSubscriptionPlan;
-
 export class BillingService {
   async getOverview(companyId: string): Promise<BillingOverview> {
     const company = await this.getCompanyWithFreshUsage(companyId);
-    const usage = await this.getUsage(companyId, {
-      maxMachinesAllowed: company.maxMachinesAllowed,
-      maxMaterialsAllowed: company.maxMaterialsAllowed,
-      maxQuotesPerMonth: company.maxQuotesPerMonth,
-      currentQuotesCount: company.currentQuotesCount,
-      quoteUsagePeriodStart: company.quoteUsagePeriodStart,
-    });
+    const usage = await this.getUsage(companyId, company);
+    const plan = toPlanResource(company.plan);
 
     return {
       companyId: company.id,
       companyName: company.name,
-      planType: subscriptionPlanLabel(company.planType),
+      plan,
       subscriptionStatus: subscriptionStatusLabel(company.subscriptionStatus),
-      stripeCustomerId: company.stripeCustomerId,
+      asaasCustomerId: company.asaasCustomerId,
       usage,
-      entitlements: PLAN_DEFINITIONS[company.planType].entitlements,
+      entitlements: plan.features,
     };
   }
 
@@ -116,13 +71,7 @@ export class BillingService {
       );
     }
 
-    const usage = await this.getUsage(companyId, {
-      maxMachinesAllowed: company.maxMachinesAllowed,
-      maxMaterialsAllowed: company.maxMaterialsAllowed,
-      maxQuotesPerMonth: company.maxQuotesPerMonth,
-      currentQuotesCount: company.currentQuotesCount,
-      quoteUsagePeriodStart: company.quoteUsagePeriodStart,
-    });
+    const usage = await this.getUsage(companyId, company);
     const metric =
       resource === "MACHINES"
         ? usage.machines
@@ -151,7 +100,7 @@ export class BillingService {
       );
     }
 
-    const entitlements = PLAN_DEFINITIONS[company.planType].entitlements;
+    const entitlements = toPlanResource(company.plan).features;
     const allowed =
       feature === "CUSTOM_FORMULAS"
         ? entitlements.customFormulas
@@ -162,27 +111,22 @@ export class BillingService {
         "This feature is not available on the current plan.",
         403,
         "PLAN_FEATURE_UNAVAILABLE",
-        { feature, planType: company.planType },
+        { feature, planCode: company.plan.code },
       );
     }
   }
 
+  // Single place that changes a company's plan — used by the free-plan
+  // checkout path, by cancellation (back to Free), by the Asaas webhook
+  // once a payment confirms, and by admin overrides on /admin/users.
   async applyPlan(
     companyId: string,
-    planType: SubscriptionPlan,
+    planId: string,
     subscriptionStatus: SubscriptionStatus = SubscriptionStatus.ACTIVE,
   ): Promise<BillingOverview> {
-    const definition = PLAN_DEFINITIONS[planType];
-
     await prisma.company.update({
       where: { id: companyId },
-      data: {
-        planType,
-        subscriptionStatus,
-        maxMachinesAllowed: definition.maxMachinesAllowed,
-        maxMaterialsAllowed: definition.maxMaterialsAllowed,
-        maxQuotesPerMonth: definition.maxQuotesPerMonth,
-      },
+      data: { planId, subscriptionStatus },
     });
 
     return this.getOverview(companyId);
@@ -191,28 +135,15 @@ export class BillingService {
   async updateSubscription(
     companyId: string,
     input: {
-      planType?: SubscriptionPlan;
+      planId?: string;
       subscriptionStatus?: SubscriptionStatus;
     },
   ): Promise<BillingOverview> {
-    const company = await this.getCompanyWithFreshUsage(companyId);
-    const planType = input.planType ?? company.planType;
-    const definition = PLAN_DEFINITIONS[planType];
-
     await prisma.company.update({
       where: { id: companyId },
       data: {
-        planType: input.planType,
+        planId: input.planId,
         subscriptionStatus: input.subscriptionStatus,
-        maxMachinesAllowed: input.planType
-          ? definition.maxMachinesAllowed
-          : undefined,
-        maxMaterialsAllowed: input.planType
-          ? definition.maxMaterialsAllowed
-          : undefined,
-        maxQuotesPerMonth: input.planType
-          ? definition.maxQuotesPerMonth
-          : undefined,
       },
     });
 
@@ -251,31 +182,15 @@ export class BillingService {
 
   async getUsageSnapshot(companyId: string): Promise<BillingUsage> {
     const company = await this.getCompanyWithFreshUsage(companyId);
-
-    return this.getUsage(companyId, {
-      maxMachinesAllowed: company.maxMachinesAllowed,
-      maxMaterialsAllowed: company.maxMaterialsAllowed,
-      maxQuotesPerMonth: company.maxQuotesPerMonth,
-      currentQuotesCount: company.currentQuotesCount,
-      quoteUsagePeriodStart: company.quoteUsagePeriodStart,
-    });
+    return this.getUsage(companyId, company);
   }
 
-  private async getCompanyWithFreshUsage(companyId: string) {
+  private async getCompanyWithFreshUsage(
+    companyId: string,
+  ): Promise<CompanyWithPlan> {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: {
-        id: true,
-        name: true,
-        planType: true,
-        subscriptionStatus: true,
-        stripeCustomerId: true,
-        currentQuotesCount: true,
-        quoteUsagePeriodStart: true,
-        maxMachinesAllowed: true,
-        maxMaterialsAllowed: true,
-        maxQuotesPerMonth: true,
-      },
+      include: { plan: true },
     });
 
     if (!company) {
@@ -293,13 +208,7 @@ export class BillingService {
 
   private async getUsage(
     companyId: string,
-    limits: {
-      maxMachinesAllowed: number;
-      maxMaterialsAllowed: number;
-      maxQuotesPerMonth: number;
-      currentQuotesCount: number;
-      quoteUsagePeriodStart: Date;
-    },
+    company: CompanyWithPlan,
   ): Promise<BillingUsage> {
     const [machineCount, materialCount] = await Promise.all([
       prisma.machine.count({ where: { companyId } }),
@@ -307,11 +216,17 @@ export class BillingService {
     ]);
 
     return {
-      machines: toUsageMetric(machineCount, limits.maxMachinesAllowed),
-      materials: toUsageMetric(materialCount, limits.maxMaterialsAllowed),
+      machines: toUsageMetric(machineCount, company.plan.maxMachinesAllowed),
+      materials: toUsageMetric(
+        materialCount,
+        company.plan.maxMaterialsAllowed,
+      ),
       monthlyQuotes: {
-        ...toUsageMetric(limits.currentQuotesCount, limits.maxQuotesPerMonth),
-        periodStart: limits.quoteUsagePeriodStart.toISOString(),
+        ...toUsageMetric(
+          company.currentQuotesCount,
+          company.plan.maxQuotesPerMonth,
+        ),
+        periodStart: company.quoteUsagePeriodStart.toISOString(),
       },
     };
   }

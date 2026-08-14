@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 import { AppError } from "../middlewares/error-handler";
 import { materialService } from "../services/material.service";
 import { getAuthenticatedCompanyId } from "../utils/request-auth";
+import { idParamSchema } from "../validators/common.validator";
 import {
   materialSchema,
   materialUpdateSchema,
@@ -51,10 +52,11 @@ export class MaterialController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
+      const { id } = idParamSchema.parse(request.params);
       const input = materialUpdateSchema.parse(request.body);
       const material = await materialService.update(
         companyId,
-        request.params.id,
+        id,
         input,
       );
       response.status(200).json(material);
@@ -70,13 +72,13 @@ export class MaterialController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
-      await materialService.delete(companyId, request.params.id);
+      const { id } = idParamSchema.parse(request.params);
+      await materialService.delete(companyId, id);
       response.status(204).send();
     } catch (error) {
-      next(error);
+      next(error instanceof ZodError ? toValidationError(error) : error);
     }
   }
 }
 
 export const materialController = new MaterialController();
-

@@ -8,6 +8,7 @@ import { ZodError } from "zod";
 import { AppError } from "../middlewares/error-handler";
 import { formulaService } from "../services/formula.service";
 import { getAuthenticatedCompanyId } from "../utils/request-auth";
+import { idParamSchema } from "../validators/common.validator";
 import {
   formulaPreviewSchema,
   formulaSchema,
@@ -89,10 +90,11 @@ export class FormulaController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
+      const { id } = idParamSchema.parse(request.params);
       const input = formulaUpdateSchema.parse(request.body);
       const formula = await formulaService.update(
         companyId,
-        request.params.id,
+        id,
         input,
         request.auth?.userId,
       );
@@ -109,14 +111,15 @@ export class FormulaController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
+      const { id } = idParamSchema.parse(request.params);
       await formulaService.delete(
         companyId,
-        request.params.id,
+        id,
         request.auth?.userId,
       );
       response.status(204).send();
     } catch (error) {
-      next(error);
+      next(error instanceof ZodError ? toValidationError(error) : error);
     }
   }
 }

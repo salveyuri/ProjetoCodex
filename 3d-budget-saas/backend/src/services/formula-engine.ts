@@ -90,7 +90,13 @@ export const getAvailableVariableNames = (
   ),
 ];
 
-const assertSafeExpressionText = (expression: string): void => {
+const allowedFormulaCharacters = /^[0-9a-zA-Z_+\-*/().\s]+$/;
+const identifierPattern = /[a-zA-Z_][a-zA-Z0-9_]*/g;
+
+const assertSafeExpressionText = (
+  expression: string,
+  availableVariables: string[],
+): void => {
   if (expression.length === 0 || expression.length > 600) {
     throw new AppError(
       "Formula expression must have between 1 and 600 characters.",
@@ -99,7 +105,7 @@ const assertSafeExpressionText = (expression: string): void => {
     );
   }
 
-  if (/[`"'[\];]/.test(expression) || expression.includes("=>")) {
+  if (!allowedFormulaCharacters.test(expression) || expression.includes("=>")) {
     throw new AppError(
       "Formula expression contains unsupported characters.",
       400,
@@ -107,9 +113,13 @@ const assertSafeExpressionText = (expression: string): void => {
     );
   }
 
-  const lowerExpression = expression.toLowerCase();
-  const hasDangerousIdentifier = DANGEROUS_IDENTIFIERS.some((identifier) =>
-    lowerExpression.includes(identifier.toLowerCase()),
+  const identifiers = expression.match(identifierPattern) ?? [];
+  const availableVariableSet = new Set(availableVariables);
+  const dangerousIdentifierSet = new Set(
+    DANGEROUS_IDENTIFIERS.map((identifier) => identifier.toLowerCase()),
+  );
+  const hasDangerousIdentifier = identifiers.some((identifier) =>
+    dangerousIdentifierSet.has(identifier.toLowerCase()),
   );
 
   if (hasDangerousIdentifier) {
@@ -119,6 +129,19 @@ const assertSafeExpressionText = (expression: string): void => {
       "FORMULA_UNSAFE_IDENTIFIER",
     );
   }
+
+  const unknownTextIdentifiers = identifiers.filter(
+    (identifier) => !availableVariableSet.has(identifier),
+  );
+
+  if (unknownTextIdentifiers.length > 0) {
+    throw new AppError(
+      `Unknown formula variables: ${unknownTextIdentifiers.join(", ")}.`,
+      400,
+      "FORMULA_UNKNOWN_VARIABLE",
+      { unknownVariables: unknownTextIdentifiers, availableVariables },
+    );
+  }
 };
 
 export const validateFormulaExpression = (
@@ -126,7 +149,7 @@ export const validateFormulaExpression = (
   availableVariables: string[],
 ): string => {
   const normalizedExpression = normalizeFormulaExpression(expression);
-  assertSafeExpressionText(normalizedExpression);
+  assertSafeExpressionText(normalizedExpression, availableVariables);
 
   let parsedExpression;
 

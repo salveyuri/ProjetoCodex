@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-const nonNegativeNumber = z.coerce.number().finite().min(0);
-const positiveInteger = z.coerce.number().int().positive();
+const nonNegativeNumber = z.number().finite().min(0);
+const positiveInteger = z.number().int().positive();
 const uuid = z.string().trim().uuid();
 
 export const calculationSchema = z
@@ -23,6 +23,7 @@ export const calculationSchema = z
     quoteItemsCount: positiveInteger.optional(),
     quantidade_mesas: positiveInteger.optional(),
   })
+  .strict()
   .transform((value, context) => {
     const weightGrams = value.weightGrams ?? value.peso_gramas;
     const printTimeHours = value.printTimeHours ?? value.tempo_horas;

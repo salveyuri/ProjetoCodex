@@ -2,11 +2,17 @@ import type { MaterialResource } from "@3d-budget/shared";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
-import { cacheService } from "./cache.service";
+import { cacheService, companyAnalyticsCacheKeyPrefix } from "./cache.service";
 import type {
   MaterialInput,
   MaterialUpdateInput,
 } from "../validators/resources.validator";
+
+type OwnedMaterialForUpdate = {
+  id: string;
+  totalWeightGrams: Prisma.Decimal;
+  costPerGram: Prisma.Decimal;
+};
 
 const toNumber = (value: Prisma.Decimal): number => Number(value.toString());
 
@@ -83,6 +89,12 @@ const toMaterialUpdateData = (
   return data;
 };
 
+// "Access denied." on purpose: doesn't confirm a company-ownership check
+// is what rejected this — see Contextos/Conhecimento.md.
+const throwMaterialForbidden = (): never => {
+  throw new AppError("Access denied.", 403, "MATERIAL_FORBIDDEN");
+};
+
 export class MaterialService {
   async list(companyId: string): Promise<MaterialResource[]> {
     const materials = await prisma.material.findMany({
@@ -101,7 +113,7 @@ export class MaterialService {
       data: toMaterialCreateData(companyId, input),
     });
 
-    cacheService.flush();
+    cacheService.delByPrefix(companyAnalyticsCacheKeyPrefix(companyId));
     return toMaterialResource(material);
   }
 
@@ -124,23 +136,41 @@ export class MaterialService {
         input.totalWeightGrams ?? toNumber(existing.totalWeightGrams),
     };
 
-    const material = await prisma.material.update({
-      where: { id: materialId },
-      data: toMaterialUpdateData(normalizedInput),
-    });
+    const [updateResult, material] = await prisma.$transaction([
+      prisma.material.updateMany({
+        where: { id: materialId, companyId },
+        data: toMaterialUpdateData(normalizedInput),
+      }),
+      prisma.material.findFirst({
+        where: { id: materialId, companyId },
+      }),
+    ]);
 
-    cacheService.flush();
-    return toMaterialResource(material);
+    if (updateResult.count !== 1) {
+      throwMaterialForbidden();
+    }
+
+    if (material === null) {
+      throwMaterialForbidden();
+    }
+
+    cacheService.delByPrefix(companyAnalyticsCacheKeyPrefix(companyId));
+    return toMaterialResource(
+      material as Parameters<typeof toMaterialResource>[0],
+    );
   }
 
   async delete(companyId: string, materialId: string): Promise<void> {
-    await this.ensureOwnership(companyId, materialId);
-
     try {
-      await prisma.material.delete({
-        where: { id: materialId },
+      const result = await prisma.material.deleteMany({
+        where: { id: materialId, companyId },
       });
-      cacheService.flush();
+
+      if (result.count !== 1) {
+        throwMaterialForbidden();
+      }
+
+      cacheService.delByPrefix(companyAnalyticsCacheKeyPrefix(companyId));
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -157,7 +187,10 @@ export class MaterialService {
     }
   }
 
-  private async ensureOwnership(companyId: string, materialId: string) {
+  private async ensureOwnership(
+    companyId: string,
+    materialId: string,
+  ): Promise<OwnedMaterialForUpdate> {
     const material = await prisma.material.findFirst({
       where: { id: materialId, companyId },
       select: {
@@ -167,11 +200,11 @@ export class MaterialService {
       },
     });
 
-    if (!material) {
-      throw new AppError("Material not found.", 404, "MATERIAL_NOT_FOUND");
+    if (material === null) {
+      throwMaterialForbidden();
     }
 
-    return material;
+    return material as OwnedMaterialForUpdate;
   }
 }
 

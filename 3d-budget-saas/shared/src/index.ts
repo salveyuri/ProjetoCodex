@@ -24,7 +24,7 @@ export interface HealthCheckResponse {
   filesystem: {
     status: FilesystemHealthStatus;
     latencyMs: number | null;
-    path: string;
+    path?: string;
     error?: string;
   };
 }
@@ -39,13 +39,50 @@ export interface ApiErrorResponse {
 
 export type UserRole = "ADMIN" | "USER";
 
-export type SubscriptionPlan = "FREE" | "PRO" | "ENTERPRISE";
-
 export type SubscriptionStatus = "ACTIVE" | "CANCELED" | "PAST_DUE";
+
+export type BillingCycle = "MONTHLY" | "YEARLY";
 
 export interface PlanEntitlements {
   customFormulas: boolean;
   pdfExport: boolean;
+}
+
+export interface PlanLimits {
+  machines: number | null;
+  materials: number | null;
+  monthlyQuotes: number | null;
+}
+
+export interface PlanResource {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  billingCycle: BillingCycle;
+  limits: PlanLimits;
+  features: PlanEntitlements;
+  isActive: boolean;
+  isPublic: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlanPayload {
+  code: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  currency?: string;
+  billingCycle: BillingCycle;
+  limits: PlanLimits;
+  features: PlanEntitlements;
+  isActive?: boolean;
+  isPublic?: boolean;
+  displayOrder?: number;
 }
 
 export interface UsageMetric {
@@ -65,7 +102,8 @@ export interface AuthCompany {
   id: string;
   name: string;
   defaultCurrency: string;
-  planType: SubscriptionPlan;
+  planCode: string;
+  planName: string;
   subscriptionStatus: SubscriptionStatus;
 }
 
@@ -101,25 +139,36 @@ export interface LoginRequest {
 export interface BillingOverview {
   companyId: string;
   companyName: string;
-  planType: SubscriptionPlan;
+  plan: PlanResource;
   subscriptionStatus: SubscriptionStatus;
-  stripeCustomerId: string | null;
+  asaasCustomerId: string | null;
   usage: BillingUsage;
   entitlements: PlanEntitlements;
 }
 
-export interface BillingPlanChangeRequest {
-  planType: Exclude<SubscriptionPlan, "FREE">;
+export interface CheckoutRequest {
+  planId: string;
 }
 
-export interface BillingPlanChangeResponse {
-  billing: BillingOverview;
-  payment: {
-    provider: "mock";
-    status: "succeeded";
-    transactionId: string;
-    planType: SubscriptionPlan;
-  };
+export interface CheckoutResponse {
+  // Present when the chosen plan is paid — the frontend must redirect the
+  // browser here (Asaas-hosted checkout, card/Pix data never touch our
+  // backend). Absent for the free plan, where `billing` reflects the
+  // change immediately since there is nothing to pay.
+  checkoutUrl: string | null;
+  checkoutId: string | null;
+  billing: BillingOverview | null;
+}
+
+export interface PaymentResource {
+  id: string;
+  status: string;
+  billingType: string | null;
+  value: number;
+  dueDate: string | null;
+  paymentDate: string | null;
+  invoiceUrl: string | null;
+  createdAt: string;
 }
 
 export interface AdminUserResource {
@@ -132,9 +181,10 @@ export interface AdminUserResource {
   company: {
     id: string;
     name: string;
-    planType: SubscriptionPlan;
+    planId: string;
+    planName: string;
     subscriptionStatus: SubscriptionStatus;
-    stripeCustomerId: string | null;
+    asaasCustomerId: string | null;
     usage: BillingUsage;
   } | null;
 }
@@ -142,7 +192,7 @@ export interface AdminUserResource {
 export interface AdminUserUpdatePayload {
   role?: UserRole;
   isActive?: boolean;
-  planType?: SubscriptionPlan;
+  planId?: string;
   subscriptionStatus?: SubscriptionStatus;
 }
 
@@ -217,7 +267,8 @@ export interface AuditLogResource {
 }
 
 export interface AdminPlanDistributionPoint {
-  planType: SubscriptionPlan;
+  planId: string;
+  planName: string;
   companies: number;
   activeCompanies: number;
   mrr: number;

@@ -6,7 +6,6 @@ import type {
   MachineResource,
   MaterialResource,
 } from "@3d-budget/shared";
-import axios from "axios";
 import {
   Calculator,
   Clock3,
@@ -25,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
 
 const toMoney = (value: number): string =>
@@ -32,18 +32,6 @@ const toMoney = (value: number): string =>
     style: "currency",
     currency: "BRL",
   }).format(value);
-
-const getApiErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return "Nao foi possivel calcular o orcamento.";
-};
 
 const numberFromInput = (value: string): number => Number(value.replace(",", "."));
 
@@ -99,7 +87,7 @@ export default function CalculatorPage() {
       setMachineId((current) => current || machinesResponse.data[0]?.id || "");
       setMaterialId((current) => current || materialsResponse.data[0]?.id || "");
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel calcular o orcamento."));
     } finally {
       setIsLoadingResources(false);
     }
@@ -126,7 +114,7 @@ export default function CalculatorPage() {
       setResult(response.data);
     } catch (error) {
       setResult(null);
-      setErrorMessage(getApiErrorMessage(error));
+      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel calcular o orcamento."));
     } finally {
       setIsCalculating(false);
     }

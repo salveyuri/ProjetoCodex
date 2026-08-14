@@ -29,18 +29,7 @@ import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
-
-const getApiErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return "Nao foi possivel carregar analytics admin.";
-};
+import { getApiErrorMessage } from "@/lib/api-error";
 
 const actionLabels: Record<string, string> = {
   ADMIN_USER_UPDATED: "Usuario/plano alterado",
@@ -77,7 +66,7 @@ export default function AdminAnalyticsPage() {
       if (axios.isAxiosError(error) && error.response?.status === 403) {
         setIsAccessDenied(true);
       } else {
-        setErrorMessage(getApiErrorMessage(error));
+        setErrorMessage(getApiErrorMessage(error, "Nao foi possivel carregar analytics admin."));
       }
     } finally {
       setIsLoading(false);
@@ -130,7 +119,7 @@ export default function AdminAnalyticsPage() {
                   Acesso restrito
                 </h2>
                 <p className="mt-2 text-sm text-muted">
-                  Esta area esta disponivel apenas para usuarios com role ADMIN.
+                  Voce nao tem permissao para acessar esta area.
                 </p>
               </div>
             </div>
@@ -183,7 +172,7 @@ export default function AdminAnalyticsPage() {
                       Planos e MRR
                     </h2>
                     <p className="text-sm text-muted">
-                      Distribuicao por plano com receita recorrente mockada.
+                      Distribuicao por plano com receita recorrente estimada.
                     </p>
                   </div>
                 </div>
@@ -191,7 +180,7 @@ export default function AdminAnalyticsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={analytics.planDistribution}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                      <XAxis dataKey="planType" stroke="#a1a1aa" />
+                      <XAxis dataKey="planName" stroke="#a1a1aa" />
                       <YAxis stroke="#a1a1aa" />
                       <Tooltip
                         contentStyle={{

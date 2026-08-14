@@ -9,8 +9,10 @@ import { Prisma, type QuoteStatus } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
 import { billingService } from "./billing.service";
-import { cacheService } from "./cache.service";
+import { cacheService, companyAnalyticsCacheKeyPrefix } from "./cache.service";
 import { calculationService } from "./CalculationService";
+import { formulaService } from "./formula.service";
+import { settingsService } from "./settings.service";
 import type {
   QuoteCreateInput,
   QuoteListQuery,
@@ -92,6 +94,12 @@ const buildQuoteCalculationContext = (
   finishingHours,
   quoteItemsCount,
 });
+
+// "Access denied." on purpose: doesn't confirm a company-ownership check
+// is what rejected this — see Contextos/Conhecimento.md.
+const throwQuoteForbidden = (): never => {
+  throw new AppError("Access denied.", 403, "QUOTE_FORBIDDEN");
+};
 
 const toQuoteItemSnapshot = (
   item: QuoteWithItems["printItems"][number],
@@ -242,14 +250,11 @@ export class QuoteService {
       input.finishingHours,
       input.items.length,
     );
-    const calculations = await Promise.all(
-      input.items.map((item) =>
-        calculationService.calculate(companyId, {
-          ...item,
-          ...quoteCalculationContext,
-          formulaId: input.formulaId,
-        }),
-      ),
+    const calculations = await this.calculateItems(
+      companyId,
+      input.items,
+      input.formulaId,
+      quoteCalculationContext,
     );
     const aggregation = aggregateCalculations(calculations);
     const appliedFormulaId = getAppliedFormulaId(calculations);
@@ -280,7 +285,7 @@ export class QuoteService {
       return created;
     });
 
-    cacheService.flush();
+    cacheService.delByPrefix(companyAnalyticsCacheKeyPrefix(companyId));
     return toQuoteResource(quote);
   }
 
@@ -307,22 +312,19 @@ export class QuoteService {
       itemsForCalculation.length,
     );
     const calculations = shouldRecalculate
-      ? await Promise.all(
-          itemsForCalculation.map((item) =>
-            calculationService.calculate(companyId, {
-              ...item,
-              ...quoteCalculationContext,
-              formulaId,
-            }),
-          ),
+      ? await this.calculateItems(
+          companyId,
+          itemsForCalculation,
+          formulaId,
+          quoteCalculationContext,
         )
       : null;
     const aggregation = calculations ? aggregateCalculations(calculations) : null;
     const appliedFormulaId = calculations ? getAppliedFormulaId(calculations) : undefined;
 
     const quote = await prisma.$transaction(async (transaction) => {
-      await transaction.quote.update({
-        where: { id: quoteId },
+      const updateResult = await transaction.quote.updateMany({
+        where: { id: quoteId, companyId },
         data: {
           customerName: input.customerName,
           validUntil: input.validUntil,
@@ -336,8 +338,14 @@ export class QuoteService {
         },
       });
 
+      if (updateResult.count !== 1) {
+        throwQuoteForbidden();
+      }
+
       if (shouldRecalculate && calculations) {
-        await transaction.printItem.deleteMany({ where: { quoteId } });
+        await transaction.printItem.deleteMany({
+          where: { quote: { id: quoteId, companyId } },
+        });
         await Promise.all(
           itemsForCalculation.map((item, index) =>
             transaction.printItem.create({
@@ -355,21 +363,27 @@ export class QuoteService {
         include: quoteInclude,
       });
 
-      if (!updated) {
-        throw new AppError("Quote not found.", 404, "QUOTE_NOT_FOUND");
+      if (updated === null) {
+        throwQuoteForbidden();
       }
 
-      return updated;
+      return updated as QuoteWithItems;
     });
 
-    cacheService.flush();
+    cacheService.delByPrefix(companyAnalyticsCacheKeyPrefix(companyId));
     return toQuoteResource(quote);
   }
 
   async delete(companyId: string, quoteId: string): Promise<void> {
-    await this.findOwnedQuote(companyId, quoteId);
-    await prisma.quote.delete({ where: { id: quoteId } });
-    cacheService.flush();
+    const result = await prisma.quote.deleteMany({
+      where: { id: quoteId, companyId },
+    });
+
+    if (result.count !== 1) {
+      throwQuoteForbidden();
+    }
+
+    cacheService.delByPrefix(companyAnalyticsCacheKeyPrefix(companyId));
   }
 
   private async findOwnedQuote(
@@ -381,11 +395,40 @@ export class QuoteService {
       include: quoteInclude,
     });
 
-    if (!quote) {
-      throw new AppError("Quote not found.", 404, "QUOTE_NOT_FOUND");
+    if (quote === null) {
+      throwQuoteForbidden();
     }
 
-    return quote;
+    return quote as QuoteWithItems;
+  }
+
+  /**
+   * Resolves `settings`/`formula` once for the whole quote (every item
+   * shares them) instead of once per item, then calculates each item in
+   * parallel. Avoids refetching the same settings/formula N times for a
+   * quote with N print items.
+   */
+  private async calculateItems(
+    companyId: string,
+    items: QuoteItemInput[],
+    formulaId: string | undefined,
+    quoteCalculationContext: ReturnType<typeof buildQuoteCalculationContext>,
+  ): Promise<QuoteCalculation[]> {
+    const [settings, formula] = await Promise.all([
+      settingsService.get(companyId),
+      formulaService.getFormulaForCalculation(companyId, formulaId),
+    ]);
+
+    return Promise.all(
+      items.map((item) =>
+        calculationService.calculateWithResolvedContext(
+          companyId,
+          { ...item, ...quoteCalculationContext, formulaId },
+          settings,
+          formula,
+        ),
+      ),
+    );
   }
 }
 

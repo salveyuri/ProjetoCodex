@@ -281,12 +281,35 @@ export const calculateQuoteBreakdown = ({
   };
 };
 
+type FormulaForCalculation = Awaited<
+  ReturnType<typeof formulaService.getFormulaForCalculation>
+>;
+
 export class CalculationService {
   async calculate(
     companyId: string,
     input: CalculationInput,
   ): Promise<CalculationResponse> {
-    const [machine, material, settings, formula] = await Promise.all([
+    const [settings, formula] = await Promise.all([
+      settingsService.get(companyId),
+      formulaService.getFormulaForCalculation(companyId, input.formulaId),
+    ]);
+
+    return this.calculateWithResolvedContext(companyId, input, settings, formula);
+  }
+
+  /**
+   * Same as `calculate`, but for callers that already resolved `settings`
+   * and `formula` once (e.g. a multi-item quote, where every item shares
+   * the same settings/formula) — avoids refetching them per item.
+   */
+  async calculateWithResolvedContext(
+    companyId: string,
+    input: CalculationInput,
+    settings: ProductionSettings,
+    formula: FormulaForCalculation,
+  ): Promise<CalculationResponse> {
+    const [machine, material] = await Promise.all([
       prisma.machine.findFirst({
         where: { id: input.machineId, companyId },
         select: {
@@ -307,16 +330,19 @@ export class CalculationService {
           costPerGram: true,
         },
       }),
-      settingsService.get(companyId),
-      formulaService.getFormulaForCalculation(companyId, input.formulaId),
     ]);
 
+    // "Access denied." on purpose for both, not "not accessible for this
+    // company": the specific wording shouldn't confirm that a
+    // company-ownership check is what rejected the request (see
+    // Contextos/Conhecimento.md). Codes stay distinct for legitimate
+    // frontend/API-consumer logic.
     if (!machine) {
-      throw new AppError("Machine not found.", 404, "MACHINE_NOT_FOUND");
+      throw new AppError("Access denied.", 403, "MACHINE_FORBIDDEN");
     }
 
     if (!material) {
-      throw new AppError("Material not found.", 404, "MATERIAL_NOT_FOUND");
+      throw new AppError("Access denied.", 403, "MATERIAL_FORBIDDEN");
     }
 
     return calculateQuoteBreakdown({

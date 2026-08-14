@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 import { AppError } from "../middlewares/error-handler";
 import { machineService } from "../services/machine.service";
 import { getAuthenticatedCompanyId } from "../utils/request-auth";
+import { idParamSchema } from "../validators/common.validator";
 import {
   machineSchema,
   machineUpdateSchema,
@@ -51,10 +52,11 @@ export class MachineController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
+      const { id } = idParamSchema.parse(request.params);
       const input = machineUpdateSchema.parse(request.body);
       const machine = await machineService.update(
         companyId,
-        request.params.id,
+        id,
         input,
       );
       response.status(200).json(machine);
@@ -70,13 +72,13 @@ export class MachineController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
-      await machineService.delete(companyId, request.params.id);
+      const { id } = idParamSchema.parse(request.params);
+      await machineService.delete(companyId, id);
       response.status(204).send();
     } catch (error) {
-      next(error);
+      next(error instanceof ZodError ? toValidationError(error) : error);
     }
   }
 }
 
 export const machineController = new MachineController();
-

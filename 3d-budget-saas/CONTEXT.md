@@ -1,5 +1,13 @@
 # CONTEXT.md
 
+> **ARQUIVO HISTÓRICO — não editar mais.** Em 2026-08-12 este projeto passou
+> a usar o mesmo padrão de contexto do projeto `atendimentos_app`: ver
+> `CLAUDE.md` (visão geral) e `Contextos/Chat.log`, `Contextos/Decisoes.md`,
+> `Contextos/Conhecimento.md`, `Contextos/Ambientes.md`,
+> `Contextos/Convencoes.md` e `Notas/TODO.md`. Todo o conteúdo abaixo foi
+> migrado para esses arquivos; este documento fica só como referência do
+> estado bruto anterior.
+
 ## Estado Atual
 
 - Monorepo `3d-budget-saas` inicializado com tres areas principais:
@@ -24,6 +32,8 @@
 - Correcao RBAC/Admin aplicada: a tela `/admin/users` agora atualiza a sessao em `/api/auth/me` e deixa a API decidir o acesso, evitando bloqueio por role antiga em `localStorage`.
 - Bloco 12 implementado: Analytics, Performance, Observabilidade e Auditoria com graficos, exports CSV/JSON, cache, logs estruturados e painel global Admin.
 - Correcao de fluxo em orcamentos aplicada: novas mesas iniciam vazias, selects usam placeholders neutros e o preview acumulado ignora mesas incompletas sem quebrar o total.
+- Bloco 13 implementado: blindagem de seguranca com rate limiting, headers Helmet, validacao Zod estrita, parser de formulas endurecido e mutacoes multi-tenant com `companyId` no proprio Prisma.
+- Ajuste visual aplicado em `/dashboard/settings`: modais de maquinas e materiais usam largura responsiva, scroll interno e campos com `min-width` seguro para evitar overflow em grades.
 
 ## Decisoes de Arquitetura
 
@@ -58,6 +68,8 @@
 - Logs HTTP foram migrados de `morgan` para `pino`/`pino-http`, com redaction de credenciais e niveis configuraveis por `LOG_LEVEL`.
 - O middleware global de erro persiste falhas em `SystemError` e tambem emite logs estruturados; rotas 404 nao sao persistidas para evitar ruido operacional.
 - A auditoria foi implementada como trilha append-only em `AuditLog`, registrando mudancas sensiveis de usuario/plano, billing e formulas.
+- A estrategia anti-IDOR agora usa consultas e mutacoes com `{ id, companyId }` nos agregados de empresa; recursos fora do tenant retornam `403` em vez de serem atualizados por `id` isolado.
+- Payloads JSON de mutacao usam schemas Zod `.strict()` e numeros/booleanos reais, sem coercao permissiva de strings em campos monetarios, percentuais ou flags.
 
 ## Database Layer
 
@@ -108,6 +120,40 @@
 - Admin UI: `/admin/users` chama `refreshUser()` antes de buscar usuarios e trata `403` da API como fonte final para exibir o aviso de acesso restrito.
 - Logout: limpa `localStorage`, remove cookie `auth_token`, remove Authorization do Axios e redireciona para `/login`.
 - Contas desativadas por admin sao bloqueadas no login e tambem em rotas protegidas por `accountStatusMiddleware`.
+
+## Security Middlewares
+
+- `helmet` fica ativo em `app.ts` com `app.disable("x-powered-by")`, ativando headers de clickjacking, MIME sniffing, referrer policy, HSTS e CSP padrao para a API.
+- `express-rate-limit` foi instalado e configurado em `backend/src/middlewares/rate-limit-middleware.ts`.
+- Limites ativos:
+  - Global API: `100` requests por minuto por IP em `/api`.
+  - Login: `5` tentativas por minuto por IP em `/api/auth/login`.
+  - Calculo pesado: `30` requests por minuto por IP em `/api/calculate`, preview de formulas e criacao/edicao de orcamentos.
+- Respostas de limite usam `429` com `RATE_LIMIT_GLOBAL`, `RATE_LIMIT_LOGIN` ou `RATE_LIMIT_CALCULATION`.
+
+## Multi-Tenancy Guard
+
+- `MachineService`, `MaterialService`, `QuoteService` e `FormulaService` passaram a usar `updateMany/deleteMany/findFirst` com `where: { id, companyId }` nas mutacoes criticas.
+- Acesso a PDF (`QuotePdfService`) tambem busca o orcamento por `{ id, companyId }`.
+- `CalculationService` busca maquina/material por `{ id, companyId }` e retorna `403` quando o recurso nao pertence a empresa autenticada.
+- IDs de URL em rotas admin, maquinas, materiais, orcamentos e formulas passam por `idParamSchema` com UUID estrito antes de chegar aos services.
+- Vetor anulado: IDOR por troca manual de UUID em URL, como acessar `/api/quotes/:id`, `/api/machines/:id`, `/api/materials/:id`, `/api/formulas/:id` ou `/api/quotes/:id/pdf` de outra empresa.
+
+## Input Sanity
+
+- Schemas Zod de auth, billing, admin, maquinas, materiais, settings, calculo, formulas e orcamentos agora usam `.strict()` para rejeitar campos extras como `role`, `planType` ou `subscriptionStatus` fora dos endpoints corretos.
+- Campos numericos em payload JSON usam `z.number()` em vez de `z.coerce.number()`, rejeitando strings, scripts e valores nao finitos em floats/percentuais.
+- Query params continuam usando coercao controlada apenas onde o transporte HTTP exige string, como paginacao de listagem.
+- `formula-engine` normaliza `{variavel}` para `variavel`, mas depois aceita somente numeros, variaveis registradas, espacos, ponto decimal e operadores `+ - * / ( )`.
+- Identificadores globais perigosos (`process`, `require`, `constructor`, `eval`, `Function`, etc.) e caracteres como colchetes, aspas, crase, ponto e virgula e setas sao bloqueados antes do parse.
+- Vetores anulados: injecao de JS em formulas, tentativa de chamar APIs globais do runtime, payload pollution por campos extras e strings maliciosas em campos numericos.
+
+## Anti-Bypass Strategy
+
+- O frontend continua apenas exibindo estados de plano; limites reais sao aplicados no backend por `requireUsageLimit` e `requirePlanFeature`.
+- `role`, `planType` e `subscriptionStatus` nao sao aceitos em payloads de usuario comum por causa de schemas `.strict()` e ausencia de endpoint `PATCH /api/users/me`.
+- Alteracao manual de role/plano/status permanece restrita a `/api/admin/users/:id`, protegido por `authMiddleware`, `accountStatusMiddleware`, `adminMiddleware`, UUID estrito e `adminUserUpdateSchema`.
+- Upgrade/cancelamento de plano via usuario passa somente por `/api/billing`, com plano pago validado por enum e `PaymentService` mock como fronteira futura para webhook Stripe assinado.
 
 ## Subscription Architecture
 
@@ -298,6 +344,7 @@
 - `/dashboard/quotes/new`: novas mesas iniciam com nome, maquina, material, peso e tempo em branco; maquina/material mostram placeholders ate o usuario selecionar recursos.
 - `/dashboard/quotes/new` e `/dashboard/quotes/[id]`: o resumo acumulado soma apenas previews validos e trata mesas incompletas como valor zero durante a edicao.
 - `/dashboard/settings/formulas`: a lista de variaveis disponiveis passa a listar os seis novos tokens do Bloco 8.3 quando o usuario cria ou edita uma formula.
+- `/dashboard/settings`: modais `Nova Maquina`, `Editar Maquina`, `Novo Material` e `Editar Material` agora mantem inputs/selects dentro do container e quebram grades de tres colunas em telas estreitas.
 
 ## UI State Fix
 
@@ -633,6 +680,10 @@
 - Smoke test direto do `CalculationService` confirmou injecao de `horas_pintura`, `valor_hora_pintura`, `horas_acabamento`, `valor_hora_acabamento`, `quantidade_mesas` e `taxa_erro` no parser.
 - Correcao de estado inicial/preview validada com `npm --workspace @3d-budget/frontend run lint`, `npm --workspace @3d-budget/backend run lint`, `npm --workspace @3d-budget/shared run build`, `npm --workspace @3d-budget/frontend run build` e `npm --workspace @3d-budget/backend exec -- tsc -p tsconfig.json --noEmit`.
 - Smoke test do validador de calculo confirmou que `POST /api/calculate` normaliza `weightGrams` e `printTimeHours` omitidos para `0` quando maquina/material validos sao informados.
+- Bloco 13 validado com `npm --workspace @3d-budget/backend run lint`, `npm --workspace @3d-budget/backend exec -- tsc -p tsconfig.json --noEmit`, `npm --workspace @3d-budget/backend run build`, `npm --workspace @3d-budget/frontend run build` e `npm --workspace @3d-budget/shared run build`.
+- Smoke tests de seguranca confirmaram rejeicao de numero como string em calculo, bloqueio de `role` injetado no registro, bloqueio de `process` em formula e bloqueio de colchetes na expressao.
+- Smoke test real de rate limit em servidor Express temporario confirmou `/api/auth/login`: cinco tentativas invalidas retornaram `400` e a sexta retornou `429`; a resposta incluiu headers Helmet como `x-frame-options`, `x-content-type-options` e CSP.
+- `npm audit --workspace @3d-budget/backend --omit=dev` continua apontando vulnerabilidade alta conhecida em `expr-eval` sem fix automatico; o Bloco 13 adicionou whitelist de caracteres, tokens permitidos e operadores restritos como mitigacao em runtime.
 
 ## Mapa de Dependencias
 
@@ -655,6 +706,7 @@
   - `SystemErrorService` para persistir erros capturados pelo middleware global.
   - `node-cache` para cache em memoria de analytics com TTL curto.
   - `pino` e `pino-http` para logs estruturados e redaction de credenciais.
+  - `helmet` e `express-rate-limit` para headers defensivos e protecao contra brute-force/DoS.
   - `Prisma.Decimal` para precisao monetaria no motor de calculo.
   - `expr-eval` para interpretar formulas matematicas com parser restrito.
   - `pdfkit` para gerar PDFs server-side em memoria.
@@ -764,7 +816,14 @@
 - CORRIGIDO: `QuoteForm` para iniciar novas mesas sem valores arbitrarios, manter placeholders em selects e somar previews validos mesmo com mesas incompletas.
 - CORRIGIDO: `CalculationService` e `calculation.validator` para tratar peso, tempo e horas operacionais ausentes/vazios como `0` em previews parciais.
 - CORRIGIDO: `frontend/src/app/dashboard/settings/page.tsx` para normalizar `ProductionSettings` e evitar warning uncontrolled/controlled nos inputs numericos.
+- INSTALADO: `express-rate-limit` no backend.
+- CRIADO: `backend/src/middlewares/rate-limit-middleware.ts` com limitadores global, login e calculo.
+- CRIADO: `backend/src/validators/common.validator.ts` com `idParamSchema` UUID para params de rota.
+- ATUALIZADO: `app.ts`, rotas de auth/calculo/formulas/orcamentos e services multi-tenant com as travas do Bloco 13.
+- ATUALIZADO: validadores Zod para schemas estritos e numeros/booleanos nao coercivos em payloads JSON.
+- ATUALIZADO: `formula-engine` com whitelist de caracteres/identificadores antes do parser `expr-eval`.
 - ATUALIZADO: este `CONTEXT.md` com estado, decisoes, pendencias e mapa de dependencias.
+- CORRIGIDO: `frontend/src/app/dashboard/settings/page.tsx` para remover overflow lateral no modal `Nova Maquina` e padronizar campos responsivos nos modais de recursos.
 
 ## Proximo Passo
 

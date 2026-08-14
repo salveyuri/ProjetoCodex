@@ -5,7 +5,6 @@ import type {
   QuoteListItem,
   QuoteResource,
 } from "@3d-budget/shared";
-import axios from "axios";
 import {
   Activity,
   ArrowUpRight,
@@ -32,6 +31,7 @@ import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-error";
 
 interface DashboardMetric {
   detail: string;
@@ -39,18 +39,6 @@ interface DashboardMetric {
   label: string;
   value: string;
 }
-
-const getApiErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return "Nao foi possivel carregar o dashboard.";
-};
 
 const isCurrentMonth = (value: string): boolean => {
   const date = new Date(value);
@@ -118,7 +106,7 @@ export default function DashboardPage() {
       setQuotes(quoteList);
       setQuoteDetails(detailResponses.map((detail) => detail.data));
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel carregar o dashboard."));
     } finally {
       setIsLoading(false);
     }

@@ -1,6 +1,5 @@
 "use client";
 
-import axios from "axios";
 import { Cpu, Loader2, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,24 +7,7 @@ import { FormEvent, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
-
-const getErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const code = error.response?.data?.code;
-
-    if (code === "EMAIL_ALREADY_EXISTS") {
-      return "E-mail ja cadastrado.";
-    }
-
-    const message = error.response?.data?.message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return "Nao foi possivel criar a conta.";
-};
+import { getApiErrorMessage } from "@/lib/api-error";
 
 const isStrongEnoughPassword = (password: string): boolean =>
   password.length >= 8 &&
@@ -76,7 +58,7 @@ export const RegisterForm = () => {
       });
       router.replace("/dashboard");
     } catch (registerError) {
-      setError(getErrorMessage(registerError));
+      setError(getApiErrorMessage(registerError, "Nao foi possivel criar a conta."));
     } finally {
       setIsSubmitting(false);
     }

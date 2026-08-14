@@ -6,12 +6,14 @@ import type {
   LoginRequest,
   RegisterRequest,
 } from "@3d-budget/shared";
+import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { api } from "@/lib/api";
@@ -29,20 +31,16 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const TOKEN_KEY = "auth_token";
+// Only the (non-secret) user profile is cached client-side, purely so the
+// UI can paint instantly before the silent refresh below resolves. The
+// actual session lives in an httpOnly refresh-token cookie set by the
+// backend (never readable from JS) plus a short-lived access token kept
+// only in memory (this React state — lost on reload by design).
 const USER_KEY = "auth_user";
-const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
-const writeAuthCookie = (token: string): void => {
-  const secureFlag = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `${TOKEN_KEY}=${encodeURIComponent(
-    token,
-  )}; Path=/; Max-Age=${COOKIE_MAX_AGE_SECONDS}; SameSite=Lax${secureFlag}`;
-};
+type RetryableRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
-const clearAuthCookie = (): void => {
-  document.cookie = `${TOKEN_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
-};
+const AUTH_ENDPOINT_NO_RETRY = /\/auth\/(refresh|login|register|logout(-all)?)$/;
 
 const setApiAuthorization = (token: string | null): void => {
   if (token) {
@@ -57,11 +55,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const refreshPromiseRef = useRef<Promise<AuthUser | null> | null>(null);
 
   const clearSession = useCallback(() => {
-    window.localStorage.removeItem(TOKEN_KEY);
     window.localStorage.removeItem(USER_KEY);
-    clearAuthCookie();
     setApiAuthorization(null);
     setToken(null);
     setUser(null);
@@ -72,41 +69,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(nextUser);
   }, []);
 
-  const refreshUser = useCallback(async (): Promise<AuthUser | null> => {
-    const activeToken = token ?? window.localStorage.getItem(TOKEN_KEY);
+  const persistSession = useCallback(
+    (data: AuthResponse) => {
+      setApiAuthorization(data.token);
+      setToken(data.token);
+      persistUser(data.user);
+    },
+    [persistUser],
+  );
 
-    if (!activeToken) {
-      return null;
+  // Silently exchanges the httpOnly refresh cookie for a new access token
+  // (sent automatically by the browser via withCredentials — see lib/api.ts).
+  // Concurrent callers (bootstrap on mount, the 401 retry below, manual
+  // calls from admin pages) share the same in-flight request instead of
+  // firing multiple refreshes at once.
+  const refreshUser = useCallback((): Promise<AuthUser | null> => {
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
     }
 
-    setApiAuthorization(activeToken);
+    const promise = (async () => {
+      try {
+        const { data } = await api.post<AuthResponse>("/auth/refresh");
+        persistSession(data);
+        return data.user;
+      } catch {
+        clearSession();
+        return null;
+      } finally {
+        refreshPromiseRef.current = null;
+      }
+    })();
 
-    try {
-      const { data } = await api.get<AuthUser>("/auth/me");
-      persistUser(data);
-      return data;
-    } catch {
-      clearSession();
-      return null;
-    }
-  }, [clearSession, persistUser, token]);
+    refreshPromiseRef.current = promise;
+    return promise;
+  }, [clearSession, persistSession]);
 
   useEffect(() => {
     let isMounted = true;
 
     const bootstrapSession = async () => {
-      const storedToken = window.localStorage.getItem(TOKEN_KEY);
       const storedUser = window.localStorage.getItem(USER_KEY);
-
-      if (!storedToken) {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      setApiAuthorization(storedToken);
-      writeAuthCookie(storedToken);
 
       if (storedUser) {
         try {
@@ -120,24 +123,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
+      await refreshUser();
+
       if (isMounted) {
-        setToken(storedToken);
-      }
-
-      try {
-        const { data } = await api.get<AuthUser>("/auth/me");
-
-        if (isMounted) {
-          persistUser(data);
-        }
-      } catch {
-        if (isMounted) {
-          clearSession();
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     };
 
@@ -146,27 +135,71 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       isMounted = false;
     };
-  }, [clearSession, persistUser]);
+    // Intentionally runs once on mount only — refreshUser is stable across
+    // renders in practice (its own deps are the stable clearSession/
+    // persistSession callbacks), and re-running this on every identity
+    // change would silently re-trigger the bootstrap refresh.
+  }, []);
 
-  const persistSession = useCallback((data: AuthResponse) => {
-    window.localStorage.setItem(TOKEN_KEY, data.token);
-    writeAuthCookie(data.token);
-    setApiAuthorization(data.token);
-    setToken(data.token);
-    persistUser(data.user);
-  }, [persistUser]);
+  // A protected call can hit its access token expiring mid-session (tokens
+  // are short-lived on purpose — see Contextos/Decisoes.md). On a 401 that
+  // isn't from an auth endpoint itself, try one silent refresh and replay
+  // the original request; if the refresh also fails, give up and let the
+  // 401 propagate (the caller ends up logged out via refreshUser->clearSession).
+  useEffect(() => {
+    const interceptorId = api.interceptors.response.use(
+      (response) => response,
+      async (error: AxiosError) => {
+        const config = error.config as RetryableRequestConfig | undefined;
+        const url = config?.url ?? "";
 
-  const login = useCallback(async (credentials: LoginRequest) => {
-    const { data } = await api.post<AuthResponse>("/auth/login", credentials);
-    persistSession(data);
-  }, [persistSession]);
+        if (
+          error.response?.status !== 401 ||
+          !config ||
+          config._retry ||
+          AUTH_ENDPOINT_NO_RETRY.test(url)
+        ) {
+          throw error;
+        }
 
-  const register = useCallback(async (payload: RegisterRequest) => {
-    const { data } = await api.post<AuthResponse>("/auth/register", payload);
-    persistSession(data);
-  }, [persistSession]);
+        config._retry = true;
+        const refreshedUser = await refreshUser();
 
-  const logout = useCallback(() => {
+        if (!refreshedUser) {
+          throw error;
+        }
+
+        config.headers.Authorization = api.defaults.headers.common
+          .Authorization as string;
+        return api.request(config);
+      },
+    );
+
+    return () => {
+      api.interceptors.response.eject(interceptorId);
+    };
+  }, [refreshUser]);
+
+  const login = useCallback(
+    async (credentials: LoginRequest) => {
+      const { data } = await api.post<AuthResponse>("/auth/login", credentials);
+      persistSession(data);
+    },
+    [persistSession],
+  );
+
+  const register = useCallback(
+    async (payload: RegisterRequest) => {
+      const { data } = await api.post<AuthResponse>("/auth/register", payload);
+      persistSession(data);
+    },
+    [persistSession],
+  );
+
+  const logout = useCallback((): void => {
+    // Best-effort: revoke the refresh token server-side, but don't block
+    // clearing the local session on the network call succeeding.
+    void api.post("/auth/logout").catch(() => undefined);
     clearSession();
   }, [clearSession]);
 

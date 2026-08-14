@@ -21,7 +21,11 @@ export const adminMiddleware = async (
     });
 
     if (!user?.isActive || user.role !== "ADMIN") {
-      next(new AppError("Admin privileges required.", 403, "ADMIN_REQUIRED"));
+      // Deliberately generic: naming the exact missing role tells an
+      // attacker precisely what to try forging. ADMIN_REQUIRED (the code,
+      // not this message) is what the frontend/API consumers should key
+      // off of instead.
+      next(new AppError("Access denied.", 403, "ADMIN_REQUIRED"));
       return;
     }
 

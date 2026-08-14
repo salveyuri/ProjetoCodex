@@ -1,0 +1,57 @@
+# Docker Compose de produção — banco de dados externo (Supabase), sem
+# Postgres local. Copie .env.example para .env na raiz e preencha os
+# valores reais antes de rodar isso de verdade.
+#
+#   cp .env.example .env
+#   docker compose build
+#   docker compose run --rm backend npx prisma migrate deploy
+#   docker compose run --rm backend npx prisma db seed   # opcional, promove SEED_ADMIN_EMAIL a ADMIN
+#   docker compose up -d
+#
+# Ver Contextos/Ambientes.md ("Produção — VPS + Supabase") para o passo a
+# passo completo (VPS, Nginx, HTTPS, Asaas).
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      # String de conexão do Supabase (Session pooler, porta 5432) — pegue
+      # em Project Settings > Database > Connection string > Session
+      # pooling no painel do Supabase.
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env — pegue a connection string no painel do Supabase}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env, generate one with openssl rand -base64 48}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-30}
+      CORS_ORIGIN: ${CORS_ORIGIN:?set CORS_ORIGIN in .env — o dominio real com https, ex. https://seudominio.com}
+      # 1 hop de proxy (o Nginx do host) na frente do backend em produção —
+      # ver deploy/nginx.conf.example e SEC-006 em Contextos/Auditoria.md.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL in .env — o dominio real com https, ex. https://seudominio.com}
+      ASAAS_ENV: ${ASAAS_ENV:-production}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:?set ASAAS_API_KEY in .env — chave de PRODUCAO do Asaas}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:?set ASAAS_WEBHOOK_TOKEN in .env, gere com openssl rand -hex 32}
+    ports:
+      # Só acessível a partir do próprio host (127.0.0.1) — o Nginx roda no
+      # host e faz proxy pra cá. Nunca publicado direto na internet.
+      - "127.0.0.1:3001:3001"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # Fica embutido no bundle do navegador em tempo de BUILD — mudar
+        # depois exige rebuildar a imagem, não só reiniciar o container.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env — ex. https://seudominio.com/api}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:3000:3000"

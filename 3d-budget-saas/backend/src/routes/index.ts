@@ -13,6 +13,8 @@ import { settingsRoutes } from "./settings.routes";
 import { calculationRoutes } from "./calculation.routes";
 import { quoteRoutes } from "./quote.routes";
 import { formulaRoutes } from "./formula.routes";
+import { planRoutes } from "./plan.routes";
+import { webhookRoutes } from "./webhook.routes";
 
 export const apiRoutes = Router();
 
@@ -26,6 +28,7 @@ apiRoutes.use("/quotes", authMiddleware, accountStatusMiddleware, quoteRoutes);
 apiRoutes.use("/formulas", authMiddleware, accountStatusMiddleware, formulaRoutes);
 apiRoutes.use("/billing", authMiddleware, accountStatusMiddleware, billingRoutes);
 apiRoutes.use("/analytics", authMiddleware, accountStatusMiddleware, analyticsRoutes);
+apiRoutes.use("/plans", authMiddleware, accountStatusMiddleware, planRoutes);
 apiRoutes.use(
   "/admin",
   authMiddleware,
@@ -33,3 +36,6 @@ apiRoutes.use(
   adminMiddleware,
   adminRoutes,
 );
+// Asaas calls this unauthenticated (no JWT) — verified inside
+// webhook.controller.ts via the asaas-access-token header instead.
+apiRoutes.use("/webhooks", webhookRoutes);

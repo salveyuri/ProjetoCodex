@@ -1,7 +1,6 @@
 "use client";
 
 import type { UserAnalyticsOverview } from "@3d-budget/shared";
-import axios from "axios";
 import {
   Bar,
   BarChart,
@@ -35,6 +34,7 @@ import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-error";
 
 const chartColors = ["#818cf8", "#22c55e", "#06b6d4", "#f59e0b", "#ef4444"];
 
@@ -47,18 +47,6 @@ const defaultRange = () => {
     from: from.toISOString().slice(0, 10),
     to: to.toISOString().slice(0, 10),
   };
-};
-
-const getApiErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return "Nao foi possivel carregar analytics.";
 };
 
 const formatMonth = (month: string): string => {
@@ -104,7 +92,9 @@ export default function AnalyticsPage() {
       );
       setAnalytics(data);
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+      setErrorMessage(
+        getApiErrorMessage(error, "Nao foi possivel carregar analytics."),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -128,7 +118,9 @@ export default function AnalyticsPage() {
       const filename = `analytics_${range.from}_${range.to}.${format}`;
       downloadBlob(response.data, filename);
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+      setErrorMessage(
+        getApiErrorMessage(error, "Nao foi possivel exportar os dados."),
+      );
     } finally {
       setIsExporting(null);
     }

@@ -13,6 +13,7 @@ import {
   Cpu,
   FileText,
   LayoutDashboard,
+  Package,
   PlusCircle,
   Settings,
   ShieldCheck,
@@ -60,6 +61,7 @@ export const Sidebar = ({
         ...navigation,
         { href: "/admin/analytics" as Route, label: "Admin BI", icon: ShieldCheck },
         { href: "/admin/users" as Route, label: "Admin Users", icon: UsersRound },
+        { href: "/admin/plans" as Route, label: "Admin Planos", icon: Package },
       ]
     : navigation;
 

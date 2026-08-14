@@ -32,6 +32,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { cn } from "@/lib/cn";
 
 interface DashboardMetric {
   detail: string;
@@ -75,7 +76,8 @@ const getMostUsedPrinter = (quotes: QuoteResource[]): string => {
 };
 
 export default function DashboardPage() {
-  const { isLoading: isAuthLoading, token } = useAuth();
+  const { isLoading: isAuthLoading, token, user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [quoteDetails, setQuoteDetails] = useState<QuoteResource[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -154,7 +156,7 @@ export default function DashboardPage() {
     {
       label: "Lucro estimado",
       value: toMoney(getEstimatedProfit(quoteDetails)),
-      detail: "Final - custo base dos snapshots",
+      detail: isAdmin ? "Final - custo base dos snapshots" : "",
       icon: WalletCards,
     },
     {
@@ -206,7 +208,12 @@ export default function DashboardPage() {
               ))}
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <section
+          className={cn(
+            "grid gap-4",
+            isAdmin && "xl:grid-cols-[minmax(0,1fr)_380px]",
+          )}
+        >
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between gap-4 border-b border-border p-5">
               <div className="flex items-center gap-3">
@@ -287,7 +294,7 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          <SystemStatusCard />
+          {isAdmin ? <SystemStatusCard /> : null}
         </section>
       </div>
     </MainLayout>
@@ -310,7 +317,9 @@ const MetricCard = ({ metric }: { metric: DashboardMetric }) => {
           <Icon className="h-5 w-5" />
         </div>
       </div>
-      <p className="mt-4 text-sm text-muted">{metric.detail}</p>
+      {metric.detail ? (
+        <p className="mt-4 text-sm text-muted">{metric.detail}</p>
+      ) : null}
     </Card>
   );
 };

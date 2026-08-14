@@ -1,6 +1,7 @@
 "use client";
 
 import type { Route } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -10,7 +11,6 @@ import {
   ChevronRight,
   Code2,
   CreditCard,
-  Cpu,
   FileText,
   LayoutDashboard,
   Package,
@@ -86,12 +86,15 @@ export const Sidebar = ({
       )}
     >
       <div className="flex min-h-12 items-center gap-3">
-        <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary text-primary-foreground">
-          <Cpu className="h-5 w-5" />
-        </div>
+        <Image
+          src="/logo_icon.webp"
+          alt="Pricify3D"
+          width={40}
+          height={40}
+          className="shrink-0 rounded-lg"
+        />
         <div className={cn("min-w-0", collapsed && "lg:hidden")}>
-          <p className="text-base font-semibold text-foreground">3D Budget</p>
-          <p className="text-sm text-muted">PrintOps Console</p>
+          <p className="text-base font-semibold text-foreground">Pricify3D</p>
         </div>
         <button
           type="button"
@@ -156,11 +159,6 @@ export const Sidebar = ({
           );
         })}
       </nav>
-
-      <div className={cn("mt-auto rounded-lg border border-border bg-surface p-3", collapsed && "lg:hidden")}>
-        <p className="text-sm font-medium text-foreground">MVP Core</p>
-        <p className="mt-1 text-sm text-muted">Orcamentos agora salvam snapshots.</p>
-      </div>
     </aside>
     </>
   );

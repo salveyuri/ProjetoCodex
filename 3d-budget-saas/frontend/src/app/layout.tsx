@@ -3,8 +3,11 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "3D Budget SaaS",
+  title: "Pricify3D",
   description: "Budgeting console for 3D printing services.",
+  icons: {
+    icon: "/logo_icon.webp",
+  },
 };
 
 export default function RootLayout({

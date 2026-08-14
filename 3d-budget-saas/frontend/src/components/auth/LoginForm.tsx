@@ -1,7 +1,8 @@
 "use client";
 
-import { Cpu, Loader2, LogIn } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
 import type { Route } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
@@ -41,14 +42,8 @@ export const LoginForm = () => {
 
   return (
     <Card className="w-full max-w-md p-6">
-      <div className="flex items-center gap-3">
-        <div className="grid h-11 w-11 place-items-center rounded-lg bg-primary text-primary-foreground">
-          <Cpu className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold">3D Budget</h1>
-          <p className="text-sm text-muted">PrintOps Console</p>
-        </div>
+      <div className="flex justify-center">
+        <Image src="/logo_full.webp" alt="Pricify3D" width={180} height={60} priority />
       </div>
 
       <div className="mt-6">

@@ -112,7 +112,7 @@ export const RegisterForm = () => {
             onChange={(event) => setCompanyName(event.target.value)}
             required
             className="h-11 rounded-lg border border-border bg-surface-muted px-3 text-sm outline-none transition placeholder:text-muted focus:border-primary"
-            placeholder="Artesanerd"
+            placeholder="Empresa"
           />
         </label>
 

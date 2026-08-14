@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, LogOut, Menu, Search, Sparkles } from "lucide-react";
+import { LogOut, Menu, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -10,7 +10,7 @@ interface HeaderProps {
 
 export const Header = ({ onToggleSidebar }: HeaderProps) => {
   const router = useRouter();
-  const { logout, user } = useAuth();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -42,29 +42,13 @@ export const Header = ({ onToggleSidebar }: HeaderProps) => {
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
-            title="Automacoes"
-            aria-label="Automacoes"
-            className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-surface text-secondary transition hover:border-secondary"
-          >
-            <Sparkles className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            title="Notificacoes"
-            aria-label="Notificacoes"
-            className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-surface text-foreground transition hover:border-primary hover:text-primary"
-          >
-            <Bell className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
             title="Sair"
             aria-label="Sair"
             onClick={handleLogout}
             className="hidden h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-muted transition hover:border-danger hover:text-danger sm:inline-flex"
           >
             <LogOut className="h-4 w-4" />
-            {user?.company?.name ?? "Sair"}
+            Sair
           </button>
         </div>
       </div>

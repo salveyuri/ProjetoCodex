@@ -891,3 +891,47 @@ sessão nova aqui com data.
 - Commits ainda nao feitos nesta rodada - Yuri nao pediu "prepare o
   commit" desta vez, so pediu os comandos de importacao/deploy; ver
   proxima entrada ou o proprio chat pra os comandos passados.
+
+## 2026-08-14 - Alerta de "producao nao configurada" (orcamento + dashboard)
+
+Pedido do Yuri: na tela de novo orcamento, quando nao houver maquina e/ou
+material cadastrados, os campos que dependem disso devem ficar desabilitados
+e o aviso "Configure a producao antes de orcar" precisa chamar mais atencao.
+Alem disso, a tela inicial (Dashboard) deve mostrar um alerta semelhante
+("Configure a producao antes de fazer seu primeiro orcamento"), com link pra
+configuracoes, quando a empresa ainda nao tiver maquina e/ou material
+cadastrados.
+
+- QuoteFormFields.tsx: TextField e NumberField ganharam prop `disabled`
+  (SelectField ja tinha). Necessario pra desabilitar "Nome da peca", "Peso"
+  e "Tempo" - antes so os selects de Maquina/Material desabilitavam.
+- PrintItemCard.tsx: nova prop `missingResources` (recebida do QuoteForm) ->
+  `fieldsDisabled = isLoadingResources || missingResources`, aplicado em
+  todos os campos da mesa (nome, maquina, material, peso, tempo). Antes,
+  Maquina/Material so desabilitavam individualmente quando o proprio array
+  estava vazio (ex.: se so faltasse material, o campo Maquina ficava
+  habilitado sem sentido).
+- PostProcessingCard.tsx: nova prop `disabled` (horas de pintura/acabamento
+  tambem desabilitam quando falta producao).
+- QuoteForm.tsx: botao "Adicionar mesa" desabilita junto; o card de aviso
+  trocou de estilo neutro (icone Info, borda accent) pra estilo de alerta
+  (icone AlertTriangle, borda/fundo danger, botao solido "Abrir
+  configuracoes") - mesmo padrao visual ja usado em error.tsx/toast.tsx
+  danger, so que reaproveitado aqui pra dar mais destaque.
+- dashboard/page.tsx: `loadDashboard` passou a buscar GET /machines e
+  GET /materials junto com os orcamentos (Promise.all), guardando so o
+  `.length` de cada. Alerta identico ao do orcamento (mesmo componente
+  visual duplicado localmente, nao um componente compartilhado - nao existe
+  um componente de alerta reutilizavel no projeto ainda) aparece logo abaixo
+  do cabecalho quando `machinesCount === 0 || materialsCount === 0`, com
+  link pra `/dashboard/settings`.
+- Validacao: lint e build do frontend limpos. Testado ao vivo no navegador
+  com uma empresa que tinha 1 maquina cadastrada e 0 materiais: alerta
+  aparece no Dashboard e na tela de novo orcamento, campos "Nome da peca",
+  "Maquina", "Material", "Peso", "Tempo", "Horas pintura/acabamento" e o
+  botao "Adicionar mesa" confirmados desabilitados via inspecao do DOM
+  (`element.disabled === true`) - a ferramenta de screenshot do navegador
+  ficou instavel nesta sessao (mesmo problema ja registrado antes), entao a
+  verificacao visual foi por leitura de DOM/texto da pagina em vez de
+  captura de tela.
+- Nao commitado ainda nesta rodada - Yuri nao pediu commit desta vez.

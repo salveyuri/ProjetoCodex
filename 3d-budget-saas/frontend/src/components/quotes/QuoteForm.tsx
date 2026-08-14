@@ -1,7 +1,7 @@
 "use client";
 
 import type { QuoteStatus } from "@3d-budget/shared";
-import { ArrowLeft, Info, Plus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
@@ -75,22 +75,25 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
         ) : null}
 
         {missingResources ? (
-          <Card className="p-4">
+          <Card className="border-danger/50 bg-danger/10 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
-                <Info className="mt-0.5 h-5 w-5 text-accent" />
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-danger/40 bg-danger/15 text-danger">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
                 <div>
-                  <p className="font-medium text-foreground">
+                  <p className="font-semibold text-danger">
                     Configure a producao antes de orcar
                   </p>
-                  <p className="mt-1 text-sm text-muted">
-                    O formulario precisa de ao menos uma maquina e um material cadastrados.
+                  <p className="mt-1 text-sm text-foreground/80">
+                    Cadastre ao menos uma maquina e um material para liberar os
+                    campos deste orcamento.
                   </p>
                 </div>
               </div>
               <Link
                 href="/dashboard/settings"
-                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-primary/40 px-3 text-sm font-semibold text-primary transition hover:bg-primary/10"
+                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg bg-danger px-4 text-sm font-semibold text-danger-foreground transition hover:bg-danger/90"
               >
                 Abrir configuracoes
               </Link>
@@ -163,7 +166,8 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
                 <button
                   type="button"
                   onClick={addTable}
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary transition hover:bg-primary/20"
+                  disabled={missingResources}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-primary/10"
                 >
                   <Plus className="h-4 w-4" />
                   Adicionar mesa
@@ -180,6 +184,7 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
                   preview={tablePreviews[table.localId] ?? null}
                   canRemove={form.tables.length > 1}
                   isLoadingResources={isLoadingResources}
+                  missingResources={missingResources}
                   onChange={(patch) => updateTable(table.localId, patch)}
                   onRemove={() => removeTable(table.localId)}
                 />
@@ -189,6 +194,7 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
             <PostProcessingCard
               paintingHours={form.paintingHours}
               finishingHours={form.finishingHours}
+              disabled={missingResources}
               onChangePaintingHours={(value) => updateField("paintingHours", value)}
               onChangeFinishingHours={(value) => updateField("finishingHours", value)}
             />

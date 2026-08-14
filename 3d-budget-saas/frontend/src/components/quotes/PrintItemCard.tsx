@@ -20,6 +20,7 @@ interface PrintItemCardProps {
   preview: CalculationResponse | null;
   canRemove: boolean;
   isLoadingResources: boolean;
+  missingResources: boolean;
   onChange: (patch: Partial<PrintTableFormState>) => void;
   onRemove: () => void;
 }
@@ -32,9 +33,13 @@ export const PrintItemCard = ({
   preview,
   canRemove,
   isLoadingResources,
+  missingResources,
   onChange,
   onRemove,
-}: PrintItemCardProps) => (
+}: PrintItemCardProps) => {
+  const fieldsDisabled = isLoadingResources || missingResources;
+
+  return (
   <Card className="min-w-0 overflow-hidden p-5 transition hover:border-primary/40">
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
       <div>
@@ -66,12 +71,13 @@ export const PrintItemCard = ({
         value={table.modelName}
         onChange={(value) => onChange({ modelName: value })}
         required
+        disabled={fieldsDisabled}
       />
       <SelectField
         label="Maquina"
         value={table.machineId}
         onChange={(value) => onChange({ machineId: value })}
-        disabled={isLoadingResources || machines.length === 0}
+        disabled={fieldsDisabled || machines.length === 0}
       >
         <option value="">
           {machines.length === 0
@@ -88,7 +94,7 @@ export const PrintItemCard = ({
         label="Material"
         value={table.materialId}
         onChange={(value) => onChange({ materialId: value })}
-        disabled={isLoadingResources || materials.length === 0}
+        disabled={fieldsDisabled || materials.length === 0}
       >
         <option value="">
           {materials.length === 0
@@ -107,6 +113,7 @@ export const PrintItemCard = ({
         suffix="g"
         value={table.weightGrams}
         onChange={(value) => onChange({ weightGrams: value })}
+        disabled={fieldsDisabled}
       />
       <NumberField
         icon={Clock3}
@@ -114,6 +121,7 @@ export const PrintItemCard = ({
         suffix="h"
         value={table.printTimeHours}
         onChange={(value) => onChange({ printTimeHours: value })}
+        disabled={fieldsDisabled}
       />
       <div className="grid min-h-11 min-w-0 content-end gap-1 rounded-lg border border-border bg-background px-3 py-2">
         <span className="text-xs uppercase text-muted">Subtotal</span>
@@ -123,4 +131,5 @@ export const PrintItemCard = ({
       </div>
     </div>
   </Card>
-);
+  );
+};

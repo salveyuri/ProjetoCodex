@@ -7,6 +7,7 @@ import { NumberField } from "./QuoteFormFields";
 interface PostProcessingCardProps {
   paintingHours: string;
   finishingHours: string;
+  disabled?: boolean;
   onChangePaintingHours: (value: string) => void;
   onChangeFinishingHours: (value: string) => void;
 }
@@ -14,6 +15,7 @@ interface PostProcessingCardProps {
 export const PostProcessingCard = ({
   paintingHours,
   finishingHours,
+  disabled,
   onChangePaintingHours,
   onChangeFinishingHours,
 }: PostProcessingCardProps) => (
@@ -39,6 +41,7 @@ export const PostProcessingCard = ({
         suffix="h"
         value={paintingHours}
         onChange={onChangePaintingHours}
+        disabled={disabled}
       />
       <NumberField
         icon={Wrench}
@@ -46,6 +49,7 @@ export const PostProcessingCard = ({
         suffix="h"
         value={finishingHours}
         onChange={onChangeFinishingHours}
+        disabled={disabled}
       />
     </div>
   </Card>

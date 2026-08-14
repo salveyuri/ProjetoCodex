@@ -1,12 +1,15 @@
 "use client";
 
 import type {
+  MachineResource,
+  MaterialResource,
   PaginatedQuoteList,
   QuoteListItem,
   QuoteResource,
 } from "@3d-budget/shared";
 import {
   Activity,
+  AlertTriangle,
   ArrowUpRight,
   CalendarClock,
   FileText,
@@ -80,6 +83,8 @@ export default function DashboardPage() {
   const isAdmin = user?.role === "ADMIN";
   const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [quoteDetails, setQuoteDetails] = useState<QuoteResource[]>([]);
+  const [machinesCount, setMachinesCount] = useState(0);
+  const [materialsCount, setMaterialsCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -92,10 +97,15 @@ export default function DashboardPage() {
     setErrorMessage(null);
 
     try {
-      const response = await api.get<PaginatedQuoteList>("/quotes", {
-        params: { page: 1, pageSize: 100 },
-      });
-      const quoteList = response.data.data;
+      const [quotesResponse, machinesResponse, materialsResponse] =
+        await Promise.all([
+          api.get<PaginatedQuoteList>("/quotes", {
+            params: { page: 1, pageSize: 100 },
+          }),
+          api.get<MachineResource[]>("/machines"),
+          api.get<MaterialResource[]>("/materials"),
+        ]);
+      const quoteList = quotesResponse.data.data;
       const currentMonthQuotes = quoteList.filter((quote) =>
         isCurrentMonth(quote.createdAt),
       );
@@ -107,6 +117,8 @@ export default function DashboardPage() {
 
       setQuotes(quoteList);
       setQuoteDetails(detailResponses.map((detail) => detail.data));
+      setMachinesCount(machinesResponse.data.length);
+      setMaterialsCount(materialsResponse.data.length);
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Nao foi possivel carregar o dashboard."));
     } finally {
@@ -196,6 +208,33 @@ export default function DashboardPage() {
           <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
             {errorMessage}
           </div>
+        ) : null}
+
+        {!isLoading && (machinesCount === 0 || materialsCount === 0) ? (
+          <Card className="border-danger/50 bg-danger/10 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-danger/40 bg-danger/15 text-danger">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-danger">
+                    Configure a producao antes de fazer seu primeiro orcamento
+                  </p>
+                  <p className="mt-1 text-sm text-foreground/80">
+                    Cadastre ao menos uma maquina e um material nas configuracoes
+                    para liberar a criacao de orcamentos.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/settings"
+                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg bg-danger px-4 text-sm font-semibold text-danger-foreground transition hover:bg-danger/90"
+              >
+                Abrir configuracoes
+              </Link>
+            </div>
+          </Card>
         ) : null}
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

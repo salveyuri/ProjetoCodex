@@ -1,11 +1,61 @@
+# Segredos e credenciais — NUNCA versionar.
+# Qualquer padrão sem "/" na frente casa em qualquer pasta do repo
+# (backend/.env, frontend/.env, etc. já ficam cobertos por ".env*").
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Chaves privadas, certificados TLS, tokens exportados
+*.pem
+*.key
+*.ppk
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.asc
+*.gpg
+
+# Dumps/backups de banco — nunca comitar um dump com dados reais.
+# (Migrações do Prisma em backend/prisma/migrations/*.sql continuam
+# rastreadas normalmente — esses padrões não pegam esse caminho.)
+*.dump
+*.sql.gz
+*.pgdump
+/backups/
+/dumps/
+
+# Dependências e build
 node_modules/
 .npm-cache/
 .next/
 dist/
+build/
 coverage/
-.env
-.env.local
-.env.*.local
+.nyc_output/
+*.tsbuildinfo
+
+# Artefatos de pacote
+*.tgz
+*.tar.gz
+
+# Logs
 *.log
+npm-debug.log*
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sistema operacional
 .DS_Store
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/

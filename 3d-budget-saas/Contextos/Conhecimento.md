@@ -8,6 +8,55 @@ investigação depois.
 
 ## Bugs resolvidos
 
+### `ASAAS_API_KEY` some silenciosamente no Docker Compose (chave começa com `$`)
+- **Sintoma:** em produção (VPS), `docker compose build`/`up` falhava com
+  `error while interpolating services.backend.environment.ASAAS_API_KEY:
+  required variable ASAAS_API_KEY is missing a value`, precedido de vários
+  `WARN[0000] The "aact_prod_..." variable is not set. Defaulting to a
+  blank string.` — mesmo com a chave preenchida no `.env`.
+- **Causa raiz:** as chaves do Asaas começam com um **`$` literal** (ex.:
+  `$aact_prod_...`, `$aact_hmlg_...`). Sem aspas no `.env`, o parser de
+  interpolação do Docker Compose trata `$aact_prod_...` como referência a
+  **outra** variável de ambiente (estilo shell), não encontra nada com
+  esse nome, e zera o valor — daí o `ASAAS_API_KEY` chegar vazio e cair no
+  guard `:?` do `docker-compose.yml`. O `dotenv` do Node (usado em
+  `npm run dev`, fora do Docker) **não** tem esse problema — não expande
+  `$` por padrão — por isso o sandbox funcionou normal nos testes durante
+  o desenvolvimento, e o bug só apareceu em produção via Compose.
+- **Solução:** sempre envolver o valor em **aspas simples** no `.env`
+  usado pelo `docker-compose.yml`: `ASAAS_API_KEY='$aact_prod_...'`.
+  Aspas simples impedem qualquer expansão. Avisos adicionados nos
+  comentários de `.env.example` (raiz e `backend/`).
+- **Incidente relacionado:** a chave de produção do Yuri apareceu em texto
+  puro na saída de terminal que ele colou no chat ao reportar o erro
+  (o warning do Compose ecoa o valor não resolvido). Orientei rotacionar a
+  chave no painel do Asaas imediatamente — tratada como comprometida assim
+  que exposta em qualquer lugar fora do `.env` do servidor.
+
+### `prisma migrate deploy` falha em produção — libssl ausente na imagem Docker
+- **Sintoma:** rodando `docker compose run --rm backend npx prisma migrate
+  deploy` na VPS, aparecia `prisma:warn Prisma failed to detect the
+  libssl/openssl version to use... Defaulting to "openssl-1.1.x"` seguido
+  de `Error: Schema engine error:`. Depois de subir os containers mesmo
+  assim, `curl /api/health` retornava `Recv failure: Connection reset by
+  peer` (o backend crashava/reiniciava em loop).
+- **Causa raiz:** `node:20-slim` (base do `backend/Dockerfile`) é Debian,
+  mas **não inclui `libssl`** por padrão — o engine nativo do Prisma
+  precisa dele em tempo de execução (e também no momento do `prisma
+  generate`, pra saber qual engine bundlar). Sem `libssl`, o Prisma nem
+  sempre falha alto e claro — às vezes só "adivinha" a versão errada e
+  quebra de forma menos óbvia depois.
+- **Solução:** `RUN apt-get update && apt-get install -y
+  --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*`
+  adicionado em **duas** stages do `backend/Dockerfile` — `deps` (propaga
+  pra `build`, onde `prisma generate` roda) e `runtime` (stage final,
+  onde `prisma migrate deploy`/`db seed`/o servidor rodam de verdade —
+  é um `FROM node:20-slim` novo, não herda o que foi instalado em `deps`).
+- **Por que só apareceu em produção:** localmente o Prisma roda via
+  `npm run dev`/`tsx` direto no Windows, nunca dentro do container Debian
+  — o Dockerfile nunca tinha sido testado de fato até o deploy real na
+  VPS (ver `Contextos/Ambientes.md`, "não testado com Docker de verdade").
+
 ### React input uncontrolled → controlled em `/dashboard/settings`
 - **Sintoma:** React alertava mudança de input uncontrolled para controlled
   em `frontend/src/app/dashboard/settings/page.tsx`.

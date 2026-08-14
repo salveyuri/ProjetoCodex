@@ -16,9 +16,21 @@
 # produces a Linux engine binary automatically; no explicit `binaryTargets`
 # needed unless you later cross-build for a different CPU architecture
 # (`docker buildx --platform`).
+#
+# node:20-slim does NOT include libssl — Prisma's engine binaries link
+# against it dynamically and fail to detect the OpenSSL version without
+# it (silently defaulting to a guess, which broke `prisma migrate deploy`
+# in production against Debian 12's OpenSSL 3.x — see
+# Contextos/Conhecimento.md). Installed in BOTH `deps` (so it's present
+# when `prisma generate` runs during the build stage, which bundles the
+# engine matching whatever OpenSSL it detects at generate time) and
+# `runtime` (a separate fresh stage, needed again at actual run time for
+# `prisma migrate deploy`/`db seed`/the server itself).
 
 FROM node:20-slim AS deps
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 # npm needs every workspace's package.json present to resolve the
 # workspace graph against package-lock.json, even the ones this image
@@ -40,6 +52,8 @@ RUN npm run build --workspace @3d-budget/backend
 
 FROM node:20-slim AS runtime
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 ENV PORT=3001
 

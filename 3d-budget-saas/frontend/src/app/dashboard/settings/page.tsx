@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  MachineCatalogResource,
   MachinePayload,
   MachineResource,
   MaterialPayload,
@@ -18,7 +19,14 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -40,11 +48,31 @@ interface MachineFormState {
   name: string;
   type: "FDM" | "RESIN";
   powerConsumptionWatts: string;
-  depreciationCostPerHour: string;
+  price: string;
   printVolumeXmm: string;
   printVolumeYmm: string;
   printVolumeZmm: string;
 }
+
+// Mesmas formulas do backend (machine.service.ts) — so pra prever
+// depreciacao/manutencao na tela antes de salvar. A autoridade de verdade
+// continua sendo o backend, que recalcula do zero ao salvar.
+const calculateMachineHourlyCosts = (
+  price: number,
+  type: "FDM" | "RESIN",
+): { depreciationCostPerHour: number; maintenanceCostPerHour: number } => {
+  if (type === "FDM") {
+    return {
+      depreciationCostPerHour: (price * 0.9) / 10000,
+      maintenanceCostPerHour: (price * 0.3) / 2000,
+    };
+  }
+
+  return {
+    depreciationCostPerHour: (price * 0.9) / 6000,
+    maintenanceCostPerHour: (price * 0.35) / 1500,
+  };
+};
 
 interface MaterialFormState {
   brand: string;
@@ -64,7 +92,7 @@ const emptyMachineForm: MachineFormState = {
   name: "",
   type: "FDM",
   powerConsumptionWatts: "120",
-  depreciationCostPerHour: "2.50",
+  price: "3000",
   printVolumeXmm: "220",
   printVolumeYmm: "220",
   printVolumeZmm: "250",
@@ -115,10 +143,20 @@ const toMachineForm = (machine: MachineResource): MachineFormState => ({
   name: machine.name,
   type: machine.type,
   powerConsumptionWatts: String(machine.powerConsumptionWatts),
-  depreciationCostPerHour: String(machine.depreciationCostPerHour),
+  price: String(machine.price),
   printVolumeXmm: String(machine.printVolumeXmm),
   printVolumeYmm: String(machine.printVolumeYmm),
   printVolumeZmm: String(machine.printVolumeZmm),
+});
+
+const toCatalogForm = (item: MachineCatalogResource): MachineFormState => ({
+  name: `${item.brand} ${item.name}`,
+  type: item.type,
+  powerConsumptionWatts: String(item.powerConsumptionWatts),
+  price: String(item.price),
+  printVolumeXmm: String(item.printVolumeXmm),
+  printVolumeYmm: String(item.printVolumeYmm),
+  printVolumeZmm: String(item.printVolumeZmm),
 });
 
 const toMaterialForm = (material: MaterialResource): MaterialFormState => ({
@@ -216,7 +254,7 @@ export default function SettingsPage() {
       name: machineForm.name,
       type: machineForm.type,
       powerConsumptionWatts: Number(machineForm.powerConsumptionWatts),
-      depreciationCostPerHour: Number(machineForm.depreciationCostPerHour),
+      price: Number(machineForm.price),
       printVolumeXmm: Number(machineForm.printVolumeXmm),
       printVolumeYmm: Number(machineForm.printVolumeYmm),
       printVolumeZmm: Number(machineForm.printVolumeZmm),
@@ -406,8 +444,10 @@ export default function SettingsPage() {
                   <tr>
                     <th className="px-3 py-2 font-medium">Nome</th>
                     <th className="px-3 py-2 font-medium">Tipo</th>
+                    <th className="px-3 py-2 font-medium">Valor</th>
                     <th className="px-3 py-2 font-medium">Consumo</th>
                     <th className="px-3 py-2 font-medium">Depreciacao/h</th>
+                    <th className="px-3 py-2 font-medium">Manutencao/h</th>
                     <th className="px-3 py-2 font-medium">Volume</th>
                     <th className="px-3 py-2 font-medium">Acoes</th>
                   </tr>
@@ -421,11 +461,15 @@ export default function SettingsPage() {
                       <td className="px-3 py-3">
                         {machine.type === "FDM" ? "FDM" : "SLA/Resina"}
                       </td>
+                      <td className="px-3 py-3">{toMoney(machine.price)}</td>
                       <td className="px-3 py-3">
                         {machine.powerConsumptionWatts} W
                       </td>
                       <td className="px-3 py-3">
                         {toMoney(machine.depreciationCostPerHour)}
+                      </td>
+                      <td className="px-3 py-3">
+                        {toMoney(machine.maintenanceCostPerHour)}
                       </td>
                       <td className="px-3 py-3">
                         {machine.printVolumeXmm} x {machine.printVolumeYmm} x{" "}
@@ -606,12 +650,12 @@ export default function SettingsPage() {
           onClose={() => setModal(null)}
         >
           <form className="grid min-w-0 gap-4" onSubmit={handleMachineSubmit}>
-            <TextField
-              label="Nome"
+            <MachineNameAutocomplete
               value={machineForm.name}
               onChange={(value) =>
                 setMachineForm((current) => ({ ...current, name: value }))
               }
+              onSelect={(item) => setMachineForm(toCatalogForm(item))}
             />
             <label className="grid min-w-0 gap-2 text-sm font-medium">
               Tipo
@@ -642,18 +686,33 @@ export default function SettingsPage() {
                 }
               />
               <TextField
-                label="Depreciacao/h (R$)"
+                label="Valor (R$)"
                 type="number"
                 step="0.01"
-                value={machineForm.depreciationCostPerHour}
+                value={machineForm.price}
                 onChange={(value) =>
                   setMachineForm((current) => ({
                     ...current,
-                    depreciationCostPerHour: value,
+                    price: value,
                   }))
                 }
               />
             </div>
+            <p className="-mt-2 text-xs text-muted">
+              {(() => {
+                const preview = calculateMachineHourlyCosts(
+                  Number(machineForm.price) || 0,
+                  machineForm.type,
+                );
+                return (
+                  <>
+                    Depreciacao: {toMoney(preview.depreciationCostPerHour)}/h
+                    {" · "}
+                    Manutencao: {toMoney(preview.maintenanceCostPerHour)}/h
+                  </>
+                );
+              })()}
+            </p>
             <div className="grid min-w-0 gap-4 md:grid-cols-3">
               <TextField
                 label="Volume X"
@@ -893,6 +952,104 @@ const Modal = ({
     </div>
   </div>
 );
+
+const MACHINE_CATALOG_MIN_QUERY_LENGTH = 2;
+const MACHINE_CATALOG_DEBOUNCE_MS = 250;
+
+// Autocomplete do nome da maquina contra o catalogo de referencia
+// (backend/prisma machine_catalog). Ao clicar numa sugestao, preenche o
+// resto do formulario — mas tudo continua editavel depois, sem nenhum
+// impedimento pro usuario ajustar o que quiser antes de salvar.
+const MachineNameAutocomplete = ({
+  value,
+  onChange,
+  onSelect,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSelect: (item: MachineCatalogResource) => void;
+}) => {
+  const [suggestions, setSuggestions] = useState<MachineCatalogResource[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    const query = value.trim();
+
+    if (query.length < MACHINE_CATALOG_MIN_QUERY_LENGTH) {
+      setSuggestions([]);
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
+      void api
+        .get<MachineCatalogResource[]>("/machine-catalog", {
+          params: { q: query },
+        })
+        .then(({ data }) => setSuggestions(data))
+        .catch(() => setSuggestions([]));
+    }, MACHINE_CATALOG_DEBOUNCE_MS);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [value]);
+
+  return (
+    <label className="relative grid min-w-0 gap-2 text-sm font-medium">
+      Nome
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => window.setTimeout(() => setIsOpen(false), 150)}
+        required
+        autoComplete="off"
+        placeholder="Ex.: Bambu Lab P1S"
+        className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+      />
+      {isOpen && suggestions.length > 0 ? (
+        <ul className="absolute left-0 top-full z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-background shadow-panel">
+          {suggestions.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  onSelect(item);
+                  setIsOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-muted"
+              >
+                <span className="min-w-0 truncate">
+                  <span className="font-medium text-foreground">
+                    {item.brand} {item.name}
+                  </span>
+                  <span className="ml-2 text-xs text-muted">
+                    {item.type === "FDM" ? "FDM" : "SLA/Resina"}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs text-muted">
+                  {toMoney(item.price)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </label>
+  );
+};
 
 const TextField = ({
   label,

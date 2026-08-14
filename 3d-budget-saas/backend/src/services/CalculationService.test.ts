@@ -21,6 +21,9 @@ const baseMachine: CalculationFormulaInput["machine"] = {
   type: "FDM",
   powerConsumptionKw: new Prisma.Decimal(0.12),
   depreciationCostPerHour: new Prisma.Decimal(3),
+  // 0 on purpose: keeps the historical regression assertions below (pinned
+  // to finalPrice = 78.23, before maintenanceCost existed) unchanged.
+  maintenanceCostPerHour: new Prisma.Decimal(0),
 };
 
 const baseMaterial: CalculationFormulaInput["material"] = {
@@ -53,10 +56,32 @@ describe("calculateQuoteBreakdown — system fallback formula", () => {
     expect(result.breakdown.materialCost).toBe(10);
     expect(result.breakdown.energyCost).toBe(0.24);
     expect(result.breakdown.depreciationCost).toBe(6);
+    expect(result.breakdown.maintenanceCost).toBe(0);
     expect(result.breakdown.laborCost).toBe(40);
     expect(result.breakdown.baseCost).toBe(56.24);
     expect(result.breakdown.finalPrice).toBe(78.23);
     expect(result.formula.source).toBe("SYSTEM_FALLBACK");
+  });
+
+  it("adds maintenanceCost to baseCost alongside depreciationCost", () => {
+    const machineWithMaintenance: CalculationFormulaInput["machine"] = {
+      ...baseMachine,
+      maintenanceCostPerHour: new Prisma.Decimal(1.5),
+    };
+
+    const result = calculateQuoteBreakdown({
+      request: baseRequest,
+      machine: machineWithMaintenance,
+      material: baseMaterial,
+      settings: baseSettings,
+      formula: null,
+    });
+
+    // 1.5/h * 2h = 3, on top of the 56.24 baseCost from the fixture above.
+    expect(result.breakdown.maintenanceCost).toBe(3);
+    expect(result.breakdown.baseCost).toBe(59.24);
+    expect(result.resources.machine.maintenanceCostPerHour).toBe(1.5);
+    expect(result.variables.manutencao_maquina).toBe(3);
   });
 
   it("rounds currency fields to 2 decimal places and cost-per-gram to 6", () => {

@@ -152,6 +152,25 @@ Passo") em 2026-08-12.
       anterior (sem proration) — comportamento MVP deliberado, documentado
       em `Contextos/Decisoes.md`.
 
+## Catálogo de impressoras (implementado em 2026-08-14)
+
+- [x] Tabela `MachineCatalog` com 63 modelos reais (FDM/resina, ≥4 por
+      marca), autocomplete no cadastro de máquina, `Machine.price` +
+      `maintenanceCostPerHour` derivados automaticamente (depreciação e
+      manutenção somadas no custo base do orçamento). Ver
+      `Contextos/Decisoes.md` (2026-08-14).
+- [ ] **Preços do catálogo são referência de 2026-08-14** (pesquisa
+      Mercado Livre/AliExpress + estimativa cambial pra quem não achou
+      preço nacional) — vão desatualizar com o tempo. Não existe tela
+      admin pra editar o catálogo ainda; hoje só dá pra corrigir via SQL
+      direto na tabela `machine_catalog`. Se isso incomodar no dia a dia,
+      vale pedir uma tela `/admin/machine-catalog` (mesmo padrão CRUD de
+      `/admin/plans`).
+- [ ] Cobertura de marcas ficou em modelos "atuais" conhecidos em
+      2026-08-14 — lançamentos novos ou marcas menores (ex. Elegoo Neptune
+      5, Bambu Lab H2D se já tiver saído, marcas nacionais brasileiras)
+      não entraram nesta leva. Pedir uma atualização quando fizer sentido.
+
 ## Próximo passo geral
 
 Pós-MVP: preparar deploy, seeds, testes automatizados, monitoramento externo

@@ -1,0 +1,893 @@
+CHAT LOG — 3d-budget-saas
+==========================
+Histórico cronológico append-only. Reconstruído em 2026-08-12 a partir das
+seções "Log de Criação" e "Validação" do antigo CONTEXT.md monolítico, ao
+adotar o padrão Contextos/ já usado no projeto atendimentos_app. O material de
+origem não tinha timestamps por entrada — os itens abaixo preservam a ordem
+original, agrupados por "Bloco" de trabalho. A partir de agora, registre cada
+sessão nova aqui com data.
+
+------------------------------------------------------------
+[sem data — setup inicial do monorepo]
+- Criado package.json raiz com workspaces (frontend/backend/shared) e scripts
+  agregadores; .gitignore raiz.
+- Criado frontend/package.json, backend/package.json, shared/package.json;
+  configs de TypeScript, Tailwind, PostCSS, ESLint e Next.js.
+- Criada estrutura base do Express (middlewares, rotas, controllers,
+  services) e schema Prisma inicial.
+- Criado dashboard Next.js em /dashboard com layout persistente.
+- Ajustado fallback de API/CORS para aceitar localhost e 127.0.0.1 em dev;
+  allowedDevOrigins no Next para validação local por 127.0.0.1.
+- Schema Prisma evoluído para o modelo relacional completo de orçamentos 3D.
+- Validação: npm install, npm run lint e npm run build ok para os três
+  pacotes; prisma generate/validate ok.
+
+------------------------------------------------------------
+[Auth — registro, login, sessão]
+- Criado backend/src/config/prisma.ts como singleton canônico do Prisma
+  Client.
+- Criados endpoints POST /api/auth/register, POST /api/auth/login,
+  GET /api/auth/me; backend/src/middlewares/auth-middleware.ts para validação
+  de JWT; validadores Zod de registro/login.
+- Criados frontend/src/contexts/AuthContext.tsx, página /login e guard
+  frontend/src/proxy.ts.
+- Criada página /register e RegisterForm com validação client-side, ligada a
+  /api/auth/register; tela de login ganhou link para cadastro.
+- Atualizados .env.example/.env com JWT_SECRET e JWT_EXPIRES_IN.
+- Validação: registro/login sem token retornam 401/400 conforme esperado;
+  guard do frontend redireciona /dashboard sem cookie auth_token para
+  /login?next=%2Fdashboard (307); builds Next validaram /register e
+  /dashboard/settings no route map.
+
+------------------------------------------------------------
+[Configurações de Produção — máquinas, materiais, custos fixos]
+- Criados controllers/routes/validators/services para máquinas, materiais e
+  configurações de produção; backend/src/utils/request-auth.ts para
+  recuperação segura do companyId.
+- Criada página /dashboard/settings com abas de impressoras, materiais e
+  custos fixos; shared/src/index.ts ganhou contratos de Machine, Material,
+  ProductionSettings; sidebar ganhou link direto.
+- Validação: endpoints protegidos sem token retornam 401; fluxo autenticado
+  completo (create/list/update/delete) testado para máquina e material,
+  update de settings ok.
+
+------------------------------------------------------------
+[Motor de Cálculo]
+- Criado backend/src/services/CalculationService.ts (função pura de cálculo +
+  service de busca multi-tenant); endpoint protegido POST /api/calculate com
+  validação Zod; página /dashboard/calculator para simulação em tempo real.
+- shared/src/index.ts ganhou contratos de CalculationRequest/Response;
+  sidebar ganhou link para calculadora.
+- Validação: fluxo completo autenticado — máquina 120W, depreciação 3/h,
+  material 100 BRL/1000g, peso 100g, tempo 2h, kWh 1, hora técnica 20,
+  margem 30%, taxa cartão 5%, taxa administrativa 2% → finalPrice = 78.23.
+
+------------------------------------------------------------
+[Gestão de Orçamentos — Quote]
+- Migration 20260512122000_quote_lifecycle_snapshots (status + snapshots em
+  print_items).
+- Controllers/routes/validators/services para /api/quotes; páginas
+  /dashboard/quotes, /dashboard/quotes/new, /dashboard/quotes/[id];
+  componente QuoteForm reutilizado para criar/editar; shared ganhou
+  contratos de Quote/QuoteItemSnapshot/QuotePayload/status workflow; sidebar
+  ganhou link.
+- Validação: create/list/show/patch status/delete ok; DRAFT→SENT,
+  totalAmount = 78.23, snapshot materialCost = 10, laborCost = 40.
+
+------------------------------------------------------------
+[Mesas de Impressão — multi-item]
+- Migration 20260512140000_quote_multi_items_totals (total_print_hours,
+  total_weight_grams em quotes).
+- /api/quotes passou a aceitar múltiplas mesas em items[], recalculando cada
+  uma; QuoteForm ganhou gerenciador dinâmico de mesas (add/remove) e resumo
+  agregado; listagem passou a exibir quantidade de mesas, peso total e horas
+  totais.
+- Validação: dois PrintItem no mesmo Quote → items=2, totalAmount=117.34,
+  totalPrintHours=3, totalWeightGrams=150.
+
+------------------------------------------------------------
+[Fórmulas Dinâmicas — Bloco 8 / 8.1 / 8.3]
+- Migration 20260512161000_dynamic_formulas (Formula.isDefault,
+  Quote.formulaId). Criado backend/src/services/formula-engine.ts (parser
+  seguro, validação, dry run, fallback) e formula.service/controller/
+  routes/validator.
+- CalculationService passou a executar fórmulas salvas no banco sem eval()
+  nem new Function(); QuoteService passou a salvar formulaId e recalcular
+  mesas com a fórmula selecionada.
+- Criada página /dashboard/settings/formulas (editor, tags de variáveis,
+  variáveis customizadas); QuoteForm ganhou seletor de fórmula.
+- Bloco 8.1: layout em duas colunas, badges de tipo, tooltips, leitura
+  colorida da equação, teste de fórmula em tempo real; ProductionSettings.
+  customVariables passou a suportar INTEGER/FLOAT/PERCENTAGE; criado
+  endpoint POST /api/formulas/preview; CalculationService passou a injetar
+  percentuais customizados como taxa decimal.
+- Bloco 8.3: migration 20260515153000_operational_formula_variables (campos
+  globais em PricingSettings + horas de pós-processamento em Quote).
+  CalculationService/formula-engine/FormulaService passaram a expor
+  horas_pintura, valor_hora_pintura, horas_acabamento,
+  valor_hora_acabamento, quantidade_mesas, taxa_erro. Validadores de
+  cálculo/orçamento/settings passaram a aceitar os novos campos e aliases em
+  português. /dashboard/settings ganhou inputs globais correspondentes;
+  QuoteForm ganhou card de pós-processamento.
+- Correção: QuoteForm parou de iniciar mesas com valores arbitrários; grids
+  de /dashboard/quotes/new e /dashboard/calculator corrigidos para evitar
+  sobreposição; CalculationService/calculation.validator passaram a tratar
+  peso/tempo/horas ausentes como 0 em previews parciais; página de settings
+  corrigida para não disparar warning uncontrolled/controlled (ver
+  Contextos/Conhecimento.md).
+- Validação: smoke tests de formulário completo (register → machine →
+  material → settings → formula → calculate com formulaId → create quote)
+  ok; PERCENTAGE customizado 15 injetado como 0.15 no preview e no cálculo
+  real; fórmula customizada retornou finalPrice = 64.68.
+
+------------------------------------------------------------
+[Polimento visual — Bloco 9]
+- Instalados EmptyState, Skeleton, SkeletonText, ToastViewport como
+  componentes globais de UX; Sidebar/MainLayout ganharam navegação desktop
+  colapsável e drawer mobile; tailwind.config.ts/globals.css ganharam a
+  paleta Slate/Zinc + Indigo/Violet final.
+- /dashboard passou a mostrar KPIs reais, atividade recente e dados
+  agregados por snapshots; /dashboard/quotes ganhou busca, filtro por
+  status, skeletons, empty state e toasts; QuoteForm ganhou transição suave
+  no valor acumulado e feedback via toast.
+- Validação: navegador local confirmou /dashboard, /dashboard/quotes e
+  /dashboard/quotes/new funcionando com os novos componentes.
+
+------------------------------------------------------------
+[Exportação em PDF — Bloco 10]
+- Instalado pdfkit + @types/pdfkit; criado
+  backend/src/services/quote-pdf.service.ts (template minimalista); criado
+  GET /api/quotes/:id/pdf; criado
+  frontend/src/lib/download-quote-pdf.ts; botões "Gerar PDF" em
+  /dashboard/quotes e QuoteForm.
+- Correção: Sidebar ganhou flex-col (botão de recolher não saía mais da
+  área lateral); tratamento de erro de download passou a ler payloads blob
+  (ver Contextos/Conhecimento.md).
+- Polimento pós-Bloco 10: telas de fórmulas, novo orçamento e calculadora
+  ajustadas para evitar sobreposições; editor de fórmulas só abre em
+  modo criar/editar.
+- Validação: smoke test em porta temporária 3014 — register → machine →
+  material → settings → quote multi-mesa → GET /api/quotes/:id/pdf →
+  200 application/pdf com assinatura %PDF. Backend local precisou ser
+  reiniciado por estar servindo dist/server.js antigo sem a rota (ver
+  Contextos/Conhecimento.md).
+
+------------------------------------------------------------
+[Planos, Limites, RBAC, Billing — Bloco 11]
+- Migration 20260512190000_plans_rbac (UserRole.USER, User.isActive,
+  SubscriptionPlan, SubscriptionStatus, limites em Company).
+- Criados BillingService, PaymentService, AdminService,
+  accountStatusMiddleware, adminMiddleware, plan-middleware; endpoints
+  /api/billing, /api/billing/upgrade, /api/billing/cancel,
+  /api/admin/users, PATCH /api/admin/users/:id.
+- Rotas de máquinas/materiais/orçamentos/PDF/fórmulas passaram a respeitar
+  limites/features do plano; criadas páginas /dashboard/billing e
+  /admin/users; Sidebar/proxy.ts atualizados com proteção apropriada.
+- Correção RBAC/Admin: AuthProvider revalida /api/auth/me;
+  /admin/users deixou de bloquear por role cacheada; plan-middleware passou
+  a consultar role atual do banco antes do bypass ADMIN (ver
+  Contextos/Conhecimento.md para o bug original).
+- Validação: empresa nova inicia em FREE (limite 2 máquinas), 3ª máquina
+  retorna PLAN_LIMIT_REACHED, /api/admin/users retorna ADMIN_REQUIRED para
+  usuário comum, upgrade mock retorna succeeded e libera PRO; smoke test
+  promoveu usuário USER→ADMIN manualmente no banco com token antigo e
+  confirmou /api/auth/me, /api/admin/users e bypass funcionando; navegador
+  local validou /dashboard/billing e /admin/users (com e sem acesso).
+
+------------------------------------------------------------
+[Analytics, Performance, Observabilidade, Auditoria — Bloco 12]
+- Instalados pino, pino-http, node-cache, recharts.
+- Migration 20260512212000_analytics_observability (audit_logs,
+  system_errors, índices de relatório).
+- Criados backend/src/config/logger.ts,
+  services de analytics/cache/audit-log/system-error; endpoints
+  GET /api/analytics/overview, GET /api/analytics/export,
+  GET /api/admin/analytics; GET /api/health passou a checar PostgreSQL,
+  query financeira e filesystem; middleware global de erro passou a
+  persistir SystemError.
+- Criadas páginas /dashboard/analytics e /admin/analytics; criado
+  frontend/src/app/error.tsx (Error Boundary global); Sidebar/
+  SystemStatusCard atualizados.
+- Correção de fluxo em orçamentos: novas mesas iniciam vazias, selects usam
+  placeholders neutros, preview acumulado ignora mesas incompletas sem
+  quebrar o total.
+- Validação: health avançado confirmou PostgreSQL conectado, query
+  financeira ok, filesystem writable; smoke test de analytics
+  (overview/export/admin analytics) ok; navegador local validou
+  /dashboard/analytics (estado vazio) e /admin/analytics (KPIs, MRR
+  estimado, sem aviso de acesso restrito para ADMIN).
+
+------------------------------------------------------------
+[Blindagem de Segurança — Bloco 13]
+- Adicionado rate limiting (express-rate-limit): global 100 req/min/IP em
+  /api, login 5 req/min/IP, cálculo pesado 30 req/min/IP; respostas 429 com
+  RATE_LIMIT_GLOBAL/LOGIN/CALCULATION.
+- Headers Helmet ativados em app.ts (+ app.disable("x-powered-by")).
+- Validação Zod endurecida (.strict() em todos os schemas de mutação,
+  z.number() em vez de z.coerce.number() em payload JSON).
+- formula-engine ganhou whitelist de caracteres/identificadores antes do
+  parser expr-eval.
+- Mutações multi-tenant endurecidas com companyId direto no Prisma
+  (updateMany/deleteMany/findFirst com {id, companyId}); criado
+  backend/src/validators/common.validator.ts com idParamSchema (UUID).
+- Ajuste visual em /dashboard/settings: modais de máquinas/materiais com
+  largura responsiva, scroll interno, min-width seguro contra overflow.
+- Validação: smoke tests confirmaram rejeição de número como string em
+  cálculo, bloqueio de role injetado no registro, bloqueio de process em
+  fórmula, bloqueio de colchetes na expressão; rate limit real confirmado em
+  servidor Express temporário (5 tentativas → 400, 6ª → 429, headers Helmet
+  presentes); npm audit segue apontando expr-eval (alta, sem fix
+  automático) — mitigado por whitelist em runtime, não corrigido na origem
+  (ver Contextos/Conhecimento.md).
+
+------------------------------------------------------------
+[2026-08-12] Reorganização de contexto (esta sessão)
+- Pedido do Yuri: ler o estado/pendências do projeto e migrar o padrão de
+  documentação de contexto (CONTEXT.md monolítico) para o mesmo padrão
+  Contextos/ + Notas/TODO.md + CLAUDE.md já usado em atendimentos_app.
+- Feito: criado CLAUDE.md (overview, stack, estrutura, modelo de dados) e
+  Contextos/Decisoes.md, Contextos/Conhecimento.md, Contextos/Ambientes.md,
+  Contextos/Convencoes.md, Contextos/Chat.log (este arquivo) e
+  Notas/TODO.md, migrando o conteúdo integral do antigo CONTEXT.md.
+  CONTEXT.md foi preservado na raiz como histórico (não editar mais).
+- Próximo passo: seguir usando Contextos/ a partir de agora; TODO.md segue
+  como lista viva de pendências (deploy, testes automatizados, PDF/
+  analytics/RBAC).
+
+------------------------------------------------------------
+[2026-08-12] Auditoria técnica completa (nenhum código alterado)
+- Pedido do Yuri: auditoria técnica completa do projeto (arquitetura,
+  código, segurança, banco, performance, dependências, testes) SEM alterar
+  código nesta etapa — só análise e registro, para depois ele escolher o que
+  implementar por ID.
+- Leitura completa de: backend/src (todos os controllers, services,
+  middlewares, validators, config), backend/prisma/schema.prisma,
+  frontend/src (fluxo de auth completo — AuthContext, proxy.ts, api.ts —
+  mais estrutura geral e componentes grandes), package.json (raiz/backend/
+  frontend), .env.example. Grep dirigido por console.log, "as any", TODO/
+  FIXME, localStorage/dangerouslySetInnerHTML/document.cookie, uso de
+  "morgan", e confirmação de que todo controller deriva companyId do JWT
+  (nunca do body).
+- Resultado: 18 achados registrados em Contextos/Auditoria.md, com ID,
+  categoria, severidade/prioridade (P1-P4), esforço estimado e arquivos
+  envolvidos. Principais: falta de revogação de JWT (SEC-001) e token em
+  localStorage/cookie não-HttpOnly (SEC-002), registro sem rate limit e com
+  enumeração de e-mail (SEC-003), /api/health vazando erro de banco e path
+  do filesystem publicamente (SEC-004), ausência de recuperação de senha
+  (SEC-005), trust proxy não configurado (SEC-006), cache de analytics
+  invalidado globalmente em vez de por empresa (DB-001), fan-out de queries
+  repetidas por mesa em orçamentos multi-item (PERF-001), zero testes
+  automatizados no projeto inteiro (TEST-001), entre outros de qualidade e
+  dependências. Nenhuma vulnerabilidade crítica (P0) encontrada; a base
+  segue o padrão anti-IDOR de forma consistente (verificado diretamente nos
+  controllers/services).
+- Nada foi implementado. Contextos/Auditoria.md funciona como backlog vivo
+  (cada item tem campo Status) — aguardando o Yuri selecionar quais IDs
+  implementar.
+
+------------------------------------------------------------
+[2026-08-12] Implementação de SEC-003, SEC-004, SEC-007, SEC-008, QUAL-003
+- Yuri aprovou os 5 itens acima do backlog de auditoria (todos P2/P3, sem
+  dependências entre si e sem mudança de comportamento visível para o
+  usuário final, exceto o rate limit do registro).
+- SEC-003: criado registerRateLimiter (5/min/IP) em
+  rate-limit-middleware.ts, aplicado em POST /api/auth/register. A parte de
+  enumeração de e-mail via 409 (EMAIL_ALREADY_EXISTS) foi deliberadamente
+  NAO alterada — fica pendente de decisão por ser mudança de UX.
+- SEC-004: health.service.ts só inclui error/path na resposta de
+  /api/health quando NODE_ENV !== "production" (helper
+  isDetailExposureAllowed). filesystem.path virou opcional em
+  HealthCheckResponse (shared/src/index.ts) — confirmado por grep que o
+  frontend (SystemStatusCard.tsx) nunca le path/error, so latencyMs.
+- SEC-007: env.ts (resolveCorsOrigin) agora lanca erro no boot se
+  CORS_ORIGIN contiver "*", ja que credentials:true e incondicional em
+  app.ts. app.ts simplificado para origin: allowedOrigins (removido o ramo
+  que refletia true para qualquer origem).
+- SEC-008: adicionados .max() em resources.validator.ts (machine.name <=120,
+  material.brand <=120, material.color <=60) e auth.validator.ts
+  (fullName/companyName <=160).
+- QUAL-003: FormulaService.create agora captura
+  Prisma.PrismaClientKnownRequestError P2002 e retorna 409
+  FORMULA_CODE_CONFLICT em vez de deixar subir como 500 generico.
+- Validacao: npm run lint + tsc --noEmit + build completo em shared e
+  backend, npm run lint no frontend (por causa da mudanca de tipo
+  compartilhado HealthCheckResponse). Testes manuais reais rodando o
+  backend local: 5 registros invalidos -> 400, 6o -> 429 (confirma
+  SEC-003); CORS_ORIGIN=* derruba o boot com a mensagem esperada (confirma
+  SEC-007); /api/health em dev mostra path, com NODE_ENV=production o campo
+  some (confirma SEC-004); fullName de 300 caracteres retorna
+  VALIDATION_ERROR citando o limite de 160 (confirma SEC-008). QUAL-003
+  validado só por leitura/compilação (exigiria concorrência real contra
+  banco vivo para testar a race condition em si).
+- Pendente: SEC-001, SEC-002, SEC-005, SEC-006, DB-001, PERF-001, PERF-002,
+  ARCH-001, QUAL-001, QUAL-002, TEST-001, DEP-001, DEVOPS-001 continuam sem
+  implementar — ver Contextos/Auditoria.md para o backlog completo.
+
+------------------------------------------------------------
+[2026-08-12] Implementação de DB-001, PERF-001, PERF-002 (mesmo dia)
+- Yuri pediu para prosseguir com DB-001, PERF-001, PERF-002, SEC-001 e
+  SEC-002. Os 3 primeiros foram implementados nesta rodada; SEC-001/SEC-002
+  ficaram para uma etapa de planejamento separada (ver entrada seguinte),
+  porque a propria auditoria ja apontava que exigem decidir o modelo de
+  sessao (schema novo + reescrita de auth back+front) antes de mexer.
+- DB-001: CacheService ganhou delByPrefix() (remove só chaves com um
+  prefixo, via cache.keys().filter().del() do node-cache) e o helper
+  companyAnalyticsCacheKeyPrefix(companyId) (movido para cache.service.ts,
+  reusado por analytics.service.ts). machine.service.ts, material.service.ts
+  e quote.service.ts trocaram os 9 cacheService.flush() (que limpavam TODO
+  o cache, inclusive de outras empresas) por
+  delByPrefix(companyAnalyticsCacheKeyPrefix(companyId)) — só invalida o
+  cache de analytics da própria empresa. admin-analytics:global deixou de
+  ser afetado por mutações de empresa (já tinha sua própria invalidação
+  pontual em audit-log.service.ts/system-error.service.ts, não mexida).
+- PERF-001: CalculationService ganhou calculateWithResolvedContext(), que
+  recebe settings/formula já resolvidos e só busca machine/material.
+  calculate() (usado por POST /api/calculate, item único) ficou inalterado
+  de propósito, para não regredir esse endpoint. QuoteService ganhou o
+  método privado calculateItems(), que busca settings/formula UMA vez por
+  chamada de create()/update() e reusa para todas as mesas do orçamento via
+  calculateWithResolvedContext — antes eram buscados de novo a cada mesa.
+- PERF-002: calculationRateLimiter (30/min/IP) aplicado também em
+  GET /quotes/:id/pdf, igual as demais rotas de calculo/escrita pesada.
+- Validacao: npm run lint + tsc --noEmit + build completo do backend (sem
+  erros). Smoke test real ponta a ponta com o backend local rodando contra
+  o Postgres de verdade: registro -> criar maquina/material -> criar
+  orcamento de 2 mesas (mesma maquina/material) -> valores batendo
+  (finalPrice de cada item e totalAmount = soma, confirma que PERF-001 nao
+  mudou o resultado do calculo) -> consultar /api/analytics/overview antes
+  e depois de criar um orcamento, confirmando que o revenue/quotesCount
+  atualiza na hora (confirma que DB-001 invalida corretamente, sem esperar
+  a TTL de 5 min) -> GET /quotes/:id/pdf respondeu normalmente (403 de
+  plano FREE, como esperado; confirma que PERF-002 nao quebrou a rota).
+- Pendente: SEC-001, SEC-002, SEC-005, SEC-006, ARCH-001, QUAL-001,
+  QUAL-002, TEST-001, DEP-001, DEVOPS-001.
+
+------------------------------------------------------------
+[2026-08-12] SEC-001 + SEC-002 — refresh token com rotação (plano + implementação)
+- Yuri pediu para prosseguir tambem com SEC-001 e SEC-002. Como a propria
+  auditoria ja apontava que essas duas exigem decidir o modelo de sessao
+  antes de mexer no codigo (schema novo + reescrita de auth em back e
+  front), usei EnterPlanMode: perguntei ao Yuri (AskUserQuestion) entre
+  duas abordagens — leve (tokenVersion + cookie HttpOnly) vs completa
+  (refresh token com rotacao estilo OAuth) — e ele escolheu a completa.
+  Plano detalhado escrito e aprovado via ExitPlanMode antes de qualquer
+  alteracao.
+- Modelo implementado: access token JWT curto (15m, antes era 7d) + refresh
+  token opaco (crypto.randomBytes) guardado como hash SHA-256 numa tabela
+  nova RefreshToken (migracao aditiva add_refresh_tokens). Refresh token
+  entregue num cookie HttpOnly/SameSite=Lax/Secure-em-producao com
+  Path=/. Rotacao a cada uso (POST /api/auth/refresh) com deteccao de
+  reuso: token ja rotacionado individualmente ainda tem 5s de graca (para
+  tolerar corridas legitimas tipo StrictMode remontando efeitos ou duas
+  abas), mas fora da graca — ou se o token foi morto por revogacao em
+  massa (deteccao de roubo, sem sucessor proprio) — a familia inteira
+  (familyId) e revogada na hora. Novos endpoints POST /api/auth/logout
+  (revoga 1 sessao) e POST /api/auth/logout-all (revoga todas as sessoes
+  do usuario), ambos funcionando so com o cookie, sem exigir access token
+  valido.
+- Frontend (AuthContext.tsx) reescrito: token de acesso so em memoria
+  (nunca localStorage/document.cookie), refresh silencioso no mount via
+  POST /api/auth/refresh, interceptor de resposta do axios que tenta um
+  refresh e replay em qualquer 401 fora dos proprios endpoints de auth,
+  logout assincrono best-effort. localStorage mantem so o perfil do
+  usuario (nao-sensivel) como cache de UI. proxy.ts passou a checar o
+  cookie refresh_token em vez do antigo auth_token.
+- Dois bugs reais encontrados e corrigidos DURANTE a implementacao (nao
+  eram esperados no plano original):
+  1. Cookie com Path=/api/auth quebrava o login na UI porque o Path de um
+     cookie e comparado contra a URL da requisicao, nao contra qual
+     servidor a recebe — o middleware do Next (porta 3000) nunca via o
+     cookie setado pelo backend (porta 3001) em paths como /dashboard.
+     Corrigido para Path=/.
+  2. O periodo de graca de reuso, na primeira versao, valia para qualquer
+     token com revokedAt recente — inclusive tokens mass-revogados por
+     deteccao de roubo real, o que permitia reautenticar dentro da janela
+     de 5s mesmo apos uma familia ter sido corretamente revogada. Corrigido
+     restringindo a graca a tokens com replacedByTokenHash preenchido (so
+     quem rotacionou individualmente tem direito a ela).
+  Os dois estao documentados em detalhe em Contextos/Conhecimento.md.
+- Validacao: tsc --noEmit + lint limpos em shared/backend/frontend; build
+  completo do frontend (next build) passou; build do backend passou via
+  tsc+tsc-alias direto (o script build completo bateu no bug ja conhecido
+  de DLL do Prisma travado pelo processo dev rodando no Windows, nao e
+  regressao). Bateria extensa de testes reais via curl contra o backend
+  local rodando com Postgres de verdade: registro/login emitindo cookie
+  HttpOnly Path=/; uso do access token numa rota protegida; rotacao
+  simples; reuso rapido tolerado (200, dentro da graca); token-irmao
+  continua valido apos essa tolerancia; reuso real apos 6s (fora da graca)
+  revogando a familia inteira (401), incluindo o token-irmao (tambem 401);
+  logout revogando so aquela sessao; logout-all revogando as duas sessoes
+  de login duplicado. Testes reais no navegador (Claude Browser): registro,
+  login, DOIS reloads consecutivos (F5) mantendo a sessao via refresh
+  silencioso, document.cookie vazio e localStorage so com o perfil (sem
+  token nenhum) em qualquer momento, logout pela UI, e bloqueio de
+  /dashboard pelo proxy apos o logout.
+- Descoberta lateral durante a depuracao: reinicios do backend via
+  Stop-Process no Windows as vezes nao derrubavam o processo antigo antes
+  do npm run dev novo tentar subir na mesma porta, deixando um processo
+  zombie respondendo e fazendo parecer que uma correcao nao tinha efeito
+  (EADDRINUSE silencioso). Aprendizado registrado em Conhecimento.md:
+  sempre confirmar via GET /api/health -> uptimeSeconds baixo antes de
+  reusar resultados de teste apos reiniciar o servidor.
+- Docs atualizados: Contextos/Decisoes.md (novo desenho de sessao),
+  Contextos/Ambientes.md (JWT_EXPIRES_IN agora 15m, novo
+  REFRESH_TOKEN_EXPIRES_IN_DAYS), Contextos/Conhecimento.md (os 2 bugs +
+  a armadilha do processo zombie), Contextos/Auditoria.md (SEC-001/SEC-002
+  marcados implementados, log de decisoes atualizado), Notas/TODO.md (job
+  de limpeza de tokens expirados e UI de "sair de todos os dispositivos"
+  registrados como pendencias futuras, deliberadamente fora do escopo
+  desta rodada).
+- Pendente: SEC-005, SEC-006, ARCH-001, QUAL-001, QUAL-002, TEST-001,
+  DEP-001, DEVOPS-001 continuam sem implementar.
+
+------------------------------------------------------------
+[2026-08-13] Implementacao de QUAL-001, QUAL-002, TEST-001
+- Yuri pediu para implementar os tres e sugerir os proximos passos com
+  breve descricao.
+- QUAL-002: npm uninstall morgan @types/morgan --workspace
+  @3d-budget/backend. Grep confirmou zero referencias restantes. npm audit
+  caiu de 9 para 8 vulnerabilidades.
+- TEST-001 (parcial, conforme a propria auditoria ja tinha planejado em
+  fases): instalado vitest no backend, criado backend/vitest.config.mts
+  (renomeado de .ts para .mts para evitar warning de CJS/ESM) e script
+  "test": "vitest run" no package.json. Criados
+  backend/src/services/formula-engine.test.ts (37 testes: normalizacao de
+  tags, lista de variaveis disponiveis, todos os identificadores perigosos
+  bloqueados um a um incluindo case-insensitive, caracteres nao suportados,
+  expressao vazia/longa demais, variavel desconhecida, sintaxe invalida,
+  resultado negativo/nao-finito rejeitado, dry run, a formula padrao do
+  sistema e ela mesma valida) e
+  backend/src/services/CalculationService.test.ts (5 testes: bate contra o
+  cenario historico conhecido do Bloco 5 com finalPrice=78.23, arredonda-
+  mento de moeda e costPerGram, peso/tempo ausentes normalizados para 0,
+  formula customizada como preco final sem taxas de cartao/administrativa
+  em cima, fallback para formula padrao quando a customizada falha em
+  runtime). 42/42 passando. Fases seguintes (testes de integracao de
+  rotas Express, testes de frontend/E2E) ficaram registradas como pendencia
+  em Notas/TODO.md, nao foram feitas agora.
+- QUAL-001: QuoteForm.tsx (~950 linhas, misturava estado, chamadas de API,
+  calculo de preview debounced, submit e toda a renderizacao) dividido em:
+  quote-form-types.ts (tipos PrintTableFormState/QuoteFormState),
+  QuoteFormFields.tsx (TextField/SelectField/NumberField/SummaryLine
+  genericos), PrintItemCard.tsx (card de mesa, era PrintTableCard inline),
+  PostProcessingCard.tsx (card de pintura/acabamento), QuoteSummary.tsx
+  (aside com valor acumulado + botoes salvar/PDF), useQuoteForm.ts (hook
+  com todo o estado e a logica: loadInitialData, calculatePreview
+  debounced, updateField/updateTable/addTable/removeTable, handleSubmit,
+  handleDownloadPdf). QuoteForm.tsx ficou com 213 linhas, so orquestracao
+  JSX. Deliberadamente nao mexi em settings/page.tsx nem calculator/page.tsx,
+  que tem campos locais com nomes parecidos (TextField/SelectField/
+  NumberField) mas sao componentes proprios separados - fora do escopo
+  pedido (QUAL-001 era so sobre QuoteForm.tsx).
+- Validacao: npm run lint + tsc --noEmit/next build limpos em shared,
+  backend e frontend; npm run test (vitest) 42/42. Teste real no navegador
+  com o backend+frontend rodando: criei maquina e material via UI, criei um
+  orcamento com 1 mesa (preview calculado via /api/calculate em tempo real,
+  R$ 20,80, salvo e aparecendo na listagem), abri em modo edicao (dados
+  carregados corretamente, incluindo "Valor salvo"), adicionei uma segunda
+  mesa (Mesa 2 apareceu com "aguardando") e removi de novo (voltou pra 1
+  mesa com os totais corretos) - tudo identico ao comportamento de antes do
+  refactor.
+- Pendente: SEC-005, SEC-006, ARCH-001, TEST-001 (fases seguintes),
+  DEP-001, DEVOPS-001.
+
+------------------------------------------------------------
+[2026-08-13] DEVOPS-001 (Docker generico, sem Docker instalado pra testar)
+- Yuri pediu pra implementar DEVOPS-001. Perguntei onde pretende hospedar
+  (infra propria vs PaaS vs indefinido) - escolheu "ainda nao decidi, so
+  deixa pronto pra deploy". Escopo combinado via plan mode: Docker generico
+  e portavel, sem CI/CD, dominio/TLS ou escolha de host (tudo isso fica pra
+  quando ele decidir onde rodar).
+- Criados backend/Dockerfile e frontend/Dockerfile (multi-stage, build
+  context na raiz do repo por causa dos npm workspaces - @3d-budget/shared
+  e file:../shared). deps stage copia o package.json de TODOS os
+  workspaces (mesmo os que aquela imagem nao roda, porque npm ci valida o
+  grafo inteiro contra o lockfile) com --ignore-scripts (o postinstall:
+  "prisma generate" do backend dispararia antes do schema.prisma existir
+  no contexto). node:20-slim (Debian), nao Alpine, pra evitar o problema
+  classico de binario do Prisma compilado pra musl vs glibc.
+  frontend/next.config.mjs ganhou output: "standalone"; criado
+  frontend/public/.gitkeep (o diretorio nao existia e o Dockerfile precisa
+  dele pra nao falhar o COPY).
+- Criado docker-compose.yml na raiz (postgres sem porta exposta ao host,
+  backend:3001, frontend:3000 com NEXT_PUBLIC_API_URL como build arg - Next
+  inlina isso no bundle do client, nao da pra trocar so reiniciando o
+  container) e .env.example na raiz (separado de backend/.env.example e
+  frontend/.env.example, que sao so pro npm run dev sem Docker).
+  TRUST_PROXY_HOPS fica 0 por padrao no compose (nao 1) porque sem Nginx
+  plugado o backend fica exposto direto - so vira 1 quando um proxy de
+  verdade estiver na frente.
+- Criado backend/prisma/seed.ts (promove SEED_ADMIN_EMAIL a ADMIN,
+  idempotente) substituindo o UPDATE manual no banco. TESTADO DE VERDADE
+  contra o Postgres local: registrei um usuario via curl, rodei o seed,
+  confirmou "Promoted"; rodei de novo, confirmou "already ADMIN"; testei
+  com e-mail inexistente, confirmou o aviso certo sem quebrar.
+- Criado deploy/nginx.conf.example (reverse proxy de referencia, sem TLS,
+  usa o TRUST_PROXY_HOPS=1 do SEC-006).
+- IMPORTANTE: nao ha Docker instalado neste ambiente (docker --version =
+  command not found), entao nao consegui buildar/rodar os containers de
+  verdade. Consegui validar duas partes cruciais SEM Docker: rodei o build
+  normal do Next (npm run build) e confirmei que output: "standalone" gera
+  exatamente a estrutura aninhada frontend/server.js que o Dockerfile
+  assume (nao server.js na raiz); e confirmei que o Prisma Client gerado
+  cai no node_modules RAIZ do monorepo (nao so em backend/node_modules),
+  validando a decisao de copiar o node_modules raiz inteiro no estagio de
+  runtime do backend/Dockerfile. O resto (o build dos containers em si)
+  fica sem validar - documentado explicitamente pro Yuri rodar
+  `docker compose build && docker compose up` antes de confiar nisso.
+- Validacao: npm run lint + npm run build (monorepo inteiro) + 57/57 testes
+  - todos limpos. Documentacao atualizada: Contextos/Ambientes.md (secao
+  "Producao (Docker)"), Contextos/Decisoes.md, Notas/TODO.md.
+- Pendente: onde hospedar de fato, dominio+TLS, CI/CD - decisao do Yuri.
+
+------------------------------------------------------------
+[2026-08-13] Tratamento das telas de erro (nao vazar o caminho de bypass)
+- Yuri viu que a tela de /admin/users, quando um usuario comum tentava
+  acessar, mostrava literalmente "disponivel apenas para usuarios com role
+  ADMIN" - revelando exatamente o mecanismo de protecao. Pediu pra tratar
+  os erros em geral pra mostrar o minimo de informacao possivel.
+- Levantamento: grep encontrou o MESMO padrao (uma funcao
+  getApiErrorMessage/getErrorMessage que le error.response.data.message
+  cru do backend e mostra direto na tela) DUPLICADO em 12 arquivos do
+  frontend. E no backend, 7 pontos com mensagens de erro que confirmavam
+  exatamente qual checagem rejeitou o request (ex.: "Admin privileges
+  required.", "Machine is not accessible for this company.").
+- Backend: admin-middleware.ts (ADMIN_REQUIRED), auth-middleware.ts
+  (unificou a mensagem do payload de JWT malformado com a de assinatura
+  invalida, mesmo codigo AUTH_TOKEN_INVALID - evita dar oracle de debug pra
+  quem tenta forjar token), e os 6 pontos de *_FORBIDDEN
+  (CalculationService, machine.service, material.service, quote.service,
+  quote-pdf.service, formula.service) - todos viraram "Access denied."
+  generico. Os CODIGOS continuam distintos (uso legitimo do frontend/API),
+  so a frase humana parou de descrever o motivo exato. NAO mexi em
+  mensagens de negocio legitimas pro dono do proprio recurso (limite de
+  plano, conta desativada, credenciais invalidas, etc.) - essas nao
+  revelam nada que ajude a burlar protecao de terceiro.
+- Frontend: criado frontend/src/lib/api-error.ts - helper central com
+  ALLOWLIST (nao blocklist) de codigos seguros conhecidos
+  (INVALID_CREDENTIALS, EMAIL_ALREADY_EXISTS, PLAN_LIMIT_REACHED, etc.)
+  mapeados pra mensagem amigavel em PT-BR; qualquer codigo fora da lista -
+  incluindo todo *_FORBIDDEN/ADMIN_REQUIRED - cai num fallback generico
+  que cada tela passa como parametro. Migrados os 12 arquivos duplicados
+  pra usar o helper (settings, calculator, formulas, billing, dashboard,
+  analytics, quotes, admin/users, admin/analytics, LoginForm, RegisterForm,
+  useQuoteForm) - removido axios import onde so era usado dentro da funcao
+  deletada. De brinde, corrigido um bug pre-existente em
+  settings/formulas/page.tsx onde `error instanceof Error ? error.message
+  : getApiErrorMessage(error)` na pratica NUNCA chamava getApiErrorMessage
+  pra erros de API (AxiosError tambem e instanceof Error) - reordenado pra
+  checar axios.isAxiosError primeiro.
+- Corrigido o texto especifico reportado: admin/users e admin/analytics
+  trocaram "Esta area esta disponivel apenas para usuarios com role ADMIN"
+  por "Voce nao tem permissao para acessar esta area."
+- Validacao: lint + build limpos em frontend e backend, 57/57 testes.
+  Teste real no navegador reproduzindo o cenario exato reportado: registrei
+  um usuario comum, acessei /admin/users, confirmei a tela generica nova (e
+  tambem o corpo bruto da resposta da API via curl direto, pra confirmar
+  que a mensagem generica vale tambem pra quem acessa a API sem passar
+  pelo frontend). Confirmado tambem que codigos seguros continuam
+  funcionando normal (login com senha errada ainda retorna
+  INVALID_CREDENTIALS/"E-mail ou senha invalidos.").
+- Documentado em Contextos/Conhecimento.md (vetor fechado) e
+  Contextos/Decisoes.md (padrao a seguir em telas novas: sempre usar
+  getApiErrorMessage do lib/api-error.ts, nunca ler error.response.data.message
+  direto).
+
+------------------------------------------------------------
+[2026-08-13] SEC-006, TEST-001 fase 2, DEP-001 (QUAL-003 ja estava feito)
+- Yuri pediu para implementar SEC-006, DEP-001, QUAL-003 e a fase 2 do
+  TEST-001, e sugerir os proximos passos.
+- Antes de comecar, conferi Contextos/Auditoria.md e o codigo: QUAL-003
+  (P2002 tratado em FormulaService.create) ja tinha sido implementado em
+  2026-08-12 e continuava intacto (grep confirmou FORMULA_CODE_CONFLICT em
+  formula.service.ts). Nao refiz, so avisei.
+- SEC-006: novo TRUST_PROXY_HOPS (default 0) em env.ts;
+  app.set("trust proxy", n) em app.ts so quando n > 0. Testado com um
+  script isolado importando app.ts duas vezes (com e sem a env var):
+  default fica false (igual hoje), com TRUST_PROXY_HOPS=1 fica 1.
+- TEST-001 fase 2: instalado supertest. Criado
+  backend/src/test-utils/register-test-company.ts (helper que registra uma
+  empresa de teste completa) e tres arquivos de teste de integracao:
+  auth.routes.test.ts (9 testes - registro, email duplicado, validacao,
+  login certo/errado, /me com/sem token, /refresh com cookie valido e sem
+  cookie), multi-tenancy.test.ts (3 testes - empresa B nao consegue
+  ler/atualizar/excluir maquina nem orcamento da empresa A, nem calcular
+  usando recursos de outra empresa), plan-limits.test.ts (3 testes - limite
+  de 2 maquinas do FREE bloqueando a 3a, PDF bloqueado como feature paga,
+  bypass de limite para ADMIN promovido direto no banco). Dois problemas
+  reais de infraestrutura de teste apareceram e foram corrigidos:
+  1. Os testes registram varias empresas rapidamente e batiam no rate
+     limit de /api/auth/register (5/min por IP), ja que todas as chamadas
+     do supertest saem do mesmo "IP" simulado. Resolvido reusando o
+     TRUST_PROXY_HOPS recem-criado: vitest.config.mts seta
+     TRUST_PROXY_HOPS=1 no ambiente de teste, e o helper de registro manda
+     um X-Forwarded-For diferente por chamada.
+  2. O pool padrao do Vitest (forks) travava um worker de forma
+     intermitente no Windows (~1 em 4 execucoes, "Worker exited
+     unexpectedly") ao carregar o binario nativo do Prisma num processo
+     filho novo - mesma familia do bug ja documentado de DLL do Prisma
+     travada. Corrigido trocando para pool: "threads" em
+     vitest.config.mts; confirmado estavel em mais de 10 execucoes
+     seguidas depois da troca.
+  Total do projeto: 57 testes (42 unitarios de antes + 15 de integracao
+  novos), todos passando.
+- DEP-001: rodei npm outdated para registrar direito e apareceram varios
+  saltos de major version que o achado original nao citava (so falava de
+  Prisma): Express 4->5, React 18->19, TypeScript 5->7, Tailwind 3->4,
+  lucide-react, helmet, @types/*. Como cada um individualmente tem risco
+  real de quebrar a aplicacao, usei AskUserQuestion antes de tocar em
+  qualquer um. Yuri escolheu manter o espirito original do achado ("nao
+  atualizar agora") - so registrar, nao mexer nos majors. Apliquei so
+  npm update (atualizacoes dentro da faixa semver ja declarada em cada
+  package.json, sem risco de breaking change): vulnerabilidades cairam de
+  9 para 1 (so resta expr-eval, ja conhecida e mitigada). Tabela completa
+  dos majors em aberto com risco estimado por pacote registrada em
+  Contextos/Auditoria.md (DEP-001).
+- Validacao: lint + tsc --noEmit + next build limpos em shared/backend/
+  frontend; npm run test com 57/57 passando, repetido 5x para confirmar
+  que o fix do pool do Vitest resolveu a flakiness de verdade; build
+  completo do backend.
+- Pendente: SEC-005 (bloqueado por provedor de e-mail), ARCH-001
+  (bloqueado por decisao de escala), DEVOPS-001 (estrategia de deploy),
+  TEST-001 fase 3 (E2E de frontend), banco de teste isolado (so vira
+  necessario com CI), e os majors de DEP-001 (registrados, aguardando
+  decisao futura).
+
+------------------------------------------------------------
+[2026-08-13] Assinaturas via Asaas + planos administraveis
+- Yuri pediu: sistema de assinaturas de verdade (checkout hospedado do
+  gateway, nunca tocando dados de pagamento no nosso backend) e uma tela
+  admin pra criar/editar planos (limites, valores, funcoes). O gateway
+  originalmente cogitado era Stripe; o Yuri trocou para Asaas
+  (docs.asaas.com) antes de eu comecar a implementar.
+- Antes de codar, pesquisei a documentacao oficial do Asaas (Checkout
+  Asaas, assinaturas, webhooks) e explorei o codigo existente (dois agentes
+  Explore em paralelo: padroes de admin CRUD/shared types/config no
+  backend, e padroes de billing/admin UI no frontend) pra desenhar um plano
+  fiel as convencoes ja estabelecidas. Usei AskUserQuestion pra tres
+  decisoes em aberto: (1) substituir o enum SubscriptionPlan inteiro por
+  uma tabela Plan (vs. manter o enum e so adicionar Plan pra preco) - Yuri
+  escolheu substituir; (2) metodos de pagamento no checkout - cartao +
+  Pix; (3) credenciais Asaas - Yuri ja tinha uma API key de sandbox e
+  passou durante a sessao (armazenada so em backend/.env, nunca ecoada no
+  chat).
+- Implementado (plano completo em Contextos/Decisoes.md, secao
+  "Assinaturas via Asaas + planos administraveis"):
+  - Schema: enums BillingCycle/CheckoutStatus, models Plan/Checkout/Payment
+    novos; Company perdeu planType + colunas de limite fixas, ganhou planId
+    (FK, Restrict), asaasCustomerId (renomeado de stripeCustomerId) e
+    asaasSubscriptionId. Migracao escrita a mao (prisma migrate dev
+    --create-only nao roda em modo nao-interativo pra mudancas "unsafe");
+    a propria SQL da migracao semeia os 3 planos (free/pro/enterprise, com
+    os mesmos limites que estavam hardcoded em PLAN_DEFINITIONS) e faz o
+    backfill de plan_id a partir do plan_type antigo antes de dropar as
+    colunas velhas e o enum. Aplicada com prisma migrate deploy no Postgres
+    local de dev (321 linhas em companies, acumuladas pelos testes de
+    integracao que nao limpam dados - ver Contextos/Ambientes.md).
+  - backend/src/services/asaas-client.ts (fetch nativo, sem SDK/dependencia
+    nova) + asaas.service.ts (monta o payload do Checkout Asaas).
+  - plan.service.ts (CRUD completo) + plan.controller.ts/plan.routes.ts
+    (GET /api/plans publico) + CRUD admin em admin.controller.ts/
+    admin.routes.ts/admin.validator.ts (GET/POST/PATCH/DELETE
+    /admin/plans).
+  - billing.service.ts reescrito pra ler limites/features de Plan (via
+    join) em vez do mapa PLAN_DEFINITIONS; billing.controller.ts ganhou
+    checkout() (substitui upgrade()), cancel() atualizado pra cancelar a
+    assinatura Asaas tambem, e payments() novo (historico de faturas real).
+  - webhook.controller.ts/webhook.routes.ts: POST /api/webhooks/asaas, sem
+    authMiddleware (Asaas nao manda JWT), autenticado por comparacao do
+    header asaas-access-token contra ASAAS_WEBHOOK_TOKEN. Idempotente
+    (upsert de Payment por asaasPaymentId), resolve a empresa por
+    asaasSubscriptionId ou por externalReference->Checkout.id, so
+    muda Company/grava AuditLog quando o estado realmente muda.
+  - auth.service.ts: registro agora busca o plano seed "free" e usa o id
+    dele (nao ha default estatico possivel pra uma FK).
+  - shared/src/index.ts: removido o union SubscriptionPlan; adicionados
+    PlanResource/PlanPayload/PlanLimits/BillingCycle/PaymentResource/
+    CheckoutResponse; BillingOverview, AdminUserResource,
+    AdminUserUpdatePayload e AdminPlanDistributionPoint atualizados.
+  - Efeito colateral corrigido: o calculo de MRR/distribuicao de planos em
+    /admin/analytics (analytics.service.ts) usava um mapa PLAN_MRR
+    hardcoded e agrupava por planType - trocado pra agrupar por planId e
+    somar Plan.price de verdade (normalizado pro equivalente mensal quando
+    o ciclo e YEARLY). O grafico do frontend (admin/analytics/page.tsx)
+    tambem tinha um dataKey="planType" que so quebraria em runtime (nao
+    detectado pelo build, Recharts nao tipa isso) - corrigido pra
+    "planName".
+  - Frontend: dashboard/billing/page.tsx reescrito (lista os planos
+    publicos de verdade, botao Assinar redireciona pro checkoutUrl do
+    Asaas quando pago ou aplica na hora quando gratis, trata
+    ?checkout=success|cancelled|expired do retorno do callback, historico
+    de faturas real). admin/plans/page.tsx novo (mesmo padrao de
+    tabela+modal de dashboard/settings, mesmo padrao 403-e-autoridade de
+    admin/users). admin/users/page.tsx atualizado pro select de plano vir
+    de /admin/plans em vez de um enum fixo de 3 opcoes. Sidebar ganhou o
+    link Admin Planos. api-error.ts ganhou PLAN_NOT_FOUND/PLAN_IN_USE/
+    PLAN_CODE_TAKEN/ASAAS_API_ERROR no allowlist.
+- Duas descobertas reais só confirmadas testando contra o sandbox de
+  verdade (a documentacao do Asaas nao deixa isso claro, e num ponto
+  contradiz o comportamento real - detalhe completo em
+  Contextos/Decisoes.md):
+  1. Para chargeTypes RECURRENT o Asaas rejeita qualquer billingTypes que
+     nao seja so ["CREDIT_CARD"] - Pix nao tem produto de cobranca
+     recorrente no Checkout Asaas. Ajustada a decisao original (cartao +
+     Pix) pra so cartao.
+  2. Um customerData PARCIAL (so name/email) faz o Asaas exigir todo o
+     resto (cpfCnpj, phone, endereco...); omitir customerData inteiramente
+     e aceito e deixa a propria pagina do Asaas coletar tudo. Corrigido
+     pra nunca mandar customerData - o que tambem significa que nao
+     precisamos guardar CPF/CNPJ/endereco em Company.
+- Validacao: lint + build limpos em shared/backend/frontend; 57/57 testes
+  de backend (1 teste ajustado: company.planType -> company.planCode).
+  Smoke test real e completo no navegador E contra o sandbox real do
+  Asaas: registrei uma empresa nova (nasceu no plano Free corretamente),
+  testei o botao Assinar (achei e corrigi os dois bugs acima via um probe
+  direto contra a API do Asaas), confirmei que o link retornado renderiza
+  a pagina de checkout REAL do Asaas (nome da conta do Yuri apareceu na
+  pagina), simulei um webhook PAYMENT_CONFIRMED contra o backend rodando
+  (ativou o plano Pro corretamente, reentrega do mesmo evento nao duplicou
+  auditoria, token errado foi rejeitado com 401), testei cancelar
+  assinatura (voltou pro Free, tratou bem a assinatura Asaas fake nao
+  existindo de verdade), e testei o CRUD completo de /admin/plans como
+  admin (criar, listar, excluir plano sem uso, excluir plano em uso
+  bloqueado com 409 PLAN_IN_USE) e o bloqueio 403 pra usuario comum.
+- Pendente (tudo detalhado em Notas/TODO.md): cadastrar o webhook de
+  verdade no painel do Asaas quando houver dominio real com HTTPS (
+  depende de DEVOPS-001); precos reais de Pro/Enterprise (hoje sao
+  placeholders da migracao seed); nao ha suporte a Pix recorrente (limite
+  real da API do Asaas, nao uma escolha nossa); job de limpeza de Checkout
+  expirados (mesmo padrao ja adiado do RefreshToken); nit cosmetico de
+  fuso horario na exibicao de datas de pagamento.
+
+------------------------------------------------------------
+[2026-08-13] Decisao de hospedagem: VPS + Supabase, guia de deploy
+- Yuri perguntou quais formas de pagamento a assinatura oferece hoje
+  (confirmado: so cartao de credito - Pix recorrente nao existe no
+  Checkout Asaas, ver secao anterior) e depois pediu recomendacao de VPS
+  e passo a passo detalhado pra colocar o sistema no ar, usando Supabase
+  como banco e uma VPS pra hospedar.
+- Ajustei docker-compose.yml pro cenario real: removido o servico
+  postgres local (banco passa a ser o Supabase, via DATABASE_URL no
+  .env), portas do backend/frontend amarradas a 127.0.0.1 (antes
+  publicavam em todas as interfaces - so o Nginx do host deve ser
+  alcancavel de fora), TRUST_PROXY_HOPS default trocado pra 1 (Nginx
+  sempre na frente em producao). .env.example da raiz atualizado
+  (DATABASE_URL do Supabase, dominio real com https em vez de
+  localhost, ASAAS_ENV=production por padrao).
+- Validei a sintaxe do docker-compose.yml com `npx js-yaml
+  docker-compose.yml` (nao ha Docker disponivel neste ambiente pra rodar
+  `docker compose config` de verdade) e isso pegou um bug real: as
+  mensagens de erro dos placeholders `${VAR:?mensagem}` continham ": "
+  (dois-pontos + espaco) sem estarem entre aspas, o que quebra o parser
+  YAML (um "with: openssl..." e um "gere com: openssl..." - ambos
+  reescritos sem o dois-pontos). Isso ja existia no arquivo original
+  (nunca detectado por nao ter Docker pra testar) - corrigido de
+  brinde.
+- Escrito o guia completo de deploy em Contextos/Ambientes.md ("Guia
+  completo: VPS + Supabase + Nginx + HTTPS + Asaas"): especificacao de
+  VPS recomendada (2 vCPU/4GB RAM, Ubuntu 24.04, provedor com regiao
+  Sao Paulo), setup do Supabase (connection string via Session pooler),
+  setup inicial da VPS (usuario sudo, firewall, Docker, Nginx, Certbot),
+  deploy (.env, build, migrate, up), configuracao do Nginx + HTTPS via
+  certbot, e passos pos-deploy (promover admin, editar precos reais dos
+  planos, cadastrar o webhook de producao no painel do Asaas). Marcado
+  como pre-requisito o fato de que o codigo ainda nao esta no GitHub de
+  verdade (muito trabalho nao commitado, ver secao "Desenvolvimento" de
+  Ambientes.md) - nao rodei git add/commit/push, fica pro Yuri decidir
+  quando.
+- Notas/TODO.md atualizado: DEVOPS-001 marcado como decidido (VPS +
+  Supabase), pendencias que sobram sao todas do lado do Yuri (contratar
+  VPS, comprar dominio, criar projeto Supabase, executar o guia).
+- O mesmo guia foi passado pro Yuri diretamente no chat, em portugues
+  (nota: as mensagens anteriores da sessao de implementacao do Asaas
+  saíram em ingles por engano - o Yuri perguntou o motivo, confirmei que
+  foi um lapso meu em nao seguir a convencao de idioma do CLAUDE.md nas
+  minhas proprias mensagens de status, mesmo tendo mantido codigo/docs em
+  PT-BR).
+
+------------------------------------------------------------
+[2026-08-14] Rebranding Pricify3D, ajustes de dashboard, catalogo de impressoras + custo de manutencao
+- Yuri pediu tres rodadas de mudanca nesta sessao:
+  1. Trocar a marca visual de "3D Budget/PrintOps Console" para
+     "Pricify3D" usando duas logos que ele anexou (logo curta/icone e
+     logo completa horizontal). Como nao ha ferramenta pra extrair
+     imagem direto da conversa, pedi pra ele salvar os arquivos em
+     frontend/public/ (salvou como logo_icon.webp/logo_full.webp) antes
+     de eu continuar.
+  2. Ocultar "API Health" e a mencao "custo base dos snapshots" (metrica
+     de lucro estimado) do Dashboard pra usuarios comuns - so ADMIN ve.
+     Remover o bloco "MVP Core" do rodape da sidebar.
+  3. (pedido seguinte) Checar a funcao dos botoes de sino/raio no header
+     (nenhuma - eram decorativos, sem onClick, sem funcionalidade
+     nenhuma - removidos a pedido do Yuri) e corrigir o botao "Sair" que
+     mostrava o nome da empresa (`user?.company?.name ?? "Sair"`) em vez
+     do texto fixo. Tambem trocado o placeholder "Artesanerd" do campo
+     Nome da empresa no cadastro para "Empresa".
+  4. (pedido maior) Gerar uma tabela de referencia com impressoras 3D
+     reais (pediu primeiro uma tabela simples com ~10, depois pediu pra
+     aumentar pra 50-100, minimo 4 por marca, preco em R$ pesquisado no
+     Mercado Livre/AliExpress) - entreguei primeiro como Artifact
+     (catalogo-impressoras, 63 modelos, busca/filtro/ordenacao) pra ele
+     revisar, deixando claro quais valores eram pesquisados de verdade
+     (bolinha verde) vs. estimados por categoria (bolinha ambar), ja que
+     pesquisar consumo+preco exato de 63 SKUs individualmente nao e algo
+     que da pra fazer com confiabilidade real nessa escala. Depois ele
+     pediu pra colocar essa mesma lista no banco, alimentando um
+     autocomplete no cadastro de maquina, mais duas novas colunas
+     calculadas (depreciacao/h e manutencao/h) com formulas que ele
+     passou (FDM: valor*0.9/10000 e valor*0.3/2000; SLA:
+     valor*0.9/6000 e valor*0.35/1500), e pediu que o sistema passasse a
+     usar depreciacao+manutencao somadas nos calculos de orcamento onde
+     antes so entrava depreciacao.
+- Rebranding: Sidebar (logo curta + "Pricify3D", sem subtitulo, sem bloco
+  MVP Core), LoginForm/RegisterForm (logo completa no lugar do
+  icone+texto anterior), layout.tsx (titulo da aba + favicon). Header:
+  botao Sair sempre mostra "Sair"; botoes de automacoes/notificacoes
+  removidos (import Bell/Sparkles removido, `user` do useAuth() ficou sem
+  uso e foi removido tambem).
+- Dashboard: SystemStatusCard (API Health) e o detail "Final - custo base
+  dos snapshots" da metrica Lucro estimado agora sao condicionados a
+  `user?.role === "ADMIN"`; layout da secao vira coluna unica (sem o slot
+  vazio do card de status) quando nao-admin.
+- Catalogo de impressoras: nova tabela `MachineCatalog` (sem companyId,
+  referencia global, nunca escrita pelo usuario) com 63 modelos reais de
+  12 marcas (Bambu Lab, Creality, Prusa, Anycubic, Elegoo, Phrozen, Qidi
+  Tech, Flashforge, Sovol, Artillery, Voxelab, Peopoly), populada via
+  INSERT na propria migracao (valores gerados por um script Node
+  descartavel que aplicou as formulas de depreciacao/manutencao a cada
+  linha). Machine ganhou `price` (novo campo que aparece no formulario no
+  lugar da antiga entrada direta de "Depreciacao/h") e
+  `maintenanceCostPerHour`; ambos os campos de custo horario (depreciacao
+  e manutencao) passaram a ser SEMPRE recalculados no backend a partir de
+  price+type (nunca aceitos direto do cliente) - mesmo padrao ja usado em
+  Material.costPerGram, ate reaproveitando a mesma estrutura de
+  ensureOwnership+"normalizedInput" de material.service.ts pra PATCH
+  parcial funcionar certo. Maquinas ja cadastradas foram migradas por
+  retroengenharia: a propria migracao reconstroi um price plausivel a
+  partir do depreciation_cost_per_hour existente (formula invertida) e so
+  entao calcula a manutencao a partir desse price reconstruido (dois
+  UPDATEs separados, ja que uma instrucao nao pode ler na mesma linha um
+  valor que ela mesma acabou de escrever noutra coluna).
+- CalculationService: baseCost agora soma materialCost + energyCost +
+  depreciationCost + maintenanceCost + laborCost (era so depreciationCost
+  antes) - essa e a "nova variavel que soma os dois valores e substitui
+  nos calculos" que o Yuri pediu. Nova variavel de formula
+  `manutencao_maquina` (ao lado de `depreciacao_maquina` ja existente) em
+  formula-engine.ts (whitelist) e formula.service.ts (registry pro editor
+  de formulas). PrintItem ganhou coluna `maintenanceCost` (snapshot, itens
+  historicos ficam com 0).
+- Autocomplete no frontend (dashboard/settings/page.tsx,
+  MachineNameAutocomplete): busca debounced (250ms, minimo 2 caracteres)
+  contra GET /api/machine-catalog?q=; ao clicar numa sugestao preenche
+  nome ("{marca} {modelo}"), tipo, watts, volume XYZ e valor - tudo
+  continua editavel depois. Label pequeno abaixo do campo Valor mostra a
+  previa de depreciacao/manutencao calculada no client (mesma formula do
+  backend, so pra exibicao - o backend recalcula do zero ao salvar).
+  Tabela de maquinas na tela de configuracoes ganhou colunas Valor e
+  Manutencao/h.
+- Precos do catalogo: pesquisados no Mercado Livre/AliExpress quando
+  encontrados; quando nao encontrados, estimados via cambio x ~2 (regra
+  de bolso pro custo de importacao/Remessa Conforme, descoberta
+  pesquisando durante a tarefa anterior do artifact). Sao referencia,
+  nao cotacao exata - documentado em Contextos/Decisoes.md e
+  Notas/TODO.md (sem tela admin pra editar o catalogo ainda).
+- Validacao: lint + build limpos em shared/backend/frontend; 58/58 testes
+  de backend (1 teste novo cobrindo maintenanceCost somado ao baseCost;
+  testes de integracao existentes ajustados de
+  `depreciationCostPerHour: 3` pra `price: 3000` nos payloads). Smoke
+  test completo no navegador: reautenticacao, autocomplete buscando
+  "Bambu"/"Prusa" e retornando sugestoes corretas com preco, selecao
+  preenchendo nome com marca+modelo, edicao do valor recalculando a
+  previa ao vivo, submit persistindo tudo certo (POST 201, linha da
+  tabela mostrando Valor/Depreciacao/Manutencao corretos). Durante o
+  teste, a ferramenta de screenshot/clique simulado do navegador ficou
+  instavel nesta sessao (parou de compor frames) - contornado clicando
+  via JS direto (document.querySelector + .click()) pra confirmar
+  comportamento; nao e um problema do codigo.
+- Encontrado e corrigido de brinde durante a implementacao: a sugestao do
+  autocomplete preenchia so o nome do modelo ("X1 Carbon"), sem a marca -
+  diferente do que o usuario via e clicava na lista ("Bambu Lab X1
+  Carbon"). Corrigido pra concatenar marca+nome.
+- Commits ainda nao feitos nesta rodada - Yuri nao pediu "prepare o
+  commit" desta vez, so pediu os comandos de importacao/deploy; ver
+  proxima entrada ou o proprio chat pra os comandos passados.

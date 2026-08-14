@@ -336,3 +336,60 @@ arquitetural.
   reentrega do mesmo evento não duplicou auditoria, e token errado foi
   rejeitado com 401. Ver `Contextos/Chat.log` (2026-08-13) para o
   passo a passo completo.
+
+## Catálogo de impressoras + custo de manutenção por hora (2026-08-14)
+
+Pedido do Yuri: uma tabela de referência com impressoras 3D reais (FDM e
+resina) pra alimentar um autocomplete no cadastro de máquina, mais uma
+segunda variável de custo horário (manutenção, além da depreciação já
+existente), ambas derivadas do **valor da impressora**.
+
+- **`MachineCatalog`** é uma tabela de referência global (sem `companyId`,
+  não pertence a nenhuma empresa) — populada só via seed na própria
+  migração (63 modelos reais: Bambu Lab, Creality, Prusa, Anycubic, Elegoo,
+  Phrozen, Qidi Tech, Flashforge, Sovol, Artillery, Voxelab, Peopoly, ≥4
+  por marca). Nunca é escrita pelo usuário, só lida via
+  `GET /api/machine-catalog?q=` pro autocomplete do campo Nome.
+- **Preços do catálogo são referência, não cotação exata** — pesquisados no
+  Mercado Livre/AliExpress quando encontrados, senão estimados via câmbio ×
+  ~2 (regra de bolso pro custo de importação/Remessa Conforme, encontrada
+  durante a pesquisa). O artifact publicado pro Yuri (2026-08-14, antes
+  desta tabela) já vinha com uma bolinha verde/âmbar marcando pesquisado vs.
+  estimado — essa distinção não foi trazida pro banco, só documentada aqui.
+- **Fórmulas** (fornecidas pelo Yuri, aplicadas em `resolveMachineHourlyCosts`
+  no `machine.service.ts` e replicadas no seed da migração):
+  - FDM: `depreciação/h = (valor * 0.9) / 10000`, `manutenção/h = (valor * 0.3) / 2000`
+  - SLA/Resina: `depreciação/h = (valor * 0.9) / 6000`, `manutenção/h = (valor * 0.35) / 1500`
+- **`Machine.price` substitui a entrada direta de depreciação no
+  formulário** — `depreciationCostPerHour` e o novo `maintenanceCostPerHour`
+  nunca são aceitos do cliente (removidos do `machineSchema`), sempre
+  recalculados no backend a partir de `price`+`type`. Mesmo padrão já usado
+  em `Material.costPerGram` (derivado de `purchasePrice`/`totalWeightGrams`)
+  — `machine.service.ts` replica o `ensureOwnership` + "normalizedInput"
+  de `material.service.ts` pra recalcular corretamente mesmo num PATCH
+  parcial que só muda `type` sem tocar `price` (ou vice-versa).
+- **Máquinas já cadastradas foram migradas por retroengenharia**: a mesma
+  migração faz `UPDATE` reconstruindo um `price` plausível a partir do
+  `depreciation_cost_per_hour` já existente (fórmula invertida), depois
+  calcula `maintenance_cost_per_hour` a partir desse `price` reconstruído —
+  em dois `UPDATE`s separados, porque uma instrução só não pode ler na mesma
+  linha um valor que ela mesma acabou de escrever noutra coluna.
+- **`manutencao_maquina` vira uma segunda variável de fórmula**, ao lado de
+  `depreciacao_maquina` (`formula-engine.ts` INTERNAL_VARIABLES,
+  `formula.service.ts` registry, `CalculationService.ts`). `baseCost` agora
+  soma os dois: `materialCost + energyCost + depreciationCost +
+  maintenanceCost + laborCost` — é a "nova variável que soma os dois
+  valores e substitui nos cálculos" pedida pelo Yuri. `PrintItem` ganhou a
+  coluna `maintenanceCost` (snapshot, igual `depreciationCost` já
+  funcionava) — itens de orçamento históricos ficam com `0` (conceito não
+  existia quando foram calculados).
+- **Autocomplete no frontend** (`dashboard/settings/page.tsx`,
+  `MachineNameAutocomplete`): busca debounced (250ms, mínimo 2 caracteres)
+  contra `/api/machine-catalog`; ao clicar numa sugestão, preenche
+  nome (`"{marca} {modelo}"`, ex. "Bambu Lab X1 Carbon"), tipo, watts,
+  volume XYZ e valor — **tudo continua editável depois**, sem nenhum
+  impedimento pra ajustar antes de salvar (só o próprio `price` dirige o
+  cálculo; se o usuário mudar o valor depois de importar, depreciação e
+  manutenção recalculam sozinhas). Um label pequeno abaixo do campo Valor
+  mostra a prévia calculada (mesma fórmula replicada no client, só pra
+  exibição — o backend recalcula do zero ao salvar, é a autoridade real).

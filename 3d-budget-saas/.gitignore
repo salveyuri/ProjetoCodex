@@ -46,6 +46,10 @@ coverage/
 # Logs
 *.log
 npm-debug.log*
+# Excecao: Chat.log e a memoria versionada do projeto (ver CLAUDE.md),
+# nao um log de execucao — sempre deve ser rastreado pelo git.
+!Contextos/Chat.log
+!**/Contextos/Chat.log
 
 # Editor / IDE
 .vscode/

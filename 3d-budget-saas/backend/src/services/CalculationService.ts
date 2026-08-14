@@ -29,6 +29,7 @@ interface CalculationMachine {
   type: MachineType;
   powerConsumptionKw: Prisma.Decimal;
   depreciationCostPerHour: Prisma.Decimal;
+  maintenanceCostPerHour: Prisma.Decimal;
 }
 
 interface CalculationMaterial {
@@ -88,6 +89,7 @@ const buildFormulaVariables = ({
   materialCost,
   energyCost,
   depreciationCost,
+  maintenanceCost,
   laborCost,
   baseCost,
 }: {
@@ -97,6 +99,7 @@ const buildFormulaVariables = ({
   materialCost: Prisma.Decimal;
   energyCost: Prisma.Decimal;
   depreciationCost: Prisma.Decimal;
+  maintenanceCost: Prisma.Decimal;
   laborCost: Prisma.Decimal;
   baseCost: Prisma.Decimal;
 }): FormulaVariables => {
@@ -120,6 +123,7 @@ const buildFormulaVariables = ({
     material_cost: Number(materialCost.toString()),
     energia_total: Number(energyCost.toString()),
     depreciacao_maquina: Number(depreciationCost.toString()),
+    manutencao_maquina: Number(maintenanceCost.toString()),
     mao_obra: Number(laborCost.toString()),
     custo_base: Number(baseCost.toString()),
     margem_lucro: marginRate,
@@ -169,8 +173,14 @@ export const calculateQuoteBreakdown = ({
     .mul(settings.energyCostPerKwh);
   const depreciationCost =
     machine.depreciationCostPerHour.mul(printTimeHours);
+  const maintenanceCost =
+    machine.maintenanceCostPerHour.mul(printTimeHours);
   const laborCost = decimal(settings.technicalHourRate).mul(printTimeHours);
-  const baseCost = materialCost.add(energyCost).add(depreciationCost).add(laborCost);
+  const baseCost = materialCost
+    .add(energyCost)
+    .add(depreciationCost)
+    .add(maintenanceCost)
+    .add(laborCost);
   const formulaVariables = buildFormulaVariables({
     request: safeRequest,
     machine,
@@ -178,6 +188,7 @@ export const calculateQuoteBreakdown = ({
     materialCost,
     energyCost,
     depreciationCost,
+    maintenanceCost,
     laborCost,
     baseCost,
   });
@@ -231,6 +242,9 @@ export const calculateQuoteBreakdown = ({
         depreciationCostPerHour: toCurrencyNumber(
           machine.depreciationCostPerHour,
         ),
+        maintenanceCostPerHour: toCurrencyNumber(
+          machine.maintenanceCostPerHour,
+        ),
       },
       material: {
         id: material.id,
@@ -255,6 +269,7 @@ export const calculateQuoteBreakdown = ({
       materialCost: toCurrencyNumber(materialCost),
       energyCost: toCurrencyNumber(energyCost),
       depreciationCost: toCurrencyNumber(depreciationCost),
+      maintenanceCost: toCurrencyNumber(maintenanceCost),
       laborCost: toCurrencyNumber(laborCost),
       baseCost: toCurrencyNumber(baseCost),
       marginAmount: toCurrencyNumber(marginAmount),
@@ -318,6 +333,7 @@ export class CalculationService {
           type: true,
           powerConsumptionKw: true,
           depreciationCostPerHour: true,
+          maintenanceCostPerHour: true,
         },
       }),
       prisma.material.findFirst({

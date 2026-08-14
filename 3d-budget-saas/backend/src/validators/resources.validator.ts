@@ -38,7 +38,11 @@ export const machineSchema = z
     printVolumeXmm: positiveNumber.default(220),
     printVolumeYmm: positiveNumber.default(220),
     printVolumeZmm: positiveNumber.default(220),
-    depreciationCostPerHour: positiveNumber,
+    // depreciationCostPerHour/maintenanceCostPerHour are never accepted
+    // from the client — always derived from price+type server-side (same
+    // pattern as Material.costPerGram, derived from purchasePrice/
+    // totalWeightGrams). See resolveMachineHourlyCosts in machine.service.ts.
+    price: positiveNumber,
     powerConsumptionWatts: positiveNumber,
   })
   .strict();

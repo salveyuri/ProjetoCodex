@@ -19,6 +19,7 @@ export const INTERNAL_VARIABLES = [
   "material_cost",
   "energia_total",
   "depreciacao_maquina",
+  "manutencao_maquina",
   "mao_obra",
   "custo_base",
   "margem_lucro",

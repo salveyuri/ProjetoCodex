@@ -21,7 +21,7 @@ describe("FREE plan — usage limits", () => {
         .send({
           name: `Machine ${index + 1}`,
           type: "FDM",
-          depreciationCostPerHour: 3,
+          price: 3000,
           powerConsumptionWatts: 120,
         });
 
@@ -34,7 +34,7 @@ describe("FREE plan — usage limits", () => {
       .send({
         name: "One too many",
         type: "FDM",
-        depreciationCostPerHour: 3,
+        price: 3000,
         powerConsumptionWatts: 120,
       });
 
@@ -50,7 +50,7 @@ describe("FREE plan — usage limits", () => {
       .send({
         name: "Ender 3",
         type: "FDM",
-        depreciationCostPerHour: 3,
+        price: 3000,
         powerConsumptionWatts: 120,
       });
     const material = await request(app)
@@ -105,7 +105,7 @@ describe("FREE plan — usage limits", () => {
         .send({
           name: `Machine ${index + 1}`,
           type: "FDM",
-          depreciationCostPerHour: 3,
+          price: 3000,
           powerConsumptionWatts: 120,
         });
     }
@@ -116,7 +116,7 @@ describe("FREE plan — usage limits", () => {
       .send({
         name: "One too many, but admin",
         type: "FDM",
-        depreciationCostPerHour: 3,
+        price: 3000,
         powerConsumptionWatts: 120,
       });
 

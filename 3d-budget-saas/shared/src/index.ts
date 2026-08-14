@@ -302,7 +302,9 @@ export interface MachineResource {
   printVolumeXmm: number;
   printVolumeYmm: number;
   printVolumeZmm: number;
+  price: number;
   depreciationCostPerHour: number;
+  maintenanceCostPerHour: number;
   powerConsumptionKw: number;
   powerConsumptionWatts: number;
   createdAt: string;
@@ -315,8 +317,27 @@ export interface MachinePayload {
   printVolumeXmm?: number;
   printVolumeYmm?: number;
   printVolumeZmm?: number;
-  depreciationCostPerHour: number;
+  // Depreciacao e manutencao por hora nao entram aqui — sao sempre
+  // derivadas de price+type no backend (mesmo padrao de
+  // Material.costPerGram, derivado de purchasePrice/totalWeightGrams).
+  price: number;
   powerConsumptionWatts: number;
+}
+
+// Catalogo de referencia usado só pelo autocomplete do cadastro de
+// máquina — nunca é criado/editado pelo usuário.
+export interface MachineCatalogResource {
+  id: string;
+  brand: string;
+  name: string;
+  type: MachineType;
+  price: number;
+  powerConsumptionWatts: number;
+  printVolumeXmm: number;
+  printVolumeYmm: number;
+  printVolumeZmm: number;
+  depreciationCostPerHour: number;
+  maintenanceCostPerHour: number;
 }
 
 export interface MaterialResource {
@@ -377,6 +398,7 @@ export interface CalculationMoneyBreakdown {
   materialCost: number;
   energyCost: number;
   depreciationCost: number;
+  maintenanceCost: number;
   laborCost: number;
   baseCost: number;
   marginAmount: number;
@@ -394,6 +416,7 @@ export interface CalculationResourceSummary {
     type: MachineType;
     powerConsumptionWatts: number;
     depreciationCostPerHour: number;
+    maintenanceCostPerHour: number;
   };
   material: {
     id: string;
@@ -514,6 +537,7 @@ export interface QuoteItemSnapshot {
   materialCost: number;
   energyCost: number;
   depreciationCost: number;
+  maintenanceCost: number;
   laborCost: number;
   baseCost: number;
   marginAmount: number;

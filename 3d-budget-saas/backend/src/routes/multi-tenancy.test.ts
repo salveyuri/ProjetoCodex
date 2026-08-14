@@ -24,7 +24,7 @@ describe("machines — cross-tenant access", () => {
       .send({
         name: "Machine A",
         type: "FDM",
-        depreciationCostPerHour: 3,
+        price: 3000,
         powerConsumptionWatts: 120,
       });
 
@@ -71,7 +71,7 @@ describe("quotes — cross-tenant access", () => {
       .send({
         name: "Ender 3",
         type: "FDM",
-        depreciationCostPerHour: 3,
+        price: 3000,
         powerConsumptionWatts: 120,
       });
     const material = await request(app)

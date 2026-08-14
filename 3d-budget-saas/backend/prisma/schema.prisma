@@ -188,7 +188,9 @@ model Machine {
   printVolumeXmm          Decimal     @map("print_volume_x_mm") @db.Decimal(10, 2)
   printVolumeYmm          Decimal     @map("print_volume_y_mm") @db.Decimal(10, 2)
   printVolumeZmm          Decimal     @map("print_volume_z_mm") @db.Decimal(10, 2)
+  price                   Decimal     @default(0) @map("price") @db.Decimal(10, 2)
   depreciationCostPerHour Decimal     @map("depreciation_cost_per_hour") @db.Decimal(10, 4)
+  maintenanceCostPerHour  Decimal     @default(0) @map("maintenance_cost_per_hour") @db.Decimal(10, 4)
   powerConsumptionKw      Decimal     @map("power_consumption_kw") @db.Decimal(10, 4)
   createdAt               DateTime    @default(now()) @map("created_at")
   updatedAt               DateTime    @updatedAt @map("updated_at")
@@ -199,6 +201,28 @@ model Machine {
   @@index([companyId])
   @@index([type])
   @@map("machines")
+}
+
+// Catálogo de referência (não pertence a nenhuma empresa) usado só para
+// autocompletar o cadastro de máquina — nunca é escrito pelo usuário.
+model MachineCatalog {
+  id                      String      @id @default(uuid()) @db.Uuid
+  brand                   String
+  name                    String
+  type                    MachineType
+  price                   Decimal     @db.Decimal(10, 2)
+  powerConsumptionWatts   Decimal     @map("power_consumption_watts") @db.Decimal(10, 2)
+  printVolumeXmm          Decimal     @map("print_volume_x_mm") @db.Decimal(10, 2)
+  printVolumeYmm          Decimal     @map("print_volume_y_mm") @db.Decimal(10, 2)
+  printVolumeZmm          Decimal     @map("print_volume_z_mm") @db.Decimal(10, 2)
+  depreciationCostPerHour Decimal     @map("depreciation_cost_per_hour") @db.Decimal(10, 4)
+  maintenanceCostPerHour  Decimal     @map("maintenance_cost_per_hour") @db.Decimal(10, 4)
+  createdAt               DateTime    @default(now()) @map("created_at")
+  updatedAt               DateTime    @updatedAt @map("updated_at")
+
+  @@unique([brand, name])
+  @@index([name])
+  @@map("machine_catalog")
 }
 
 model Material {
@@ -301,6 +325,7 @@ model PrintItem {
   materialCost                    Decimal  @default(0) @map("material_cost") @db.Decimal(12, 2)
   energyCost                      Decimal  @default(0) @map("energy_cost") @db.Decimal(12, 2)
   depreciationCost                Decimal  @default(0) @map("depreciation_cost") @db.Decimal(12, 2)
+  maintenanceCost                 Decimal  @default(0) @map("maintenance_cost") @db.Decimal(12, 2)
   laborCost                       Decimal  @default(0) @map("labor_cost") @db.Decimal(12, 2)
   baseCost                        Decimal  @default(0) @map("base_cost") @db.Decimal(12, 2)
   marginAmount                    Decimal  @default(0) @map("margin_amount") @db.Decimal(12, 2)

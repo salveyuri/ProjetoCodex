@@ -75,6 +75,11 @@ const systemVariableMeta: Record<
     type: "FLOAT",
     previewValue: 6,
   },
+  manutencao_maquina: {
+    description: "Custo de manutencao da maquina para o tempo informado.",
+    type: "FLOAT",
+    previewValue: 3,
+  },
   mao_obra: {
     description: "Custo de hora tecnica para o tempo informado.",
     type: "FLOAT",

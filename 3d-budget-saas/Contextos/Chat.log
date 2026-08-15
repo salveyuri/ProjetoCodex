@@ -971,3 +971,14 @@ fundo ou ao lado do formulario.
   mesmo problema ja registrado antes).
 - Tela de cadastro (`/register`) nao foi alterada - o pedido foi
   especificamente sobre a tela de login.
+
+## 2026-08-14 - Ajustes finos na tela de login (icone + texto no lugar da logo full, remove "acesso restrito")
+
+Seguimento do split-screen de login desta mesma sessao: Yuri pediu pra
+remover a StatusBadge "acesso restrito" do topo do card e trocar a logo
+grande (`logo_full.webp`) por `logo_icon.webp` (960x960, 48x48 no card,
+`rounded-lg`) ao lado do texto "Pricify 3D" escrito por extenso - mesmo
+padrao de icone+nome ja usado no cabecalho do `Sidebar.tsx` (so que la e
+40x40 + "Pricify3D" junto). `LoginForm.tsx`: removida a StatusBadge (e o
+import de `status-badge` que ficou sem uso). Validado com lint, build e
+inspecao ao vivo no navegador (logo_icon.webp carregando, badge sumida).

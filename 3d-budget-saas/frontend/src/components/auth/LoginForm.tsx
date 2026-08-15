@@ -8,7 +8,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { getApiErrorMessage } from "@/lib/api-error";
 
 export const LoginForm = () => {
@@ -42,13 +41,20 @@ export const LoginForm = () => {
 
   return (
     <Card className="w-full max-w-md p-6">
-      <div className="flex justify-center">
-        <Image src="/logo_full.webp" alt="Pricify3D" width={180} height={60} priority />
+      <div className="flex items-center justify-center gap-3">
+        <Image
+          src="/logo_icon.webp"
+          alt="Pricify3D"
+          width={48}
+          height={48}
+          priority
+          className="shrink-0 rounded-lg"
+        />
+        <span className="text-2xl font-semibold text-foreground">Pricify 3D</span>
       </div>
 
       <div className="mt-6">
-        <StatusBadge tone="neutral">acesso restrito</StatusBadge>
-        <h2 className="mt-4 text-2xl font-semibold">Entrar</h2>
+        <h2 className="text-2xl font-semibold">Entrar</h2>
       </div>
 
       <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>

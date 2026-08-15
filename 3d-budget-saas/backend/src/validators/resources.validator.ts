@@ -59,7 +59,7 @@ export const materialSchema = z
       .trim()
       .min(2, "Material name must have at least 2 characters.")
       .max(120, "Material name must have at most 120 characters."),
-    type: z.enum(["FILAMENT", "RESIN", "POWDER", "OTHER"]),
+    type: z.enum(["FILAMENT", "RESIN", "OTHER"]),
     color: z
       .string()
       .trim()
@@ -67,7 +67,6 @@ export const materialSchema = z
       .max(60, "Color must have at most 60 characters."),
     totalWeightGrams: z.number().finite().positive(),
     purchasePrice: z.number().finite().min(0),
-    density: z.number().finite().positive().default(1.24),
   })
   .strict();
 

@@ -982,3 +982,38 @@ padrao de icone+nome ja usado no cabecalho do `Sidebar.tsx` (so que la e
 40x40 + "Pricify3D" junto). `LoginForm.tsx`: removida a StatusBadge (e o
 import de `status-badge` que ficou sem uso). Validado com lint, build e
 inspecao ao vivo no navegador (logo_icon.webp carregando, badge sumida).
+
+## 2026-08-15 - Remove densidade e tipo "Po" de materiais
+
+Pedido do Yuri: remover o campo "densidade" do cadastro de materiais (nunca
+parecia util, nao usado em nenhum calculo) e remover a opcao "Po" do tipo
+de material, deixando so Filamento/Resina/Outro - em ambos os casos,
+"pode remover do banco tambem".
+
+- Migracao nova `20260814190000_remove_material_density_and_powder_type`:
+  reatribui materiais com type=POWDER pra OTHER (nenhum no banco de dev
+  no momento, so seguranca), recria o enum MaterialType sem POWDER (padrao
+  Postgres de renomear+recriar+converter+dropar o tipo antigo, ja que nao
+  da pra remover um valor de enum direto), e dropa a coluna density. Detalhe
+  tecnico: `prisma migrate dev --create-only` nao funciona neste ambiente
+  (comando interativo, falha non-interactive) - a migracao foi escrita a
+  mao seguindo a mesma pasta/formato que o Prisma geraria, e aplicada com
+  `prisma migrate deploy` (mesmo caminho ja usado nas migracoes anteriores
+  desta sessao).
+- Removido de schema.prisma, resources.validator.ts (materialSchema),
+  material.service.ts (toMaterialResource/toMaterialCreateData/
+  toMaterialUpdateData) e shared/src/index.ts (MaterialType,
+  MaterialResource, MaterialPayload) tudo relacionado a `density` e ao
+  valor POWDER.
+- Frontend (dashboard/settings/page.tsx): campo "Densidade" removido do
+  modal de material (grid de 3 colunas virou 2), opcao "Po" removida do
+  select de Tipo.
+- Antes de rodar a migracao, precisei parar o servidor de dev do backend
+  (tsx watch) - mesmo problema de lock do DLL do Prisma no Windows ja
+  registrado antes nesta sessao - e subir de novo depois.
+- Validado: prisma validate, lint+build de shared/backend/frontend,
+  58/58 testes de backend (nenhum quebrou), e teste ao vivo no navegador:
+  cadastrei uma conta nova, abri o modal de Novo Material e confirmei que
+  so aparecem Nome/Marca, Tipo (Filamento/Resina/Outro), Cor, Peso/Volume
+  e Preco compra (sem Densidade), e que salvar um material tipo Resina
+  funciona ponta a ponta.

@@ -76,11 +76,10 @@ const calculateMachineHourlyCosts = (
 
 interface MaterialFormState {
   brand: string;
-  type: "FILAMENT" | "RESIN" | "POWDER" | "OTHER";
+  type: "FILAMENT" | "RESIN" | "OTHER";
   color: string;
   totalWeightGrams: string;
   purchasePrice: string;
-  density: string;
 }
 
 interface ToastState {
@@ -104,7 +103,6 @@ const emptyMaterialForm: MaterialFormState = {
   color: "",
   totalWeightGrams: "1000",
   purchasePrice: "80",
-  density: "1.24",
 };
 
 const defaultSettings: ProductionSettings = {
@@ -165,7 +163,6 @@ const toMaterialForm = (material: MaterialResource): MaterialFormState => ({
   color: material.color,
   totalWeightGrams: String(material.totalWeightGrams),
   purchasePrice: String(material.purchasePrice),
-  density: String(material.density),
 });
 
 export default function SettingsPage() {
@@ -293,7 +290,6 @@ export default function SettingsPage() {
       color: materialForm.color,
       totalWeightGrams: Number(materialForm.totalWeightGrams),
       purchasePrice: Number(materialForm.purchasePrice),
-      density: Number(materialForm.density),
     };
 
     try {
@@ -781,7 +777,6 @@ export default function SettingsPage() {
                 >
                   <option value="FILAMENT">Filamento</option>
                   <option value="RESIN">Resina</option>
-                  <option value="POWDER">Po</option>
                   <option value="OTHER">Outro</option>
                 </select>
               </label>
@@ -793,7 +788,7 @@ export default function SettingsPage() {
                 }
               />
             </div>
-            <div className="grid min-w-0 gap-4 md:grid-cols-3">
+            <div className="grid min-w-0 gap-4 md:grid-cols-2">
               <TextField
                 label="Peso/Volume"
                 type="number"
@@ -814,18 +809,6 @@ export default function SettingsPage() {
                   setMaterialForm((current) => ({
                     ...current,
                     purchasePrice: value,
-                  }))
-                }
-              />
-              <TextField
-                label="Densidade"
-                type="number"
-                step="0.01"
-                value={materialForm.density}
-                onChange={(value) =>
-                  setMaterialForm((current) => ({
-                    ...current,
-                    density: value,
                   }))
                 }
               />

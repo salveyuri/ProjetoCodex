@@ -393,3 +393,31 @@ existente), ambas derivadas do **valor da impressora**.
   manutenção recalculam sozinhas). Um label pequeno abaixo do campo Valor
   mostra a prévia calculada (mesma fórmula replicada no client, só pra
   exibição — o backend recalcula do zero ao salvar, é a autoridade real).
+
+## Remocao de densidade e tipo "Po" de Material (2026-08-15)
+
+Pedido do Yuri: o campo "densidade" no cadastro de material nunca chegou a
+ser usado em nenhum calculo de custo (nao aparece em `CalculationService.ts`
+nem nas variaveis de formula) e a opcao de tipo "Po" (`POWDER`) tambem nao
+parecia util no momento — ambos removidos do sistema, incluindo do banco.
+
+- **Migracao** (`20260814190000_remove_material_density_and_powder_type`):
+  reatribui materiais existentes com `type = 'POWDER'` para `'OTHER'` antes
+  de recriar o enum `MaterialType` sem esse valor (Postgres nao deixa
+  remover um valor de enum ainda referenciado - o padrao e renomear o tipo
+  antigo, criar o novo sem o valor, converter a coluna via
+  `USING (col::text::NovoTipo)` e derrubar o tipo antigo). Coluna `density`
+  dropada na mesma migracao. Nenhum material do banco de dev tinha
+  `type = 'POWDER'` no momento (so uma salvaguarda pra producao, que pode
+  ter dados diferentes).
+- `MaterialType` (schema Prisma e `shared/src/index.ts`) passa a ser só
+  `FILAMENT | RESIN | OTHER`. `materialSchema` (`resources.validator.ts`)
+  e `MaterialResource`/`MaterialPayload` perderam o campo `density`.
+  `material.service.ts` removeu toda leitura/escrita de `density` (nunca
+  entrava em nenhum calculo, só era guardado e devolvido pro cliente).
+- Frontend (`dashboard/settings/page.tsx`): removido o campo "Densidade"
+  do modal de material (grid de 3 colunas virou 2) e a opcao "Po" do
+  select de Tipo, que agora lista só Filamento/Resina/Outro.
+- Validado: `prisma validate`, lint/build de shared+backend+frontend,
+  58/58 testes de backend, e criacao de material de ponta a ponta pelo
+  navegador (tipo Resina, sem campo de densidade, salvando certo).

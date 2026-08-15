@@ -19,11 +19,10 @@ const toNumber = (value: Prisma.Decimal): number => Number(value.toString());
 const toMaterialResource = (material: {
   id: string;
   brand: string;
-  type: "FILAMENT" | "RESIN" | "POWDER" | "OTHER";
+  type: "FILAMENT" | "RESIN" | "OTHER";
   color: string;
   totalWeightGrams: Prisma.Decimal;
   costPerGram: Prisma.Decimal;
-  density: Prisma.Decimal;
   createdAt: Date;
   updatedAt: Date;
 }): MaterialResource => {
@@ -38,7 +37,6 @@ const toMaterialResource = (material: {
     totalWeightGrams,
     purchasePrice: Number((totalWeightGrams * costPerGram).toFixed(2)),
     costPerGram,
-    density: toNumber(material.density),
     createdAt: material.createdAt.toISOString(),
     updatedAt: material.updatedAt.toISOString(),
   };
@@ -65,7 +63,6 @@ const toMaterialCreateData = (
   color: input.color,
   totalWeightGrams: input.totalWeightGrams,
   costPerGram: input.purchasePrice / input.totalWeightGrams,
-  density: input.density,
 });
 
 const toMaterialUpdateData = (
@@ -84,7 +81,6 @@ const toMaterialUpdateData = (
     data.totalWeightGrams = input.totalWeightGrams;
   }
   if (costPerGram !== undefined) data.costPerGram = costPerGram;
-  if (input.density !== undefined) data.density = input.density;
 
   return data;
 };

@@ -293,7 +293,7 @@ export interface AdminAnalyticsOverview {
 
 export type MachineType = "FDM" | "RESIN";
 
-export type MaterialType = "FILAMENT" | "RESIN" | "POWDER" | "OTHER";
+export type MaterialType = "FILAMENT" | "RESIN" | "OTHER";
 
 export interface MachineResource {
   id: string;
@@ -348,7 +348,6 @@ export interface MaterialResource {
   totalWeightGrams: number;
   purchasePrice: number;
   costPerGram: number;
-  density: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -359,7 +358,6 @@ export interface MaterialPayload {
   color: string;
   totalWeightGrams: number;
   purchasePrice: number;
-  density?: number;
 }
 
 export type CustomVariableType = "INTEGER" | "FLOAT" | "PERCENTAGE";

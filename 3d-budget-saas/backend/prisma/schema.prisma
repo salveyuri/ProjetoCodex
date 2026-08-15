@@ -38,7 +38,6 @@ enum MachineType {
 enum MaterialType {
   FILAMENT
   RESIN
-  POWDER
   OTHER
 }
 
@@ -233,7 +232,6 @@ model Material {
   color            String
   totalWeightGrams Decimal      @map("total_weight_grams") @db.Decimal(10, 2)
   costPerGram      Decimal      @map("cost_per_gram") @db.Decimal(10, 6)
-  density          Decimal      @db.Decimal(10, 4)
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
 

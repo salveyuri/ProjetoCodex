@@ -2,9 +2,11 @@ import { Router } from "express";
 import { authController } from "../controllers/auth.controller";
 import { authMiddleware } from "../middlewares/auth-middleware";
 import {
+  forgotPasswordRateLimiter,
   loginRateLimiter,
   refreshRateLimiter,
   registerRateLimiter,
+  resetPasswordRateLimiter,
 } from "../middlewares/rate-limit-middleware";
 
 export const authRoutes = Router();
@@ -34,4 +36,16 @@ authRoutes.post("/logout", (request, response, next) =>
 
 authRoutes.post("/logout-all", (request, response, next) =>
   authController.logoutAll(request, response, next),
+);
+
+authRoutes.post(
+  "/forgot-password",
+  forgotPasswordRateLimiter,
+  (request, response, next) => authController.forgotPassword(request, response, next),
+);
+
+authRoutes.post(
+  "/reset-password",
+  resetPasswordRateLimiter,
+  (request, response, next) => authController.resetPassword(request, response, next),
 );

@@ -1100,3 +1100,116 @@ coloridos por origem).
   "(56,24 * (1 + 0,3)) + (56,24 * 0,05) = R$ 75,92", batendo com o
   "Resultado" ao lado; alterar custo_base pra 100 ao vivo atualizou pra
   "(100 * (1 + 0,3)) + (100 * 0,05) = R$ 135,00" corretamente.
+
+## 2026-08-15 - Sistema de e-mails transacionais via Resend
+
+Pedido do Yuri: implementar envio de e-mail (ferramenta Resend, remetente
+`system@pricify3d.com`, dominio hospedado no Zoho Mail) com tela admin pra
+editar templates, em 6 situacoes - conta criada, reset de senha (com
+seguranca tratada, link levando pra tela de nova senha), assinatura
+confirmada, assinatura renovada, alerta de vencimento, e resumo de
+orcamento (ao exportar PDF ou aprovar). Tarefa grande - usada plan mode
+antes de implementar (pesquisa via subagent Explore + plano detalhado
+aprovado pelo Yuri).
+
+- 3 tabelas novas (`EmailTemplate`, `EmailLog`, `PasswordResetToken`),
+  migracao `20260815120000_email_system` com seed dos 6 templates
+  (layout HTML generico, o Yuri ajusta o HTML de verdade depois pela
+  tela). Novas deps: `resend` (SDK oficial) e `node-cron`.
+- `backend/src/services/resend-client.ts` (wrapper fino, nunca lanca),
+  `email-templates.ts` (registro estatico de variaveis por template),
+  `email.service.ts` (`EmailService.send()` + 6 metodos de conveniencia,
+  um por gatilho - todos fire-and-forget via `void emailService.sendX()`,
+  nunca bloqueiam a acao principal nem lancam mesmo se o Resend falhar).
+- Reset de senha: mesmo padrao de seguranca do refresh token ja existente
+  (token bruto de 32 bytes, so o hash SHA-256 gravado, nunca o token cru);
+  `forgot-password` sempre responde 200 (evita enumeracao de e-mail),
+  invalida token anterior antes de criar um novo; `reset-password` e
+  single-use, expira em 30min, e revoga todos os refresh tokens do
+  usuario ao suceder (forca logout em todo dispositivo). Novas telas
+  `/forgot-password` e `/reset-password` (link "Esqueci minha senha" no
+  login).
+- Achado importante durante o planejamento: o webhook do Asaas so mutava
+  `Company`/gravava audit log `if (isFirstActivation || statusChanged)`,
+  o que nunca acontece numa renovacao de rotina (ja ACTIVE, continua
+  ACTIVE) - corrigido com uma checagem independente (`isNewPaymentRecord`,
+  antes do upsert do Payment) que dispara o e-mail certo
+  (confirmada/renovada) sem mexer na logica ja testada. Validado
+  simulando os dois webhooks de verdade contra o endpoint real.
+- Alerta de vencimento: cron `node-cron` dentro do proprio processo
+  backend (sem infra nova), roda todo dia 9h America/Sao_Paulo, consulta
+  `Payment` com vencimento nos proximos 3 dias. Limitacao documentada:
+  so funciona se o Asaas mandar webhook da fatura futura antes do
+  vencimento (depende da configuracao do painel deles, ainda pendente em
+  producao).
+- Resumo de orcamento vai pro dono da conta (nao pro cliente final -
+  `Quote` nao guarda e-mail de contato), dois gatilhos (aprovado/
+  exportado), sem dedupe no export (reexportar e uso legitimo).
+- Tela `/admin/email-templates` (lista + editar, sem criar/apagar - os 6
+  keys sao fixos, cada um amarrado a um gatilho do codigo), reaproveita a
+  UX de "variaveis disponiveis clicaveis" ja corrigida nesta mesma sessao
+  na tela de formulas (aqui com `{{chave}}`, formato realmente usado pelo
+  motor de template - diferente do `nome` sem chaves das formulas).
+  Escaping HTML por padrao nas variaveis (protege contra nome de
+  empresa/cliente injetando HTML), exceto chaves terminadas em `Html`
+  (conteudo pre-renderizado, ex. `itemsHtml`).
+- Validado: 65 testes de backend passando (58 anteriores + 4 novos de
+  integracao do reset de senha + 3 unitarios do EmailService), lint/build
+  de shared/backend/frontend limpos. Smoke test extenso no navegador e via
+  API: cadastro disparando ACCOUNT_CREATED (confirmado em EmailLog),
+  fluxo completo de forgot/reset password (senha antiga passa a falhar,
+  nova funciona, sessao antiga invalidada), tela admin de templates
+  (listar, editar, variavel inserida corretamente, audit log gravado),
+  criacao+aprovacao+exportacao de orcamento disparando QUOTE_SUMMARY duas
+  vezes com o destinatario certo, e simulacao dos webhooks de assinatura
+  confirmada/renovada batendo exatamente com o comportamento esperado.
+  Nenhuma chave real do Resend configurada neste ambiente - todo envio
+  aparece como `EmailLog.status = "FAILED"` com
+  `errorMessage: "RESEND_API_KEY not configured"`, suficiente pra
+  confirmar que cada gatilho disparou no lugar certo.
+- Yuri ainda precisa: gerar a `RESEND_API_KEY` real e configurar em
+  producao, verificar o dominio `pricify3d.com` no painel do Resend
+  (SPF/DKIM), e confirmar quais eventos o webhook do Asaas realmente
+  manda (pro alerta de vencimento funcionar de verdade). Ver
+  `Notas/TODO.md`.
+
+## 2026-08-15 - Checagem dos eventos do webhook do Asaas + correcao do alerta de vencimento
+
+Seguimento da tarefa de e-mails: o Yuri pediu pra checar de verdade os
+eventos do webhook do Asaas (a limitacao ja tinha sido documentada como
+suposicao, sem confirmar) e corrigir o que fosse necessario, depois
+commitar.
+
+- Checado direto na API real do Asaas (sandbox, `GET /v3/webhooks` com a
+  `ASAAS_API_KEY` ja configurada): **nenhum webhook esta cadastrado**
+  (`totalCount: 0`). Achado mais amplo que o esperado - isso significa que
+  hoje nem so o alerta de vencimento fica sem dado: os e-mails de
+  assinatura confirmada/renovada tambem nunca disparariam sozinhos em
+  producao, porque o Asaas nao tem pra onde mandar nada (o teste ponta a
+  ponta da tarefa anterior simulou os webhooks chamando nosso proprio
+  endpoint direto, nao veio do Asaas de verdade).
+- Testado tambem, criando um customer + subscription reais no sandbox via
+  API: confirmado que o Asaas gera o Payment da proxima cobranca com
+  antecedencia (status PENDING, dueDate dias no futuro) assim que a
+  cobranca anterior liquida - o dado que o alerta precisa existe do lado
+  do Asaas bem antes do vencimento, so nao chega aqui porque nada esta
+  cadastrado pra empurrar.
+- Correcao aplicada: `backend/src/services/asaas-client.ts` ganhou
+  `listPendingPayments()` (`GET /payments?subscription={id}&status=
+  PENDING`); `subscription-expiring.job.ts` agora busca direto na API do
+  Asaas pra cada empresa ACTIVE com assinatura, faz upsert em `payments`
+  (mesmo formato que o webhook ja grava) antes de rodar a consulta local
+  original - torna o alerta funcional hoje, independente de quando/quais
+  eventos o webhook de producao vier a usar. Erro numa empresa nao trava
+  o lote inteiro (log e continua).
+- Validado de ponta a ponta com dado real do sandbox: subscription de
+  verdade criada com vencimento em 2 dias, empresa de teste apontada pra
+  ela, `runSubscriptionExpiringCheck()` (agora exportado) rodado direto -
+  encontrou o candidato puxando do Asaas (nada no banco local antes) e
+  disparou "Sua assinatura vence em 2 dias" corretamente. Dado de teste
+  (subscription no sandbox, empresa local) limpo depois.
+- 65/65 testes de backend continuam passando, lint/build limpos.
+- Documentado em `Contextos/Decisoes.md` e `Notas/TODO.md` - assinatura
+  confirmada/renovada continuam dependendo do webhook de producao ser
+  cadastrado de verdade (sao reacao a um evento que aconteceu, nao dá pra
+  "puxar" do mesmo jeito que a fatura futura).

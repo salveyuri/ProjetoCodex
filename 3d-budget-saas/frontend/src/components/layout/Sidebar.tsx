@@ -13,6 +13,7 @@ import {
   CreditCard,
   FileText,
   LayoutDashboard,
+  Mail,
   Package,
   PlusCircle,
   Settings,
@@ -62,6 +63,7 @@ export const Sidebar = ({
         { href: "/admin/analytics" as Route, label: "Admin BI", icon: ShieldCheck },
         { href: "/admin/users" as Route, label: "Admin Users", icon: UsersRound },
         { href: "/admin/plans" as Route, label: "Admin Planos", icon: Package },
+        { href: "/admin/email-templates" as Route, label: "Admin E-mails", icon: Mail },
       ]
     : navigation;
 

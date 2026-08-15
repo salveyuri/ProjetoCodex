@@ -5,6 +5,7 @@ import { logger } from "../config/logger";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
 import { auditLogService } from "../services/audit-log.service";
+import { emailService } from "../services/email.service";
 import { asaasWebhookSchema } from "../validators/webhook.validator";
 
 // Payment statuses that mean "money actually landed" — activates the plan
@@ -84,10 +85,19 @@ export class WebhookController {
         return;
       }
 
+      // Whether this exact payment was already recorded — used below to
+      // fire the "subscription confirmed/renewed" email exactly once per
+      // payment even though Asaas can redeliver the same event.
+      const existingPaymentRow = await prisma.payment.findUnique({
+        where: { asaasPaymentId: payment.id },
+        select: { id: true },
+      });
+      const isNewPaymentRecord = existingPaymentRow === null;
+
       // Upsert keyed by asaasPaymentId makes this idempotent — Asaas
       // guarantees "at least once" delivery, so the same event can arrive
       // more than once.
-      await prisma.payment.upsert({
+      const paymentRow = await prisma.payment.upsert({
         where: { asaasPaymentId: payment.id },
         create: {
           asaasPaymentId: payment.id,
@@ -109,6 +119,8 @@ export class WebhookController {
         },
       });
 
+      const isFirstActivation =
+        checkout !== null && checkout.status === CheckoutStatus.PENDING;
       let nextStatus: SubscriptionStatus | null = null;
 
       if (CONFIRMED_EVENTS.has(event)) {
@@ -118,8 +130,6 @@ export class WebhookController {
       }
 
       if (nextStatus) {
-        const isFirstActivation =
-          checkout !== null && checkout.status === CheckoutStatus.PENDING;
         const statusChanged = company.subscriptionStatus !== nextStatus;
 
         // Only touch Company/AuditLog when something actually changes —
@@ -155,6 +165,19 @@ export class WebhookController {
             after: { subscriptionStatus: nextStatus },
             metadata: { event, asaasPaymentId: payment.id },
           });
+        }
+      }
+
+      // Independent of the Company/AuditLog block above on purpose: a
+      // routine renewal (already ACTIVE, payment confirms, stays ACTIVE)
+      // never enters "isFirstActivation || statusChanged", but it still
+      // needs an email. isNewPaymentRecord (checked before the upsert)
+      // guards against sending it twice for a redelivered webhook.
+      if (isNewPaymentRecord && CONFIRMED_EVENTS.has(event)) {
+        if (isFirstActivation) {
+          void emailService.sendSubscriptionConfirmed(company.id, paymentRow.id);
+        } else {
+          void emailService.sendSubscriptionRenewed(company.id, paymentRow.id);
         }
       }
 

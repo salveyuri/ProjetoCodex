@@ -3,6 +3,7 @@ import { rateLimit } from "express-rate-limit";
 import type { ApiErrorResponse } from "@3d-budget/shared";
 
 const oneMinute = 60 * 1000;
+const fifteenMinutes = 15 * 60 * 1000;
 
 const createRateLimitHandler =
   (code: string, message: string) =>
@@ -65,6 +66,31 @@ export const refreshRateLimiter = rateLimit({
   handler: createRateLimitHandler(
     "RATE_LIMIT_REFRESH",
     "Too many session refresh attempts from this IP. Try again shortly.",
+  ),
+});
+
+// Stricter/longer window than the other auth limiters — this endpoint
+// triggers an email to a possibly-unowned address, so it needs a tighter
+// abuse ceiling than "wrong password" retries do.
+export const forgotPasswordRateLimiter = rateLimit({
+  windowMs: fifteenMinutes,
+  limit: 3,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: createRateLimitHandler(
+    "RATE_LIMIT_FORGOT_PASSWORD",
+    "Too many password reset requests from this IP. Try again in 15 minutes.",
+  ),
+});
+
+export const resetPasswordRateLimiter = rateLimit({
+  windowMs: oneMinute,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: createRateLimitHandler(
+    "RATE_LIMIT_RESET_PASSWORD",
+    "Too many password reset attempts from this IP. Try again in one minute.",
   ),
 });
 

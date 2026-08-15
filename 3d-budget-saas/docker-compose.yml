@@ -37,6 +37,8 @@ services:
       ASAAS_ENV: ${ASAAS_ENV:-production}
       ASAAS_API_KEY: ${ASAAS_API_KEY:?set ASAAS_API_KEY in .env — chave de PRODUCAO do Asaas}
       ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:?set ASAAS_WEBHOOK_TOKEN in .env, gere com openssl rand -hex 32}
+      RESEND_API_KEY: ${RESEND_API_KEY:?set RESEND_API_KEY in .env — chave do Resend}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-Pricify3D <system@pricify3d.com>}
     ports:
       # Só acessível a partir do próprio host (127.0.0.1) — o Nginx roda no
       # host e faz proxy pra cá. Nunca publicado direto na internet.

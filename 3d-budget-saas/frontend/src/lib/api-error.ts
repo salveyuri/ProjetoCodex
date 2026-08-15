@@ -33,6 +33,12 @@ const KNOWN_ERROR_MESSAGES: Record<string, string> = {
   PLAN_CODE_TAKEN: "Ja existe um plano com esse codigo.",
   ASAAS_API_ERROR:
     "O gateway de pagamento nao respondeu. Tente novamente em instantes.",
+  PASSWORD_RESET_TOKEN_INVALID:
+    "Este link de redefinicao de senha e invalido ou ja expirou. Peca um novo.",
+  EMAIL_TEMPLATE_NOT_FOUND: "Este template de e-mail nao foi encontrado.",
+  RATE_LIMIT_FORGOT_PASSWORD:
+    "Muitas tentativas. Aguarde 15 minutos e tente novamente.",
+  RATE_LIMIT_RESET_PASSWORD: "Muitas tentativas. Aguarde um minuto e tente novamente.",
 };
 
 const DEFAULT_FALLBACK =

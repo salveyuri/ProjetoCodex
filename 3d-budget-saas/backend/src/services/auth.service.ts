@@ -7,8 +7,14 @@ import type { SignOptions } from "jsonwebtoken";
 import { env } from "../config/env";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
+import { emailService, PASSWORD_RESET_TOKEN_TTL_MINUTES } from "./email.service";
 import { planService } from "./plan.service";
-import type { LoginInput, RegisterInput } from "../validators/auth.validator";
+import type {
+  ForgotPasswordInput,
+  LoginInput,
+  RegisterInput,
+  ResetPasswordInput,
+} from "../validators/auth.validator";
 
 interface JwtAccessTokenPayload {
   sub: string;
@@ -25,6 +31,7 @@ export interface AuthResult {
 const PASSWORD_SALT_ROUNDS = 12;
 const REFRESH_TOKEN_BYTES = 32;
 const REUSE_GRACE_PERIOD_MS = 5000;
+const PASSWORD_RESET_TOKEN_BYTES = 32;
 
 const companySelect = {
   id: true,
@@ -91,6 +98,16 @@ const generateRawRefreshToken = (): string =>
   randomBytes(REFRESH_TOKEN_BYTES).toString("base64url");
 
 const hashRefreshToken = (rawToken: string): string =>
+  createHash("sha256").update(rawToken).digest("hex");
+
+// Same shape as the refresh token: a random raw value is emailed once and
+// never stored — only its SHA-256 hash lives in the database, so a leaked
+// database (unlike a leaked email) can't be used to reset anyone's
+// password.
+const generateRawPasswordResetToken = (): string =>
+  randomBytes(PASSWORD_RESET_TOKEN_BYTES).toString("base64url");
+
+const hashPasswordResetToken = (rawToken: string): string =>
   createHash("sha256").update(rawToken).digest("hex");
 
 const refreshTokenExpiresAt = (): Date => {
@@ -162,6 +179,7 @@ export class AuthService {
         randomUUID(),
         createdByIp,
       );
+      void emailService.sendAccountCreated(authUser.id);
 
       return buildAuthResult(authUser, refreshToken);
     } catch (error) {
@@ -320,6 +338,92 @@ export class AuthService {
       where: { userId: existing.userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  /**
+   * Always resolves successfully regardless of whether the email exists —
+   * telling the caller "no account with that email" would let an attacker
+   * enumerate registered accounts. A reset link is only emailed when a
+   * matching, active user is found.
+   */
+  async forgotPassword(
+    input: ForgotPasswordInput,
+    createdByIp?: string,
+  ): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { email: input.email },
+      select: { id: true, isActive: true },
+    });
+
+    if (!user || !user.isActive) {
+      return;
+    }
+
+    // Never leave more than one live link for the same user — an older
+    // request the user forgot about shouldn't still be redeemable.
+    await prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const rawToken = generateRawPasswordResetToken();
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + PASSWORD_RESET_TOKEN_TTL_MINUTES);
+
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashPasswordResetToken(rawToken),
+        expiresAt,
+        createdByIp,
+      },
+    });
+
+    void emailService.sendPasswordReset(user.id, rawToken);
+  }
+
+  /**
+   * Redeems a password-reset token: single-use (rejects if already
+   * redeemed), short-lived (rejects if expired), looked up only by its
+   * hash (the raw token from the email is never stored). On success every
+   * refresh token for the user is revoked — a password reset is a strong
+   * signal the account may have been compromised, so every other
+   * logged-in device is forced to log in again with the new password.
+   */
+  async resetPassword(input: ResetPasswordInput): Promise<void> {
+    const tokenHash = hashPasswordResetToken(input.token);
+    const resetToken = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+    });
+
+    if (
+      !resetToken ||
+      resetToken.usedAt !== null ||
+      resetToken.expiresAt < new Date()
+    ) {
+      throw new AppError(
+        "Invalid or expired password reset link.",
+        400,
+        "PASSWORD_RESET_TOKEN_INVALID",
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(input.password, PASSWORD_SALT_ROUNDS);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { passwordHash },
+      }),
+      prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { usedAt: new Date() },
+      }),
+      prisma.refreshToken.updateMany({
+        where: { userId: resetToken.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
   }
 
   async getAuthenticatedUser(userId: string): Promise<AuthUser> {

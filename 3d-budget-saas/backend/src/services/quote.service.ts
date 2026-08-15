@@ -11,6 +11,7 @@ import { AppError } from "../middlewares/error-handler";
 import { billingService } from "./billing.service";
 import { cacheService, companyAnalyticsCacheKeyPrefix } from "./cache.service";
 import { calculationService } from "./CalculationService";
+import { emailService } from "./email.service";
 import { formulaService } from "./formula.service";
 import { settingsService } from "./settings.service";
 import type {
@@ -373,6 +374,11 @@ export class QuoteService {
     });
 
     cacheService.delByPrefix(companyAnalyticsCacheKeyPrefix(companyId));
+
+    if (existing.status !== "APPROVED" && quote.status === "APPROVED") {
+      void emailService.sendQuoteSummary(companyId, quoteId, "APPROVED");
+    }
+
     return toQuoteResource(quote);
   }
 

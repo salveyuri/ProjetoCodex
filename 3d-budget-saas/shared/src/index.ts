@@ -598,3 +598,45 @@ export interface PaginatedQuoteList {
     totalPages: number;
   };
 }
+
+export type EmailTemplateKey =
+  | "ACCOUNT_CREATED"
+  | "PASSWORD_RESET"
+  | "SUBSCRIPTION_CONFIRMED"
+  | "SUBSCRIPTION_RENEWED"
+  | "SUBSCRIPTION_EXPIRING"
+  | "QUOTE_SUMMARY";
+
+export interface EmailTemplateVariable {
+  name: string;
+  description: string;
+}
+
+export interface EmailTemplateResource {
+  id: string;
+  key: EmailTemplateKey;
+  name: string;
+  description: string | null;
+  subject: string;
+  bodyHtml: string;
+  isActive: boolean;
+  availableVariables: EmailTemplateVariable[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailTemplateUpdatePayload {
+  name?: string;
+  subject?: string;
+  bodyHtml?: string;
+  isActive?: boolean;
+}
+
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  token: string;
+  password: string;
+}

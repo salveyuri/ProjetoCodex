@@ -456,3 +456,199 @@ tres nomes. O Yuri confirmou remover os tres.
   nao tinham nomes hardcoded), e conferencia ao vivo no navegador (painel
   "Variaveis disponiveis" caiu de 24 pra 21 itens, sem peso_gramas/
   tempo_horas/margem_lucro_percentual).
+
+## Sistema de e-mails transacionais via Resend (2026-08-15)
+
+Pedido do Yuri: implementar envio de e-mail (Resend, remetente
+`system@pricify3d.com`, dominio hospedado no Zoho Mail) para 6 situacoes -
+conta criada, reset de senha, assinatura confirmada, assinatura renovada,
+assinatura perto de vencer, resumo de orcamento (ao exportar ou aprovar) -
+com uma tela admin pra editar o conteudo dos templates. Plano completo
+aprovado em plan mode antes de implementar (ver historico do chat).
+
+### Modelo de dados (3 tabelas novas)
+
+- **`EmailTemplate`**: `key` (unico, um dos 6 nomes fixos), `name`,
+  `description`, `subject`, `bodyHtml`, `isActive`. Sao templates
+  **globais do sistema**, nao por empresa. Deliberadamente **sem
+  create/delete** - so listar e editar (`email-template.service.ts`,
+  `admin.controller.ts`) - porque cada `key` esta amarrada a um ponto fixo
+  do codigo que dispara aquele e-mail; criar uma key nova nao faria nada
+  disparar, e apagar uma quebraria o gatilho correspondente. Seed inicial
+  (migracao `20260815120000_email_system`) com layout HTML generico (card
+  branco, header com a logo, rodape) repetido nos 6 - o Yuri ajusta o HTML
+  de verdade depois pela tela `/admin/email-templates`.
+- **`EmailLog`**: registro de cada envio (`status`: `SENT`/`FAILED`/
+  `SKIPPED_INACTIVE`), com `dedupeKey` opcional unico - usado pra garantir
+  que um evento que pode ser reentregue (webhook do Asaas, "at least
+  once") ou que roda periodicamente (cron de vencimento) nunca manda o
+  mesmo e-mail duas vezes pro mesmo evento.
+- **`PasswordResetToken`**: mesmo padrao de seguranca do `RefreshToken` ja
+  existente (`auth.service.ts`) - token bruto de 32 bytes aleatorios
+  (base64url) gerado, **emailado uma unica vez**, e **so o hash SHA-256** e
+  gravado no banco (`tokenHash String @unique`). Nunca da pra recuperar o
+  token cru a partir do banco. `expiresAt` curto (30 min), `usedAt`
+  marca uso (rejeitando reuso). Ver secao de seguranca abaixo.
+
+### Variaveis de template: `{{chave}}` (chaves duplas)
+
+Sintaxe deliberadamente diferente da usada nas formulas (`nome` sem
+chaves, corrigido nesta mesma sessao) - contextos diferentes: aqui
+`{{chave}}` e o formato real, persistido e usado pelo motor de template
+(`email.service.ts`, regex `/\{\{(\w+)\}\}/g`), nao so uma tolerancia de
+digitacao. Substituicao por string simples, sem lib nova (mesmo espirito
+do `.replace()` ja usado em `formula-engine.ts`, so que pra HTML/assunto
+em vez de expressao matematica).
+
+**Escaping por padrao**: toda variavel e HTML-escapada antes de entrar no
+corpo (`escapeHtml` em `email.service.ts`) - protege contra
+nome_da_empresa/nome_do_cliente (dados do usuario) injetando HTML/tags no
+e-mail. Excecao: chaves terminadas em `Html` (ex.: `itemsHtml`, a lista de
+itens do orcamento pre-renderizada em HTML pelo proprio `sendQuoteSummary`)
+passam raw - convencao de nomenclatura simples em vez de um segundo
+parametro. No assunto as variaveis NAO sao HTML-escapadas (assunto e texto
+puro, nunca renderizado como HTML - escapar ali mostraria "&amp;" literal
+pro destinatario) - so remove quebras de linha, pra uma variavel nao
+conseguir injetar cabecalhos extras.
+
+### Envio best-effort, nunca bloqueia a acao principal
+
+`EmailService.send()` (e todos os `sendX` de conveniencia) nunca lanca -
+todo o corpo do metodo esta num try/catch que so loga. Todo ponto de
+disparo chama com `void emailService.sendX(...)` (fire-and-forget, sem
+`await`) - cadastro, webhook do Asaas (que precisa responder 2xx rapido,
+por recomendacao deles), e aprovacao/exportacao de orcamento nunca podem
+falhar ou ficar mais lentos por causa de uma indisponibilidade do Resend.
+`resend-client.ts` segue o mesmo principio (nunca lanca, so retorna
+`{id, error}`) e se `RESEND_API_KEY` nao estiver configurada (dev sem
+chave), loga aviso e pula o envio - confirmado nos testes/smoke test desta
+sessao, aparece como `EmailLog.status = "FAILED"` com `errorMessage:
+"RESEND_API_KEY not configured"`, o que ja e suficiente pra confirmar que
+o gatilho disparou no lugar certo sem precisar de uma chave real.
+
+### Reset de senha - seguranca (pedido explicito do Yuri)
+
+- `POST /auth/forgot-password`: sempre responde 200 independente do
+  e-mail existir ou nao (evita enumeracao de contas) - so dispara e-mail
+  se achar um usuario ativo. Invalida qualquer token anterior ainda valido
+  do mesmo usuario antes de criar um novo (nunca mais de um link vivo).
+  Rate limit apertado (3 / 15min por IP, `forgotPasswordRateLimiter`) -
+  janela bem maior que os outros limiters de auth, porque aqui o abuso
+  significa spam na caixa de entrada de outra pessoa.
+- `POST /auth/reset-password`: busca so pelo hash do token recebido (nunca
+  varre comparando token cru); rejeita se nao achar, se ja foi usado
+  (`usedAt`), ou se expirou. Ao suceder: atualiza a senha, marca o token
+  usado, e revoga todos os refresh tokens do usuario (`revokedAt = now()`
+  em todas as linhas `revokedAt: null` daquele `userId` - mesma query que
+  `logoutAll` ja fazia) - forca logout em todo dispositivo logado, pratica
+  padrao depois de troca de senha (o pedido em si e sinal de possivel
+  comprometimento da conta).
+- Testado em `password-reset.routes.test.ts` (4 testes de integracao
+  contra o app real): sempre 200 no forgot-password; token reusado rejeita
+  na segunda vez; senha antiga para de funcionar e a nova funciona; sessao
+  antiga (refresh token de antes do reset) fica invalida apos o reset.
+  Validado tambem manualmente no navegador nesta sessao (fluxo completo
+  `/forgot-password` -> `/reset-password?token=...` -> login com senha
+  nova).
+
+### Gatilho de assinatura confirmada/renovada - achado importante no webhook
+
+Durante o planejamento, encontrado um problema real no
+`webhook.controller.ts` existente: o bloco que muta `Company`/grava
+`AuditLog` so roda `if (isFirstActivation || statusChanged)` - numa
+renovacao de rotina (empresa ja `ACTIVE`, pagamento confirma, continua
+`ACTIVE`) esse `if` nunca entra, entao nao dava pra pendurar o e-mail de
+renovacao ali dentro sem reescrever logica ja testada. Solucao: uma
+checagem independente antes do upsert do `Payment` - `isNewPaymentRecord =
+(payment ainda nao existia no banco)` - e um bloco novo, separado do `if`
+existente, que dispara `sendSubscriptionConfirmed` (se `isFirstActivation`)
+ou `sendSubscriptionRenewed` (senao) sempre que `isNewPaymentRecord &&
+CONFIRMED_EVENTS.has(event)`. `isNewPaymentRecord` garante que reentregas
+do mesmo evento (Asaas "at least once") nunca duplicam o e-mail. Validado
+nesta sessao simulando os dois webhooks de verdade contra o endpoint real
+(`POST /api/webhooks/asaas` com o token correto): primeiro pagamento (com
+`externalReference` = checkout pendente) disparou `SUBSCRIPTION_CONFIRMED`
+e promoveu o plano pra Pro; segundo pagamento (mesma `subscription`, sem
+checkout) disparou `SUBSCRIPTION_RENEWED`, nao `SUBSCRIPTION_CONFIRMED` de
+novo.
+
+### Alerta de vencimento - checagem dos eventos do webhook do Asaas (2026-08-15)
+
+Sem infraestrutura de fila/cron dedicada no projeto (mesmo motivo que ja
+adiava a limpeza periodica de `RefreshToken`, ver `Notas/TODO.md`) -
+resolvido com `node-cron` dentro do proprio processo Node (sem
+worker/infra nova, roda todo dia as 9h America/Sao_Paulo,
+`backend/src/jobs/subscription-expiring.job.ts`, chamado a partir de
+`server.ts`). Consulta `Payment` com `dueDate` entre agora e agora+3 dias
+(prazo confirmado com o Yuri), status ainda nao liquidado, empresa
+`ACTIVE`, com `dedupeKey` por `Payment.id` pra nunca reenviar o mesmo
+aviso rodando todo dia dentro da janela de 3 dias.
+
+Pedido do Yuri numa sessao seguinte: checar de verdade se os eventos do
+webhook do Asaas mandam o que o alerta precisa, e corrigir se nao. Checado
+direto na API do Asaas (sandbox, `GET /v3/webhooks`, mesma chave ja
+configurada em `ASAAS_API_KEY`):
+
+- **Nenhum webhook esta cadastrado** - `totalCount: 0`. Isso confirma o que
+  ja estava anotado no `Notas/TODO.md` ("Cadastrar o webhook de verdade no
+  painel/API do Asaas... só faz sentido depois de DEVOPS-001"), mas
+  esclarece o alcance real: **nao e so o alerta de vencimento que fica sem
+  dado** - as assinaturas confirmada/renovada tambem nunca disparariam
+  sozinhas hoje, porque o Asaas nao tem pra onde mandar nada (o teste
+  ponta a ponta anterior desta mesma sessao simulou os webhooks chamando
+  nosso proprio endpoint diretamente, nao veio do Asaas de verdade).
+- Testado tambem (criando um customer + subscription reais no sandbox via
+  API): o Asaas **gera o Payment da proxima cobranca com antecedencia**
+  (status `PENDING`, `dueDate` dias no futuro) assim que a cobranca
+  anterior e liquidada / a assinatura e criada - confirmado ao vivo,
+  `GET /v3/payments?subscription={id}&status=PENDING` devolveu o pagamento
+  futuro na hora. Ou seja, o dado que o alerta precisa **existe do lado do
+  Asaas bem antes do vencimento** - so nao estava chegando aqui porque
+  nada esta cadastrado pra empurrar.
+
+**Correcao aplicada**: em vez de depender so do que um webhook (ainda nao
+cadastrado, e que exigiria lembrar de marcar `PAYMENT_CREATED` entre os
+eventos escolhidos - facil de esquecer) empurraria, o job agora **busca
+direto na API do Asaas** antes de rodar a consulta local:
+`asaasClient.listPendingPayments()` (novo metodo em `asaas-client.ts`,
+`GET /payments?subscription={id}&status=PENDING`) pra cada empresa `ACTIVE`
+com `asaasSubscriptionId`, e faz upsert do resultado em `payments` -
+mesmo formato que o `webhook.controller.ts` já grava - antes da consulta
+local original (que continua igual). Se uma chamada falhar pra uma
+empresa (rate limit, erro transitorio), loga e continua o lote, não trava
+o job inteiro. Sem `ASAAS_API_KEY` configurada (dev sem chave), pula essa
+sincronizacao silenciosamente.
+
+Validado de ponta a ponta com dado real do sandbox: criada uma
+subscription de verdade (vencimento em 2 dias), empresa de teste
+apontada pra ela, rodado `runSubscriptionExpiringCheck()` diretamente
+(agora exportado) - encontrou o candidato puxando do Asaas (nada estava
+no banco local antes) e dispara o e-mail certo ("Sua assinatura vence em
+2 dias"). Dado de teste (subscription no sandbox, empresa local) limpo
+depois.
+
+Isso torna o alerta funcional **hoje**, independente de quando/se o
+webhook de producao for cadastrado, e independente de quais eventos forem
+escolhidos ao cadastra-lo - deixa de ser um ponto de falha silencioso.
+
+### Resumo de orcamento - destinatario e gatilhos
+
+Vai pro e-mail do dono da conta (`Company.user.email`), nao pro cliente
+final - decisao confirmada com o Yuri, ja que `Quote` so guarda
+`customerName` (texto), nunca um e-mail de contato do cliente. Dois
+gatilhos, mesmo template, variavel `triggerLabel` muda o texto
+("aprovado"/"exportado"): `QuoteService.update()` quando `status` vira
+`APPROVED` (comparando antes/depois da transacao, `quote.service.ts`) e
+`QuoteController.exportPdf()` apos gerar o PDF com sucesso
+(`quote.controller.ts`) - sem dedupe nesse caso, ja que reexportar o mesmo
+orcamento varias vezes e um uso legitimo (nao e um evento unico como
+pagamento). Testado nesta sessao criando maquina+material+orcamento de
+verdade via API, aprovando e exportando - `EmailLog` confirma os dois
+disparos com o `customerName` e destinatario corretos.
+
+### Testes novos
+
+`password-reset.routes.test.ts` (4, integracao completa contra o app
+real) e `email.service.test.ts` (3, unitario - escaping de HTML,
+nao-escaping de assunto, `send()` nunca lanca mesmo com o Resend
+falhando). Suite total: 58 -> 65 testes, todos passando.

@@ -108,6 +108,24 @@ const resolveAsaasWebhookToken = (): string => {
   return "";
 };
 
+// Resend (e-mails transacionais). Sem chave configurada, resend-client.ts
+// loga e pula o envio em vez de travar a acao principal (cadastro, webhook,
+// aprovacao de orcamento) - so obrigatorio em producao.
+const resolveResendApiKey = (): string => {
+  if (process.env.RESEND_API_KEY) {
+    return process.env.RESEND_API_KEY;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("RESEND_API_KEY must be defined in production.");
+  }
+
+  return "";
+};
+
+const resolveEmailFromAddress = (): string =>
+  process.env.EMAIL_FROM_ADDRESS ?? "Pricify3D <system@pricify3d.com>";
+
 const asaasEnv = resolveAsaasEnv();
 
 export const env = {
@@ -129,4 +147,6 @@ export const env = {
   asaasBaseUrl: resolveAsaasBaseUrl(asaasEnv),
   asaasApiKey: resolveAsaasApiKey(),
   asaasWebhookToken: resolveAsaasWebhookToken(),
+  resendApiKey: resolveResendApiKey(),
+  emailFromAddress: resolveEmailFromAddress(),
 };

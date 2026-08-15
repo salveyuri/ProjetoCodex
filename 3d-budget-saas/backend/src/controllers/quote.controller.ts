@@ -5,6 +5,7 @@ import type {
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { AppError } from "../middlewares/error-handler";
+import { emailService } from "../services/email.service";
 import { quotePdfService } from "../services/quote-pdf.service";
 import { quoteService } from "../services/quote.service";
 import { getAuthenticatedCompanyId } from "../utils/request-auth";
@@ -60,6 +61,7 @@ export class QuoteController {
       const companyId = getAuthenticatedCompanyId(request);
       const { id } = idParamSchema.parse(request.params);
       const pdf = await quotePdfService.generate(companyId, id);
+      void emailService.sendQuoteSummary(companyId, id, "EXPORTED");
 
       response
         .status(200)

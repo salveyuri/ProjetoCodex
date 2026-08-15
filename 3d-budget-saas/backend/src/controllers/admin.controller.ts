@@ -1,13 +1,22 @@
-import type { AdminUserResource, PlanResource } from "@3d-budget/shared";
+import type {
+  AdminUserResource,
+  EmailTemplateResource,
+  PlanResource,
+} from "@3d-budget/shared";
 import type { Prisma } from "@prisma/client";
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { AppError } from "../middlewares/error-handler";
 import { adminService } from "../services/admin.service";
 import { auditLogService } from "../services/audit-log.service";
+import {
+  emailTemplateService,
+  toEmailTemplateResource,
+} from "../services/email-template.service";
 import { planService, toPlanResource } from "../services/plan.service";
 import { idParamSchema } from "../validators/common.validator";
 import { adminUserUpdateSchema } from "../validators/admin.validator";
+import { emailTemplateUpdateSchema } from "../validators/email-template.validator";
 import { planCreateSchema, planUpdateSchema } from "../validators/plan.validator";
 
 const toValidationError = (error: ZodError): AppError =>
@@ -15,10 +24,11 @@ const toValidationError = (error: ZodError): AppError =>
     issues: error.issues,
   });
 
-// PlanResource is a plain JSON-serializable shape, but its structural type
-// (fixed named fields) doesn't satisfy Prisma's InputJsonValue index
-// signature — this is just an audit-log payload, not a query.
-const toAuditJson = (value: PlanResource): Prisma.InputJsonValue =>
+// These Resource shapes are plain JSON-serializable objects, but their
+// structural types (fixed named fields) don't satisfy Prisma's
+// InputJsonValue index signature — this is just an audit-log payload, not
+// a query.
+const toAuditJson = <T>(value: T): Prisma.InputJsonValue =>
   value as unknown as Prisma.InputJsonValue;
 
 export class AdminController {
@@ -132,6 +142,44 @@ export class AdminController {
         metadata: { code: before.code },
       });
       response.status(204).send();
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async emailTemplates(
+    _request: Request,
+    response: Response<EmailTemplateResource[]>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const templates = await emailTemplateService.listAll();
+      response.status(200).json(templates);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateEmailTemplate(
+    request: Request,
+    response: Response<EmailTemplateResource>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { id } = idParamSchema.parse(request.params);
+      const input = emailTemplateUpdateSchema.parse(request.body);
+      const before = toEmailTemplateResource(await emailTemplateService.getById(id));
+      const template = await emailTemplateService.update(id, input);
+      await auditLogService.record({
+        action: "ADMIN_EMAIL_TEMPLATE_UPDATED",
+        entityType: "EmailTemplate",
+        entityId: id,
+        actorUserId: request.auth?.userId,
+        before: toAuditJson(before),
+        after: toAuditJson(template),
+        metadata: { changedFields: Object.keys(input) },
+      });
+      response.status(200).json(template);
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);
     }

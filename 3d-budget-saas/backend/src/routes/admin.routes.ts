@@ -31,3 +31,11 @@ adminRoutes.patch("/plans/:id", (request, response, next) =>
 adminRoutes.delete("/plans/:id", (request, response, next) =>
   adminController.deletePlan(request, response, next),
 );
+
+adminRoutes.get("/email-templates", (request, response, next) =>
+  adminController.emailTemplates(request, response, next),
+);
+
+adminRoutes.patch("/email-templates/:id", (request, response, next) =>
+  adminController.updateEmailTemplate(request, response, next),
+);

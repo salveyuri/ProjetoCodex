@@ -171,6 +171,44 @@ Passo") em 2026-08-12.
       5, Bambu Lab H2D se já tiver saído, marcas nacionais brasileiras)
       não entraram nesta leva. Pedir uma atualização quando fizer sentido.
 
+## Sistema de e-mails via Resend (implementado em 2026-08-15)
+
+- [x] 6 templates editáveis em `/admin/email-templates` (conta criada,
+      reset de senha, assinatura confirmada/renovada/perto de vencer,
+      resumo de orçamento), reset de senha com token de uso único (mesmo
+      padrão de segurança do refresh token), cron diário in-process pro
+      alerta de vencimento. Ver `Contextos/Decisoes.md` (2026-08-15).
+- [ ] **`RESEND_API_KEY` real ainda não configurada em lugar nenhum** — o
+      Yuri precisa gerar a chave no painel do Resend e setar em produção
+      (`docker-compose.yml`/`.env` já pedem a variável,
+      `EMAIL_FROM_ADDRESS` já tem o default certo). Sem isso nenhum
+      e-mail é entregue de verdade (fica só registrado como `FAILED` em
+      `EmailLog`, comportamento correto/esperado em dev).
+- [ ] **Domínio `pricify3d.com` precisa estar verificado no Resend**
+      (registros SPF/DKIM) — o e-mail está hospedado no Zoho Mail, então
+      isso é configuração cruzada entre os dois painéis, feita pelo Yuri
+      (fora do escopo do código).
+- [x] **Checado em 2026-08-15**: nenhum webhook está cadastrado no Asaas
+      ainda (`GET /v3/webhooks` no sandbox devolveu `totalCount: 0`) — ou
+      seja, hoje nem o alerta de vencimento nem os e-mails de assinatura
+      confirmada/renovada disparariam sozinhos em produção, porque o Asaas
+      não tem pra onde mandar nada (isso já era esperado, ver item do
+      webhook de produção acima — o que não estava claro é que também
+      afeta os outros dois e-mails, não só o de vencimento). Corrigido só
+      pro alerta de vencimento: o job agora busca a próxima fatura direto
+      na API do Asaas (`asaasClient.listPendingPayments`) em vez de só
+      esperar um webhook, então funciona hoje independente de quando o
+      webhook de produção for cadastrado. Ver `Contextos/Decisoes.md`
+      (2026-08-15). **Assinatura confirmada/renovada continuam dependendo
+      do webhook de produção ser cadastrado** (são reações a um evento que
+      aconteceu, não dá pra "puxar" o mesmo jeito).
+- [ ] Nenhum e-mail de "pagamento atrasado" (`PAYMENT_OVERDUE`) foi
+      implementado nesta rodada — só era pedido confirmada/renovada/perto
+      de vencer. Avaliar se vale adicionar depois.
+- [ ] `Quote` não guarda e-mail do cliente final — o resumo de orçamento
+      vai pro dono da conta, não pro cliente. Se um dia fizer sentido
+      mandar direto pro cliente, precisa de um campo novo + migração.
+
 ## Próximo passo geral
 
 Pós-MVP: preparar deploy, seeds, testes automatizados, monitoramento externo

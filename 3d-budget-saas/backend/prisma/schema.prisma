@@ -57,13 +57,30 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  company       Company?
-  refreshTokens RefreshToken[]
+  company             Company?
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([role])
   @@index([isActive])
   @@index([createdAt])
   @@map("users")
+}
+
+model PasswordResetToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")
+  createdByIp String?   @map("created_by_ip")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model RefreshToken {
@@ -399,4 +416,33 @@ model SystemError {
   @@index([companyId, createdAt])
   @@index([code])
   @@map("system_errors")
+}
+
+model EmailTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  name        String
+  description String?
+  subject     String
+  bodyHtml    String   @map("body_html") @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("email_templates")
+}
+
+model EmailLog {
+  id              String   @id @default(uuid()) @db.Uuid
+  templateKey     String   @map("template_key")
+  toEmail         String   @map("to_email")
+  subject         String
+  status          String
+  resendMessageId String?  @map("resend_message_id")
+  errorMessage    String?  @map("error_message")
+  dedupeKey       String?  @unique @map("dedupe_key")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([templateKey, toEmail])
+  @@map("email_logs")
 }

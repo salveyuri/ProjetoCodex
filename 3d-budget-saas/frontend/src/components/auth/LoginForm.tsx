@@ -72,7 +72,15 @@ export const LoginForm = () => {
         </label>
 
         <label className="grid gap-2 text-sm font-medium text-foreground">
-          Senha
+          <span className="flex items-center justify-between">
+            Senha
+            <Link
+              href="/forgot-password"
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Esqueci minha senha
+            </Link>
+          </span>
           <input
             type="password"
             autoComplete="current-password"

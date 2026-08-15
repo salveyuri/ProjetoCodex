@@ -37,6 +37,21 @@ export interface AsaasCreateCheckoutResult {
   status: string;
 }
 
+export interface AsaasPaymentSummary {
+  id: string;
+  subscription: string | null;
+  status: string;
+  value: number;
+  dueDate: string | null;
+  paymentDate: string | null;
+  invoiceUrl: string | null;
+  billingType: string | null;
+}
+
+interface AsaasPaymentListResponse {
+  data: AsaasPaymentSummary[];
+}
+
 // Thin wrapper around the Asaas REST API (https://docs.asaas.com/) using the
 // built-in fetch (Node 20+) — no need for an HTTP client dependency for two
 // endpoints. Every failure (network or non-2xx) becomes an AppError so
@@ -96,5 +111,22 @@ export const asaasClient = {
     await request<unknown>(`/subscriptions/${subscriptionId}`, {
       method: "DELETE",
     });
+  },
+
+  // Asaas generates the next cycle's payment ahead of its due date (as
+  // soon as the previous one settles) — this lets the subscription-
+  // expiring cron job (backend/src/jobs/subscription-expiring.job.ts)
+  // pull that upcoming due date directly, instead of only relying on a
+  // PAYMENT_CREATED webhook event that requires a webhook to actually be
+  // registered with Asaas (not the case yet — see Notas/TODO.md).
+  listPendingPayments: async (
+    subscriptionId: string,
+  ): Promise<AsaasPaymentSummary[]> => {
+    const response = await request<AsaasPaymentListResponse>(
+      `/payments?subscription=${encodeURIComponent(subscriptionId)}&status=PENDING`,
+      { method: "GET" },
+    );
+
+    return response.data;
   },
 };

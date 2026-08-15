@@ -4,7 +4,12 @@ import { ZodError } from "zod";
 import { env } from "../config/env";
 import { AppError } from "../middlewares/error-handler";
 import { authService } from "../services/auth.service";
-import { loginSchema, registerSchema } from "../validators/auth.validator";
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  registerSchema,
+  resetPasswordSchema,
+} from "../validators/auth.validator";
 
 const toValidationError = (error: ZodError): AppError =>
   new AppError("Invalid request payload.", 400, "VALIDATION_ERROR", {
@@ -136,6 +141,36 @@ export class AuthController {
       response.status(204).send();
     } catch (error) {
       next(error);
+    }
+  }
+
+  async forgotPassword(
+    request: Request,
+    response: Response<{ received: true }>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const input = forgotPasswordSchema.parse(request.body);
+      await authService.forgotPassword(input, request.ip);
+      // Always the same response, whether or not the email exists — see
+      // AuthService.forgotPassword for why.
+      response.status(200).json({ received: true });
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async resetPassword(
+    request: Request,
+    response: Response<void>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const input = resetPasswordSchema.parse(request.body);
+      await authService.resetPassword(input);
+      response.status(204).send();
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
     }
   }
 

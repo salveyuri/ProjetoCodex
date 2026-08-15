@@ -1,0 +1,398 @@
+"use client";
+
+import type { EmailTemplateResource, EmailTemplateUpdatePayload } from "@3d-budget/shared";
+import axios from "axios";
+import { Edit3, Mail, RefreshCcw, Save, ShieldAlert, X } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Card } from "@/components/ui/card";
+import { SkeletonText } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { cn } from "@/lib/cn";
+
+interface EmailTemplateFormState {
+  name: string;
+  subject: string;
+  bodyHtml: string;
+  isActive: boolean;
+}
+
+interface ToastState {
+  tone: "success" | "danger";
+  message: string;
+}
+
+const toForm = (template: EmailTemplateResource): EmailTemplateFormState => ({
+  name: template.name,
+  subject: template.subject,
+  bodyHtml: template.bodyHtml,
+  isActive: template.isActive,
+});
+
+const toPayload = (form: EmailTemplateFormState): EmailTemplateUpdatePayload => ({
+  name: form.name.trim(),
+  subject: form.subject.trim(),
+  bodyHtml: form.bodyHtml,
+  isActive: form.isActive,
+});
+
+export default function AdminEmailTemplatesPage() {
+  const { isLoading: isAuthLoading, token, refreshUser } = useAuth();
+  const [templates, setTemplates] = useState<EmailTemplateResource[]>([]);
+  const [selected, setSelected] = useState<EmailTemplateResource | null>(null);
+  const [form, setForm] = useState<EmailTemplateFormState | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const [isAccessDenied, setIsAccessDenied] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  const showToast = useCallback((nextToast: ToastState) => {
+    setToast(nextToast);
+    window.setTimeout(() => setToast(null), 3600);
+  }, []);
+
+  const loadTemplates = useCallback(async () => {
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setIsAccessDenied(false);
+
+    try {
+      const { data } = await api.get<EmailTemplateResource[]>("/admin/email-templates");
+      setTemplates(data);
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 403) {
+        setIsAccessDenied(true);
+      } else {
+        showToast({
+          tone: "danger",
+          message: getApiErrorMessage(error, "Nao foi possivel carregar os templates."),
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast, token]);
+
+  useEffect(() => {
+    if (!isAuthLoading) {
+      void (async () => {
+        if (token) {
+          await refreshUser();
+        }
+
+        await loadTemplates();
+      })();
+    }
+  }, [isAuthLoading, loadTemplates, refreshUser, token]);
+
+  const openModal = (template: EmailTemplateResource) => {
+    setSelected(template);
+    setForm(toForm(template));
+  };
+
+  const closeModal = () => {
+    setSelected(null);
+    setForm(null);
+  };
+
+  const insertVariable = (name: string) => {
+    const tag = `{{${name}}}`;
+    const textarea = bodyRef.current;
+
+    if (!textarea) {
+      setForm((current) =>
+        current ? { ...current, bodyHtml: `${current.bodyHtml}${tag}` } : current,
+      );
+      return;
+    }
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+
+    setForm((current) =>
+      current
+        ? {
+            ...current,
+            bodyHtml: `${current.bodyHtml.slice(0, start)}${tag}${current.bodyHtml.slice(end)}`,
+          }
+        : current,
+    );
+
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.selectionStart = start + tag.length;
+      textarea.selectionEnd = start + tag.length;
+    });
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!selected || !form) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const { data } = await api.patch<EmailTemplateResource>(
+        `/admin/email-templates/${selected.id}`,
+        toPayload(form),
+      );
+      setTemplates((current) =>
+        current.map((template) => (template.id === data.id ? data : template)),
+      );
+      closeModal();
+      showToast({ tone: "success", message: "Template salvo." });
+    } catch (error) {
+      showToast({
+        tone: "danger",
+        message: getApiErrorMessage(error, "Nao foi possivel salvar o template."),
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <MainLayout>
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        <section className="flex flex-col justify-between gap-4 rounded-lg border border-border bg-surface/75 p-5 lg:flex-row lg:items-end">
+          <div>
+            <StatusBadge tone="success">Admin</StatusBadge>
+            <h1 className="mt-4 text-3xl font-semibold text-foreground">
+              Templates de e-mail
+            </h1>
+            <p className="mt-2 max-w-2xl text-base text-muted">
+              Edite assunto e HTML dos e-mails automaticos enviados pelo sistema.
+              Desativar um template pausa o envio sem precisar mexer em codigo.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadTemplates()}
+            disabled={!token}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCcw className="h-4 w-4" />
+            Atualizar
+          </button>
+        </section>
+
+        {isAccessDenied ? (
+          <Card className="p-5">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="mt-1 h-5 w-5 text-warning" />
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">Acesso restrito</h2>
+                <p className="mt-2 text-sm text-muted">
+                  Voce nao tem permissao para acessar esta area.
+                </p>
+              </div>
+            </div>
+          </Card>
+        ) : null}
+
+        {!isAccessDenied ? (
+          <Card className="overflow-hidden">
+            <div className="flex items-center gap-3 border-b border-border p-5">
+              <Mail className="h-5 w-5 text-primary" />
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">
+                  Templates cadastrados
+                </h2>
+                <p className="text-sm text-muted">{templates.length} templates.</p>
+              </div>
+            </div>
+
+            {isLoading ? (
+              <div className="grid gap-3 p-5">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="grid gap-3 rounded-lg border border-border bg-background p-4 md:grid-cols-3"
+                  >
+                    <SkeletonText className="w-44" />
+                    <SkeletonText className="w-64" />
+                    <SkeletonText className="w-24" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="border-b border-border bg-background text-xs uppercase text-muted">
+                    <tr>
+                      <th className="px-5 py-3">Template</th>
+                      <th className="px-5 py-3">Assunto</th>
+                      <th className="px-5 py-3">Status</th>
+                      <th className="px-5 py-3">Acoes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {templates.map((template) => (
+                      <tr key={template.id} className="bg-surface/40">
+                        <td className="px-5 py-4">
+                          <p className="font-medium text-foreground">{template.name}</p>
+                          <p className="text-xs text-muted">{template.key}</p>
+                        </td>
+                        <td className="max-w-xs truncate px-5 py-4 text-muted">
+                          {template.subject}
+                        </td>
+                        <td className="px-5 py-4">
+                          <StatusBadge tone={template.isActive ? "success" : "danger"}>
+                            {template.isActive ? "Ativo" : "Inativo"}
+                          </StatusBadge>
+                        </td>
+                        <td className="px-5 py-4">
+                          <button
+                            type="button"
+                            title="Editar"
+                            aria-label="Editar"
+                            onClick={() => openModal(template)}
+                            className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        ) : null}
+      </div>
+
+      {selected && form ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-6">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-background p-5 shadow-panel sm:p-6">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <h2 className="text-xl font-semibold">Editar template: {selected.name}</h2>
+              <button
+                type="button"
+                title="Fechar"
+                aria-label="Fechar"
+                onClick={closeModal}
+                className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form className="grid min-w-0 gap-4" onSubmit={handleSubmit}>
+              <div className="grid min-w-0 gap-4 sm:grid-cols-[1fr_140px]">
+                <label className="grid min-w-0 gap-2 text-sm font-medium">
+                  Nome
+                  <input
+                    value={form.name}
+                    onChange={(event) =>
+                      setForm((current) =>
+                        current ? { ...current, name: event.target.value } : current,
+                      )
+                    }
+                    required
+                    className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                  />
+                </label>
+                <label className="flex min-h-11 items-center gap-3 self-end rounded-lg border border-border bg-surface-muted px-3 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={form.isActive}
+                    onChange={(event) =>
+                      setForm((current) =>
+                        current ? { ...current, isActive: event.target.checked } : current,
+                      )
+                    }
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  Ativo
+                </label>
+              </div>
+
+              <label className="grid min-w-0 gap-2 text-sm font-medium">
+                Assunto
+                <input
+                  value={form.subject}
+                  onChange={(event) =>
+                    setForm((current) =>
+                      current ? { ...current, subject: event.target.value } : current,
+                    )
+                  }
+                  required
+                  className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                />
+              </label>
+
+              <div className="grid min-w-0 gap-2">
+                <span className="text-sm font-medium">Variaveis disponiveis</span>
+                <div className="flex flex-wrap gap-2">
+                  {selected.availableVariables.map((variable) => (
+                    <button
+                      key={variable.name}
+                      type="button"
+                      title={variable.description}
+                      onClick={() => insertVariable(variable.name)}
+                      className="rounded-md border border-primary/30 bg-primary/10 px-2 py-1 font-mono text-xs font-semibold text-primary transition hover:border-primary/60"
+                    >
+                      {`{{${variable.name}}}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="grid min-w-0 gap-2 text-sm font-medium">
+                Corpo HTML
+                <textarea
+                  ref={bodyRef}
+                  value={form.bodyHtml}
+                  onChange={(event) =>
+                    setForm((current) =>
+                      current ? { ...current, bodyHtml: event.target.value } : current,
+                    )
+                  }
+                  required
+                  rows={16}
+                  className={cn(
+                    "w-full min-w-0 resize-y rounded-lg border border-border bg-surface-muted px-3 py-3 font-mono text-xs outline-none transition focus:border-primary",
+                  )}
+                />
+              </label>
+
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-70"
+              >
+                <Save className="h-4 w-4" />
+                Salvar
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {toast ? (
+        <div
+          className={cn(
+            "fixed bottom-4 right-4 z-50 rounded-lg border px-4 py-3 text-sm font-medium shadow-panel",
+            toast.tone === "success"
+              ? "border-secondary/40 bg-secondary/10 text-secondary"
+              : "border-danger/40 bg-danger/10 text-danger",
+          )}
+        >
+          {toast.message}
+        </div>
+      ) : null}
+    </MainLayout>
+  );
+}

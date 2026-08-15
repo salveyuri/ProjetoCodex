@@ -1017,3 +1017,33 @@ de material, deixando so Filamento/Resina/Outro - em ambos os casos,
   so aparecem Nome/Marca, Tipo (Filamento/Resina/Outro), Cor, Peso/Volume
   e Preco compra (sem Densidade), e que salvar um material tipo Resina
   funciona ponta a ponta.
+
+## 2026-08-15 - Botoes de variavel inseriam {chaves} na formula
+
+Pedido do Yuri: checar se os botoes de "Variaveis disponiveis" (tela de
+formulas) devem inserir a variavel com ou sem chaves, e corrigir se o
+correto for sem.
+
+- Confirmado lendo o codigo: a sintaxe canonica NAO usa chaves - a formula
+  padrao do sistema (`SYSTEM_DEFAULT_FORMULA` em `formula-engine.ts`) e
+  tudo que e persistido no banco (`formula.service.ts` sempre salva
+  `result.expression`, que e o retorno de `validateFormulaExpression`) usa
+  identificadores soltos (`custo_base`, nao `{custo_base}`). O suporte a
+  `{variavel}` existe só como conveniencia de digitacao -
+  `normalizeFormulaExpression` (backend) e `getUsedVariableNames`
+  (frontend) removem as chaves antes de validar/detectar - nunca e o
+  formato canonico, e ha teste explicito disso em
+  `formula-engine.test.ts` ("normalizes {variavel} tags before
+  validating"). Ou seja: funcionava (o dry-run aceita chaves), mas o botao
+  inserindo `{nome}` nao batia com o formato que a propria formula ja
+  salva mostra depois de recarregar (sempre sem chaves) - a inconsistencia
+  visual que o Yuri notou.
+- `dashboard/settings/formulas/page.tsx`: `insertVariable` passou a
+  inserir `name` puro (`const tag = name`, era `` `{${name}}` ``). O chip
+  do proprio botao (`VariableGroup`) tambem parou de mostrar `{nome}` e
+  passou a mostrar só `nome`, pra bater com o que realmente e inserido.
+- Validado: lint+build do frontend limpos, teste ao vivo no navegador
+  (aberto o editor de "Nova formula", clicado no botao "peso", confirmado
+  via inspecao do `textarea` que o texto inserido foi `peso` sem chaves).
+  Nao precisou mexer no backend - a tolerancia a `{variavel}` la continua
+  existindo (nao faz mal manter, so nao e mais o que a UI produz).

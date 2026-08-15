@@ -329,7 +329,7 @@ export default function FormulasPage() {
   };
 
   const insertVariable = (name: string) => {
-    const tag = `{${name}}`;
+    const tag = name;
     const input = expressionRef.current;
 
     if (!input) {
@@ -1008,9 +1008,7 @@ const VariableGroup = ({
           >
             <span className="min-w-0 flex-1">
               <span className="block truncate font-mono text-sm font-semibold text-foreground">
-                {"{"}
                 {variable.name}
-                {"}"}
               </span>
               <span className="mt-1 flex min-w-0 items-center gap-1 text-xs text-muted">
                 <Info className="h-3 w-3" />

@@ -935,3 +935,39 @@ cadastrados.
   verificacao visual foi por leitura de DOM/texto da pagina em vez de
   captura de tela.
 - Nao commitado ainda nesta rodada - Yuri nao pediu commit desta vez.
+
+## 2026-08-14 - Layout split-screen na tela de login (login.webp)
+
+Pedido do Yuri: usar a imagem promocional `login.webp` (ja salva em
+`frontend/public/`, arte de divulgacao com a impressora, logo e blocos de
+"Calculo inteligente"/"Lucro otimizado") na tela de login, decidindo entre
+fundo ou ao lado do formulario.
+
+- Optado por layout split-screen (imagem ao lado, nao como fundo atras do
+  formulario) porque a arte ja tem bastante texto/informacao proprios
+  (blocos "Calculo inteligente", "Orcamento rapido e profissional" etc.) -
+  usar como fundo atras do card de login esconderia esse conteudo atras do
+  formulario e brigaria por atencao. Lado a lado preserva a arte inteira
+  visivel.
+- `frontend/src/app/login/page.tsx`: virou grid de 2 colunas em telas
+  `lg:` pra cima (`lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]`) - coluna
+  esquerda com `next/image` (`fill` + `object-cover`) mostrando
+  `login.webp` em altura total da viewport, com um gradiente sutil na
+  borda direita (`bg-gradient-to-r from-transparent to-background`) pra
+  suavizar a transicao pro fundo do formulario. Em telas menores que `lg`
+  a coluna da imagem some (`hidden lg:block`) e sobra so o formulario
+  centralizado, igual era antes - a imagem e paisagem (1536x1024) e fica
+  apertada demais em mobile, e usabilidade do login importa mais que a
+  arte ali.
+- `LoginForm.tsx` nao mudou - o logo pequeno (`logo_full.webp`) continua
+  aparecendo dentro do card, que so importa de verdade no mobile (onde a
+  imagem grande some); no desktop ele fica redundante ao lado da logo
+  maior ja embutida na arte, mas nao atrapalha.
+- Validacao: lint e build do frontend limpos. Conferido ao vivo no
+  navegador em 1440x900 (imagem ocupando a coluna esquerda em altura
+  cheia, formulario na direita) e em 375x812 mobile (imagem oculta,
+  formulario ocupando a tela toda) via inspecao de DOM/CSS computado (a
+  ferramenta de screenshot do navegador seguiu instavel nesta sessao,
+  mesmo problema ja registrado antes).
+- Tela de cadastro (`/register`) nao foi alterada - o pedido foi
+  especificamente sobre a tela de login.

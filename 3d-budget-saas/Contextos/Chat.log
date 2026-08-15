@@ -1066,3 +1066,37 @@ e nao relacionado a lista de variaveis de formula.
   pra 21 itens).
 - Precisei parar o dev server do backend de novo antes do build (mesmo
   lock do DLL do Prisma no Windows), e subir de novo depois.
+
+## 2026-08-15 - "Leitura do calculo" no teste de formula (valores substituidos)
+
+Pedido do Yuri: na tela de formulas, na secao "Teste de formula", mostrar a
+equacao com os valores reais preenchidos no teste (nao so os nomes das
+variaveis), pra facilitar identificar erro de calculo - mesma ideia da
+"Leitura da equacao" que ja existe acima (mas essa so mostra nomes,
+coloridos por origem).
+
+- `dashboard/settings/formulas/page.tsx`: novo componente
+  `SubstitutedExpression` (ao lado de `HighlightedExpression`, mesmo
+  padrao de tokenizar a expressao por identificador/operador com regex e
+  colorir cada `<span>`), mas em vez de colorir o nome da variavel, troca
+  o token pelo valor numerico (via novo helper `formatCalcValue`,
+  `toLocaleString("pt-BR", { maximumFractionDigits: 4 })`) e no final
+  concatena `" = "` + `toMoney(resultado)`.
+- Alimentado por `preview.expression` + `preview.variables` (resposta de
+  `POST /formulas/preview`) - o backend ja retorna o mapa completo de
+  variaveis realmente usadas na avaliacao (system + custom + overrides do
+  teste, ja convertidas: percentual vira taxa decimal), entao nao precisou
+  de nenhuma mudanca de backend, so consumir o que ja vinha na resposta.
+- Novo bloco "Leitura do calculo" adicionado dentro do card "Teste de
+  formula", abaixo da grade de inputs/resultado. Quando ainda nao ha
+  preview valido (erro ou nenhuma edicao ainda), mostra um texto
+  placeholder pedindo pra ajustar os valores.
+- Validado: lint+build do frontend limpos. Testado ao vivo no navegador -
+  precisei promover a empresa de teste (sem plano pago) pra Pro via script
+  Prisma direto no banco de dev, ja que `/formulas/preview` e
+  `requirePlanFeature("CUSTOM_FORMULAS")` (fora de escopo desta tarefa,
+  so necessario pra conseguir testar). Formula padrao do sistema com
+  custo_base=56.24, margem_lucro=30, taxa_cartao=5 mostrou
+  "(56,24 * (1 + 0,3)) + (56,24 * 0,05) = R$ 75,92", batendo com o
+  "Resultado" ao lado; alterar custo_base pra 100 ao vivo atualizou pra
+  "(100 * (1 + 0,3)) + (100 * 0,05) = R$ 135,00" corretamente.

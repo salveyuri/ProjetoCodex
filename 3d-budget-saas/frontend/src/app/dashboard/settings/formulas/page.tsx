@@ -113,6 +113,11 @@ const toMoney = (value: number): string =>
     currency: "BRL",
   }).format(value);
 
+const formatCalcValue = (value: number): string =>
+  Number.isFinite(value)
+    ? value.toLocaleString("pt-BR", { maximumFractionDigits: 4 })
+    : String(value);
+
 const toFormulaForm = (formula: FormulaResource): FormulaFormState => ({
   name: formula.name,
   expression: formula.expression,
@@ -817,6 +822,23 @@ export default function FormulasPage() {
                         </p>
                       </div>
                     </div>
+
+                    <div className="mt-4 min-w-0 rounded-lg border border-border bg-background p-3">
+                      <p className="mb-2 text-xs uppercase text-muted">
+                        Leitura do calculo
+                      </p>
+                      {preview ? (
+                        <SubstitutedExpression
+                          expression={preview.expression}
+                          variables={preview.variables}
+                          result={preview.result}
+                        />
+                      ) : (
+                        <p className="text-sm text-muted">
+                          Ajuste os valores de teste para ver a equacao calculada passo a passo.
+                        </p>
+                      )}
+                    </div>
                   </Card>
                 </div>
               </section>
@@ -1109,6 +1131,49 @@ const HighlightedExpression = ({
 
         return <span key={`${token}-${index}`}>{token}</span>;
       })}
+    </pre>
+  );
+};
+
+const SubstitutedExpression = ({
+  expression,
+  variables,
+  result,
+}: {
+  expression: string;
+  variables: Record<string, number>;
+  result: number;
+}) => {
+  const tokens = expression
+    .split(/([a-zA-Z_][a-zA-Z0-9_]*|[()+\-*/^])/g)
+    .filter(Boolean);
+
+  return (
+    <pre className="min-h-12 max-w-full whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground">
+      {tokens.map((token, index) => {
+        if (Object.prototype.hasOwnProperty.call(variables, token)) {
+          return (
+            <span
+              key={`${token}-${index}`}
+              className="rounded bg-secondary/15 px-1 py-0.5 font-semibold text-secondary"
+            >
+              {formatCalcValue(variables[token])}
+            </span>
+          );
+        }
+
+        if (/^[()+\-*/^]$/.test(token)) {
+          return (
+            <span key={`${token}-${index}`} className="text-primary">
+              {token}
+            </span>
+          );
+        }
+
+        return <span key={`${token}-${index}`}>{token}</span>;
+      })}
+      <span className="text-primary"> = </span>
+      <span className="font-semibold text-foreground">{toMoney(result)}</span>
     </pre>
   );
 };

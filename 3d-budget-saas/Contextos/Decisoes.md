@@ -421,3 +421,38 @@ parecia util no momento — ambos removidos do sistema, incluindo do banco.
 - Validado: `prisma validate`, lint/build de shared+backend+frontend,
   58/58 testes de backend, e criacao de material de ponta a ponta pelo
   navegador (tipo Resina, sem campo de densidade, salvando certo).
+
+## Remocao de variaveis de formula redundantes (2026-08-15)
+
+Seguimento da checagem dos botoes de variavel: confirmado que `peso`/
+`peso_gramas` e `tempo`/`tempo_horas` eram literalmente a mesma variavel
+computada duas vezes (`CalculationService.ts` atribuia o mesmo valor pras
+duas chaves; o proprio registro em `formula.service.ts` ja descrevia
+`peso_gramas`/`tempo_horas` como "Alias de..."). `margem_lucro_percentual`
+tambem foi identificada como redundante frente a `margem_lucro` (mesma
+configuracao, so em escala diferente - percentual bruto vs. taxa decimal).
+Nenhuma das ~85 formulas salvas no banco de dev usava qualquer um dos
+tres nomes. O Yuri confirmou remover os tres.
+
+- `INTERNAL_VARIABLES` (`formula-engine.ts`): removidos `peso_gramas`,
+  `tempo_horas`, `margem_lucro_percentual`. Lista de variaveis de sistema
+  cai de 24 para 21.
+- `buildFormulaVariables` (`CalculationService.ts`): removidas as 3 chaves
+  correspondentes do objeto retornado.
+- `systemVariableMeta` (`formula.service.ts`): removidas as 3 entradas do
+  registro (o tipo `Record<(typeof INTERNAL_VARIABLES)[number], ...>` ja
+  forca consistencia entre os dois arquivos em tempo de compilacao).
+- Nao mexido: `calculation.validator.ts` continua aceitando
+  `peso_gramas`/`tempo_horas` como nomes alternativos de CAMPO no corpo da
+  requisicao `POST /calculate` (ex.: `peso_gramas` no lugar de
+  `weightGrams`) - e um mecanismo diferente e deliberado (aliasing
+  camelCase/snake_case no payload da API, o mesmo padrao ja usado pra
+  `machineId`/`machine_id`, `formulaId`/`formula_id` etc.), nao a lista de
+  variaveis disponiveis dentro de uma expressao de formula.
+- Nenhuma migracao de banco necessaria - variaveis de formula sao
+  calculadas em runtime, nunca ficam persistidas como coluna.
+- Validado: lint+build de shared/backend/frontend, 58/58 testes de
+  backend (os testes ja iteravam sobre `INTERNAL_VARIABLES` dinamicamente,
+  nao tinham nomes hardcoded), e conferencia ao vivo no navegador (painel
+  "Variaveis disponiveis" caiu de 24 pra 21 itens, sem peso_gramas/
+  tempo_horas/margem_lucro_percentual).

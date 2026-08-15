@@ -13,9 +13,7 @@ export const SYSTEM_DEFAULT_FORMULA = {
 
 export const INTERNAL_VARIABLES = [
   "peso",
-  "peso_gramas",
   "tempo",
-  "tempo_horas",
   "material_cost",
   "energia_total",
   "depreciacao_maquina",
@@ -23,7 +21,6 @@ export const INTERNAL_VARIABLES = [
   "mao_obra",
   "custo_base",
   "margem_lucro",
-  "margem_lucro_percentual",
   "valor_hora_tecnica",
   "custo_kwh",
   "taxa_cartao",

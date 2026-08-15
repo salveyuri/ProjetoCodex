@@ -1047,3 +1047,22 @@ correto for sem.
   via inspecao do `textarea` que o texto inserido foi `peso` sem chaves).
   Nao precisou mexer no backend - a tolerancia a `{variavel}` la continua
   existindo (nao faz mal manter, so nao e mais o que a UI produz).
+
+## 2026-08-15 - Remove variaveis de formula redundantes (peso_gramas, tempo_horas, margem_lucro_percentual)
+
+Seguimento da correcao dos botoes de {chaves}: o Yuri pediu pra confirmar
+se `peso`/`peso_gramas` e `tempo`/`tempo_horas` eram a mesma coisa. Eram -
+literalmente o mesmo valor computado sob dois nomes (ver
+`Contextos/Decisoes.md` pra detalhe tecnico). Ele confirmou remover os
+aliases e tambem apontou `margem_lucro_percentual` como redundante frente
+a `margem_lucro`. Removidos os tres de `INTERNAL_VARIABLES`
+(`formula-engine.ts`), `buildFormulaVariables` (`CalculationService.ts`) e
+`systemVariableMeta` (`formula.service.ts`). Nao mexi no
+`calculation.validator.ts` - o `peso_gramas`/`tempo_horas` aceito ali e um
+alias de CAMPO do payload da API (`POST /calculate`), mecanismo diferente
+e nao relacionado a lista de variaveis de formula.
+- Validado: lint+build de shared/backend/frontend, 58/58 testes de
+  backend, conferido ao vivo no navegador (painel de variaveis foi de 24
+  pra 21 itens).
+- Precisei parar o dev server do backend de novo antes do build (mesmo
+  lock do DLL do Prisma no Windows), e subir de novo depois.

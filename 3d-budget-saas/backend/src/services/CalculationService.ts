@@ -117,9 +117,7 @@ const buildFormulaVariables = ({
 
   return {
     peso: weightGrams,
-    peso_gramas: weightGrams,
     tempo: printTimeHours,
-    tempo_horas: printTimeHours,
     material_cost: Number(materialCost.toString()),
     energia_total: Number(energyCost.toString()),
     depreciacao_maquina: Number(depreciationCost.toString()),
@@ -127,7 +125,6 @@ const buildFormulaVariables = ({
     mao_obra: Number(laborCost.toString()),
     custo_base: Number(baseCost.toString()),
     margem_lucro: marginRate,
-    margem_lucro_percentual: settings.desiredMarginPercent,
     valor_hora_tecnica: settings.technicalHourRate,
     custo_kwh: settings.energyCostPerKwh,
     taxa_cartao: cardFeeRate,

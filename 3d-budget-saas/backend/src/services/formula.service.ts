@@ -45,18 +45,8 @@ const systemVariableMeta: Record<
   { description: string; type: CustomVariableType; previewValue: number }
 > = {
   peso: { description: "Peso da mesa em gramas.", type: "FLOAT", previewValue: 100 },
-  peso_gramas: {
-    description: "Alias de peso em gramas.",
-    type: "FLOAT",
-    previewValue: 100,
-  },
   tempo: {
     description: "Tempo estimado de impressao em horas.",
-    type: "FLOAT",
-    previewValue: 2,
-  },
-  tempo_horas: {
-    description: "Alias de tempo em horas.",
     type: "FLOAT",
     previewValue: 2,
   },
@@ -93,11 +83,6 @@ const systemVariableMeta: Record<
   margem_lucro: {
     description: "Margem como taxa. No teste, digite 30 para simular 0.30.",
     type: "PERCENTAGE",
-    previewValue: 30,
-  },
-  margem_lucro_percentual: {
-    description: "Margem bruta em percentual. Ex: 30.",
-    type: "FLOAT",
     previewValue: 30,
   },
   valor_hora_tecnica: {

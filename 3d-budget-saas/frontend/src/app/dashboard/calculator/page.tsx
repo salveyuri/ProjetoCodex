@@ -156,12 +156,6 @@ export default function CalculatorPage() {
               icon: Cpu,
               tone: "text-accent",
             },
-            {
-              label: "Mao de obra",
-              value: result.breakdown.laborCost,
-              icon: Clock3,
-              tone: "text-foreground",
-            },
           ]
         : [],
     [result],
@@ -385,6 +379,12 @@ export default function CalculatorPage() {
                       result
                         ? toMoney(result.breakdown.administrativeFeeAmount)
                         : "--"
+                    }
+                  />
+                  <BreakdownText
+                    label="Taxa de erro"
+                    value={
+                      result ? toMoney(result.breakdown.errorFeeAmount) : "--"
                     }
                   />
                   <BreakdownText

@@ -8,7 +8,7 @@ export const SYSTEM_DEFAULT_FORMULA = {
   code: SYSTEM_DEFAULT_FORMULA_CODE,
   name: "Formula Padrao do Sistema",
   expression:
-    "(custo_base * (1 + margem_lucro)) + (custo_base * (1 + margem_lucro) * (taxa_cartao + taxa_administrativa))",
+    "(custo_base * (1 + margem_lucro)) + (custo_base * (1 + margem_lucro) * (taxa_cartao + taxa_administrativa + taxa_erro))",
 };
 
 export const INTERNAL_VARIABLES = [
@@ -18,10 +18,8 @@ export const INTERNAL_VARIABLES = [
   "energia_total",
   "depreciacao_maquina",
   "manutencao_maquina",
-  "mao_obra",
   "custo_base",
   "margem_lucro",
-  "valor_hora_tecnica",
   "custo_kwh",
   "taxa_cartao",
   "taxa_administrativa",

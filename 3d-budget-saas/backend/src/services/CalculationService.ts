@@ -90,7 +90,6 @@ const buildFormulaVariables = ({
   energyCost,
   depreciationCost,
   maintenanceCost,
-  laborCost,
   baseCost,
 }: {
   request: CalculationRequest;
@@ -100,12 +99,16 @@ const buildFormulaVariables = ({
   energyCost: Prisma.Decimal;
   depreciationCost: Prisma.Decimal;
   maintenanceCost: Prisma.Decimal;
-  laborCost: Prisma.Decimal;
   baseCost: Prisma.Decimal;
 }): FormulaVariables => {
   const marginRate = settings.desiredMarginPercent / 100;
   const cardFeeRate = settings.cardFeePercent / 100;
   const administrativeFeeRate = settings.administrativeFeePercent / 100;
+  // Percentage convention (0-100, unfilled = 0), same as card/administrative
+  // fees — a rate of 0 is always safe: it's summed into the formula's
+  // "(taxa_cartao + taxa_administrativa + taxa_erro)" factor, never used as
+  // a standalone multiplier, so an unfilled rate never zeroes the price.
+  const errorFeeRate = settings.errorRate / 100;
   const weightGrams = toSafeNumber(request.weightGrams);
   const printTimeHours = toSafeNumber(request.printTimeHours);
   const paintingHours = toSafeNumber(request.paintingHours);
@@ -122,21 +125,19 @@ const buildFormulaVariables = ({
     energia_total: Number(energyCost.toString()),
     depreciacao_maquina: Number(depreciationCost.toString()),
     manutencao_maquina: Number(maintenanceCost.toString()),
-    mao_obra: Number(laborCost.toString()),
     custo_base: Number(baseCost.toString()),
     margem_lucro: marginRate,
-    valor_hora_tecnica: settings.technicalHourRate,
     custo_kwh: settings.energyCostPerKwh,
     taxa_cartao: cardFeeRate,
     taxa_administrativa: administrativeFeeRate,
-    taxas_percentuais: cardFeeRate + administrativeFeeRate,
+    taxas_percentuais: cardFeeRate + administrativeFeeRate + errorFeeRate,
     consumo_kw: Number(machine.powerConsumptionKw.toString()),
     horas_pintura: paintingHours,
     valor_hora_pintura: settings.paintingHourRate,
     horas_acabamento: finishingHours,
     valor_hora_acabamento: settings.finishingHourRate,
     quantidade_mesas: quoteItemsCount,
-    taxa_erro: settings.errorRate,
+    taxa_erro: errorFeeRate,
     ...runtimeCustomVariables,
   };
 };
@@ -163,6 +164,7 @@ export const calculateQuoteBreakdown = ({
   const administrativeFeeRate = percentToRate(
     settings.administrativeFeePercent,
   );
+  const errorFeeRate = percentToRate(settings.errorRate);
 
   const materialCost = material.costPerGram.mul(weightGrams);
   const energyCost = machine.powerConsumptionKw
@@ -172,12 +174,10 @@ export const calculateQuoteBreakdown = ({
     machine.depreciationCostPerHour.mul(printTimeHours);
   const maintenanceCost =
     machine.maintenanceCostPerHour.mul(printTimeHours);
-  const laborCost = decimal(settings.technicalHourRate).mul(printTimeHours);
   const baseCost = materialCost
     .add(energyCost)
     .add(depreciationCost)
-    .add(maintenanceCost)
-    .add(laborCost);
+    .add(maintenanceCost);
   const formulaVariables = buildFormulaVariables({
     request: safeRequest,
     machine,
@@ -186,7 +186,6 @@ export const calculateQuoteBreakdown = ({
     energyCost,
     depreciationCost,
     maintenanceCost,
-    laborCost,
     baseCost,
   });
   const selectedFormula = formula ?? SYSTEM_DEFAULT_FORMULA;
@@ -225,7 +224,9 @@ export const calculateQuoteBreakdown = ({
     formulaSource === "SYSTEM_FALLBACK"
       ? subtotalWithMargin.mul(administrativeFeeRate)
       : decimal(0);
-  const feesTotal = cardFeeAmount.add(administrativeFeeAmount);
+  const errorFeeAmount =
+    formulaSource === "SYSTEM_FALLBACK" ? subtotalWithMargin.mul(errorFeeRate) : decimal(0);
+  const feesTotal = cardFeeAmount.add(administrativeFeeAmount).add(errorFeeAmount);
   const powerConsumptionWatts = machine.powerConsumptionKw.mul(1000);
 
   return {
@@ -253,7 +254,6 @@ export const calculateQuoteBreakdown = ({
     },
     rates: {
       desiredMarginPercent: settings.desiredMarginPercent,
-      technicalHourRate: settings.technicalHourRate,
       paintingHourRate: settings.paintingHourRate,
       finishingHourRate: settings.finishingHourRate,
       errorRate: settings.errorRate,
@@ -267,12 +267,12 @@ export const calculateQuoteBreakdown = ({
       energyCost: toCurrencyNumber(energyCost),
       depreciationCost: toCurrencyNumber(depreciationCost),
       maintenanceCost: toCurrencyNumber(maintenanceCost),
-      laborCost: toCurrencyNumber(laborCost),
       baseCost: toCurrencyNumber(baseCost),
       marginAmount: toCurrencyNumber(marginAmount),
       subtotalWithMargin: toCurrencyNumber(subtotalWithMargin),
       cardFeeAmount: toCurrencyNumber(cardFeeAmount),
       administrativeFeeAmount: toCurrencyNumber(administrativeFeeAmount),
+      errorFeeAmount: toCurrencyNumber(errorFeeAmount),
       feesTotal: toCurrencyNumber(feesTotal),
       finalPrice: toCurrencyNumber(finalPrice),
     },

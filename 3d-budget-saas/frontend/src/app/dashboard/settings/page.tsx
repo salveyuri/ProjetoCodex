@@ -110,7 +110,6 @@ const emptyMaterialForm: MaterialFormState = {
 
 const defaultSettings: ProductionSettings = {
   desiredMarginPercent: 30,
-  technicalHourRate: 0,
   paintingHourRate: 0,
   finishingHourRate: 0,
   errorRate: 0,
@@ -579,16 +578,6 @@ export default function SettingsPage() {
                 }
               />
               <NumberField
-                label="Hora tecnica (R$)"
-                value={settings.technicalHourRate}
-                onChange={(value) =>
-                  setSettings((current) => ({
-                    ...current,
-                    technicalHourRate: value,
-                  }))
-                }
-              />
-              <NumberField
                 label="Hora pintura (R$)"
                 value={settings.paintingHourRate}
                 onChange={(value) =>
@@ -629,7 +618,7 @@ export default function SettingsPage() {
                 }
               />
               <NumberField
-                label="Taxa de erro"
+                label="Taxa de erro (%)"
                 value={settings.errorRate}
                 onChange={(value) =>
                   setSettings((current) => ({

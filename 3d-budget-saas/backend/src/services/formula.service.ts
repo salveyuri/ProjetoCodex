@@ -70,25 +70,15 @@ const systemVariableMeta: Record<
     type: "FLOAT",
     previewValue: 3,
   },
-  mao_obra: {
-    description: "Custo de hora tecnica para o tempo informado.",
-    type: "FLOAT",
-    previewValue: 40,
-  },
   custo_base: {
-    description: "Soma de material, energia, depreciacao e mao de obra.",
+    description: "Soma de material, energia, depreciacao e manutencao.",
     type: "FLOAT",
-    previewValue: 56.24,
+    previewValue: 19.24,
   },
   margem_lucro: {
     description: "Margem como taxa. No teste, digite 30 para simular 0.30.",
     type: "PERCENTAGE",
     previewValue: 30,
-  },
-  valor_hora_tecnica: {
-    description: "Valor monetario da hora tecnica.",
-    type: "FLOAT",
-    previewValue: 20,
   },
   custo_kwh: {
     description: "Custo monetario do kWh.",
@@ -106,9 +96,10 @@ const systemVariableMeta: Record<
     previewValue: 2,
   },
   taxas_percentuais: {
-    description: "Soma das taxas percentuais. No teste, digite 7 para simular 0.07.",
+    description:
+      "Soma das taxas percentuais (cartao, administrativa e erro). No teste, digite 10 para simular 0.10.",
     type: "PERCENTAGE",
-    previewValue: 7,
+    previewValue: 10,
   },
   consumo_kw: {
     description: "Consumo da maquina em kW.",
@@ -141,9 +132,10 @@ const systemVariableMeta: Record<
     previewValue: 2,
   },
   taxa_erro: {
-    description: "Taxa ou multiplicador de erro configurado pela empresa.",
-    type: "FLOAT",
-    previewValue: 1.2,
+    description:
+      "Taxa de erro/desperdicio. Se nao preenchida (0), nao afeta o calculo. No teste, digite 3 para simular 0.03.",
+    type: "PERCENTAGE",
+    previewValue: 3,
   },
 };
 

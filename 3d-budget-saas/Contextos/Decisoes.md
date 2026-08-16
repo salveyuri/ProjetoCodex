@@ -730,3 +730,50 @@ usavam.
 `email.service.test.ts` (gating de preferencia, incluindo confirmar que
 `sendAccountCreated` ignora as 3 preferencias). Suite total: 70 -> 78
 testes, todos passando.
+
+## 2026-08-16 - Convencao de taxas seguras a zero + remocao de "Hora tecnica"
+
+### Toda taxa percentual da formula segue a mesma convencao: somar antes de multiplicar
+
+`taxa_cartao`, `taxa_administrativa` e `taxa_erro` agora sao, as tres,
+percentuais (0-100% na UI, convertidos pra taxa 0.0-1.0 antes de entrar na
+formula) que a formula padrao do sistema **soma entre si dentro de um unico
+fator multiplicativo** -
+`(taxa_cartao + taxa_administrativa + taxa_erro)` - em vez de cada uma
+multiplicar o subtotal separadamente. Essa e a razao estrutural pela qual
+"nao preenchida" (0) nunca zera o preco: dentro de uma soma, 0 e o elemento
+neutro; so seria perigoso se uma taxa multiplicasse o resultado sozinha
+(onde o neutro seria 1, nao 0) - o que a formula padrao nunca faz.
+
+`taxa_erro` foi a excecao antes desta mudanca: o registro de variaveis da
+tela de formulas a documentava como um multiplicador direto (tipo `FLOAT`,
+exemplo `1.2`), mas o valor real vinha de um campo com default `0` - ou
+seja, qualquer formula customizada que seguisse a propria sugestao do
+sistema (`custo_base * taxa_erro`) zerava o orcamento sempre que o campo
+nao fosse preenchido. Convertida pra `PERCENTAGE` e somada na formula
+padrao do mesmo jeito que as outras duas, ela deixa de ter esse defeito -
+e ganha a mesma garantia "nao preenchida = sem efeito" que taxa_cartao/
+administrativa ja tinham.
+
+**Limite aceito**: isso protege a formula padrao e qualquer formula
+customizada que siga a mesma convencao ensinada pelo sistema. Como o motor
+de formulas e algebra generica (`expr-eval`, sem analise de arvore
+sintatica), uma empresa ainda poderia escrever `preco = custo_base *
+taxa_cartao` como a formula INTEIRA (nao um termo somado) e zerar o proprio
+calculo com uma taxa em 0 - nao ha como prevenir isso sem reescrever a
+expressao estruturalmente, fora de escopo. O que a mudanca garante e que o
+caminho padrao/ensinado pelo produto e sempre seguro.
+
+### "Hora tecnica" removida do sistema (nao so escondida)
+
+Campo sem uso conhecido (Yuri: "nao lembro pelo que foi criado"). Removida
+de ponta a ponta em vez de so escondida da UI: coluna `technical_hour_rate`
+dropada de `pricing_settings`, `applied_technical_hour_rate` e `labor_cost`
+dropadas de `print_items` (snapshot historico de orcamentos ja calculados -
+aceitavel apagar porque o projeto ainda nao foi pra producao, sem clientes
+reais, so dados de dev/teste). `baseCost` deixa de somar mao de obra -
+passa a ser so material + energia + depreciacao + manutencao. Variaveis de
+formula `mao_obra`/`valor_hora_tecnica` removidas do whitelist
+(`INTERNAL_VARIABLES`) - uma formula customizada que ja usasse essas
+variaveis passa a falhar validacao (`FORMULA_UNKNOWN_VARIABLE`) na proxima
+edicao; nenhuma formula existente no banco de dev as usava.

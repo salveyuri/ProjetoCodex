@@ -268,7 +268,6 @@ model PricingSettings {
   id                   String   @id @default(uuid()) @db.Uuid
   companyId            String   @unique @map("company_id") @db.Uuid
   desiredMarginPercent Decimal  @default(30) @map("desired_margin_percent") @db.Decimal(7, 4)
-  technicalHourRate    Decimal  @default(0) @map("technical_hour_rate") @db.Decimal(10, 2)
   paintingHourRate     Decimal  @default(0) @map("painting_hour_rate") @db.Decimal(10, 2)
   finishingHourRate    Decimal  @default(0) @map("finishing_hour_rate") @db.Decimal(10, 2)
   errorRate            Decimal  @default(0) @map("error_rate") @db.Decimal(10, 4)
@@ -345,13 +344,11 @@ model PrintItem {
   energyCost                      Decimal  @default(0) @map("energy_cost") @db.Decimal(12, 2)
   depreciationCost                Decimal  @default(0) @map("depreciation_cost") @db.Decimal(12, 2)
   maintenanceCost                 Decimal  @default(0) @map("maintenance_cost") @db.Decimal(12, 2)
-  laborCost                       Decimal  @default(0) @map("labor_cost") @db.Decimal(12, 2)
   baseCost                        Decimal  @default(0) @map("base_cost") @db.Decimal(12, 2)
   marginAmount                    Decimal  @default(0) @map("margin_amount") @db.Decimal(12, 2)
   feesTotal                       Decimal  @default(0) @map("fees_total") @db.Decimal(12, 2)
   finalPrice                      Decimal  @default(0) @map("final_price") @db.Decimal(12, 2)
   appliedMarginPercent            Decimal  @default(0) @map("applied_margin_percent") @db.Decimal(7, 4)
-  appliedTechnicalHourRate        Decimal  @default(0) @map("applied_technical_hour_rate") @db.Decimal(10, 2)
   appliedEnergyCostPerKwh         Decimal  @default(0) @map("applied_energy_cost_per_kwh") @db.Decimal(10, 4)
   appliedCardFeePercent           Decimal  @default(0) @map("applied_card_fee_percent") @db.Decimal(7, 4)
   appliedAdministrativeFeePercent Decimal  @default(0) @map("applied_administrative_fee_percent") @db.Decimal(7, 4)

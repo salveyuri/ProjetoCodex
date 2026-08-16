@@ -384,7 +384,6 @@ export type CustomVariableMap = Record<string, CustomVariableDefinition>;
 
 export interface ProductionSettings {
   desiredMarginPercent: number;
-  technicalHourRate: number;
   paintingHourRate: number;
   finishingHourRate: number;
   errorRate: number;
@@ -410,12 +409,12 @@ export interface CalculationMoneyBreakdown {
   energyCost: number;
   depreciationCost: number;
   maintenanceCost: number;
-  laborCost: number;
   baseCost: number;
   marginAmount: number;
   subtotalWithMargin: number;
   cardFeeAmount: number;
   administrativeFeeAmount: number;
+  errorFeeAmount: number;
   feesTotal: number;
   finalPrice: number;
 }
@@ -440,7 +439,6 @@ export interface CalculationResourceSummary {
 
 export interface CalculationAppliedRates {
   desiredMarginPercent: number;
-  technicalHourRate: number;
   paintingHourRate: number;
   finishingHourRate: number;
   errorRate: number;
@@ -549,13 +547,11 @@ export interface QuoteItemSnapshot {
   energyCost: number;
   depreciationCost: number;
   maintenanceCost: number;
-  laborCost: number;
   baseCost: number;
   marginAmount: number;
   feesTotal: number;
   finalPrice: number;
   appliedMarginPercent: number;
-  appliedTechnicalHourRate: number;
   appliedEnergyCostPerKwh: number;
   appliedCardFeePercent: number;
   appliedAdministrativeFeePercent: number;

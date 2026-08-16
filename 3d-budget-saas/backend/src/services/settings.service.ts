@@ -16,7 +16,6 @@ interface ExtraFees {
 
 const DEFAULT_SETTINGS: ProductionSettings = {
   desiredMarginPercent: 30,
-  technicalHourRate: 0,
   paintingHourRate: 0,
   finishingHourRate: 0,
   errorRate: 0,
@@ -121,7 +120,6 @@ const toExtraFeesJson = ({
 
 const toSettingsResponse = (settings: {
   desiredMarginPercent: Prisma.Decimal;
-  technicalHourRate: Prisma.Decimal;
   paintingHourRate: Prisma.Decimal;
   finishingHourRate: Prisma.Decimal;
   errorRate: Prisma.Decimal;
@@ -131,7 +129,6 @@ const toSettingsResponse = (settings: {
 
   return {
     desiredMarginPercent: toNumber(settings.desiredMarginPercent),
-    technicalHourRate: toNumber(settings.technicalHourRate),
     paintingHourRate: toNumber(settings.paintingHourRate),
     finishingHourRate: toNumber(settings.finishingHourRate),
     errorRate: toNumber(settings.errorRate),
@@ -154,7 +151,6 @@ export class SettingsService {
       create: {
         companyId,
         desiredMarginPercent: DEFAULT_SETTINGS.desiredMarginPercent,
-        technicalHourRate: DEFAULT_SETTINGS.technicalHourRate,
         paintingHourRate: DEFAULT_SETTINGS.paintingHourRate,
         finishingHourRate: DEFAULT_SETTINGS.finishingHourRate,
         errorRate: DEFAULT_SETTINGS.errorRate,
@@ -175,7 +171,6 @@ export class SettingsService {
       where: { companyId },
       update: {
         desiredMarginPercent: input.desiredMarginPercent,
-        technicalHourRate: input.technicalHourRate,
         paintingHourRate: input.paintingHourRate,
         finishingHourRate: input.finishingHourRate,
         errorRate: input.errorRate,
@@ -189,7 +184,6 @@ export class SettingsService {
       create: {
         companyId,
         desiredMarginPercent: input.desiredMarginPercent,
-        technicalHourRate: input.technicalHourRate,
         paintingHourRate: input.paintingHourRate,
         finishingHourRate: input.finishingHourRate,
         errorRate: input.errorRate,

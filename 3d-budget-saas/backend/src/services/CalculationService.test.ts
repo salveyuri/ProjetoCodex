@@ -5,7 +5,6 @@ import { calculateQuoteBreakdown, type CalculationFormulaInput } from "./Calcula
 
 const baseSettings: ProductionSettings = {
   desiredMarginPercent: 30,
-  technicalHourRate: 20,
   paintingHourRate: 0,
   finishingHourRate: 0,
   errorRate: 0,
@@ -43,7 +42,9 @@ const baseRequest: CalculationFormulaInput["request"] = {
 
 describe("calculateQuoteBreakdown — system fallback formula", () => {
   // Regression fixture: this exact combination was validated manually
-  // during Bloco 5 (ver Contextos/Chat.log) and returned finalPrice = 78.23.
+  // during Bloco 5 (ver Contextos/Chat.log) and originally returned
+  // finalPrice = 78.23. Re-pinned to 22.59 in 2026-08-16 after removing
+  // laborCost/technicalHourRate from baseCost (see Contextos/Decisoes.md).
   it("matches the historical known-good calculation when no formula is set", () => {
     const result = calculateQuoteBreakdown({
       request: baseRequest,
@@ -57,9 +58,8 @@ describe("calculateQuoteBreakdown — system fallback formula", () => {
     expect(result.breakdown.energyCost).toBe(0.24);
     expect(result.breakdown.depreciationCost).toBe(6);
     expect(result.breakdown.maintenanceCost).toBe(0);
-    expect(result.breakdown.laborCost).toBe(40);
-    expect(result.breakdown.baseCost).toBe(56.24);
-    expect(result.breakdown.finalPrice).toBe(78.23);
+    expect(result.breakdown.baseCost).toBe(16.24);
+    expect(result.breakdown.finalPrice).toBe(22.59);
     expect(result.formula.source).toBe("SYSTEM_FALLBACK");
   });
 
@@ -77,9 +77,9 @@ describe("calculateQuoteBreakdown — system fallback formula", () => {
       formula: null,
     });
 
-    // 1.5/h * 2h = 3, on top of the 56.24 baseCost from the fixture above.
+    // 1.5/h * 2h = 3, on top of the 16.24 baseCost from the fixture above.
     expect(result.breakdown.maintenanceCost).toBe(3);
-    expect(result.breakdown.baseCost).toBe(59.24);
+    expect(result.breakdown.baseCost).toBe(19.24);
     expect(result.resources.machine.maintenanceCostPerHour).toBe(1.5);
     expect(result.variables.manutencao_maquina).toBe(3);
   });
@@ -95,6 +95,43 @@ describe("calculateQuoteBreakdown — system fallback formula", () => {
 
     expect(result.resources.material.costPerGram).toBe(0.1);
     expect(Number.isInteger(result.breakdown.finalPrice * 100)).toBe(true);
+  });
+
+  it("an unfilled (0) errorRate/cardFeePercent/administrativeFeePercent does not zero the price", () => {
+    const result = calculateQuoteBreakdown({
+      request: baseRequest,
+      machine: baseMachine,
+      material: baseMaterial,
+      settings: {
+        ...baseSettings,
+        cardFeePercent: 0,
+        administrativeFeePercent: 0,
+        errorRate: 0,
+      },
+      formula: null,
+    });
+
+    // baseCost * (1 + margem_lucro), with every rate at 0 contributing
+    // nothing to the "(taxa_cartao + taxa_administrativa + taxa_erro)"
+    // factor — never multiplying the whole price by 0.
+    expect(result.breakdown.finalPrice).toBe(21.11);
+    expect(result.breakdown.cardFeeAmount).toBe(0);
+    expect(result.breakdown.administrativeFeeAmount).toBe(0);
+    expect(result.breakdown.errorFeeAmount).toBe(0);
+  });
+
+  it("errorRate adds its share of the fee on top of card/administrative, same as they do", () => {
+    const result = calculateQuoteBreakdown({
+      request: baseRequest,
+      machine: baseMachine,
+      material: baseMaterial,
+      settings: { ...baseSettings, errorRate: 10 },
+      formula: null,
+    });
+
+    // subtotalWithMargin (21.112) * 10% = 2.1112 -> rounds to 2.11.
+    expect(result.breakdown.errorFeeAmount).toBe(2.11);
+    expect(result.breakdown.finalPrice).toBeGreaterThan(22.59);
   });
 
   it("normalizes a missing weight/print time to 0 instead of throwing", () => {
@@ -131,8 +168,8 @@ describe("calculateQuoteBreakdown — custom (DATABASE) formula", () => {
       },
     });
 
-    expect(result.breakdown.baseCost).toBe(56.24);
-    expect(result.breakdown.finalPrice).toBe(112.48);
+    expect(result.breakdown.baseCost).toBe(16.24);
+    expect(result.breakdown.finalPrice).toBe(32.48);
     expect(result.formula.source).toBe("DATABASE");
     expect(result.formula.id).toBe("formula-1");
     // No card/administrative fee is layered on top of a custom formula's
@@ -156,6 +193,6 @@ describe("calculateQuoteBreakdown — custom (DATABASE) formula", () => {
 
     expect(result.formula.source).toBe("SYSTEM_FALLBACK");
     // Same math as the no-formula case above.
-    expect(result.breakdown.finalPrice).toBe(78.23);
+    expect(result.breakdown.finalPrice).toBe(22.59);
   });
 });

@@ -1378,3 +1378,98 @@ senha nunca podem ser bloqueados por essas preferencias.
   confirmado que persistiu (nome e checkbox), com o campo E-mail sempre
   `disabled` mostrando o e-mail original. Lint/build limpos em
   shared/backend/frontend, 78/78 testes de backend.
+
+## 2026-08-16 - Remove card "Estoque cadastrado" da tela de configuracoes
+
+Pedido do Yuri: remover o card "Estoque cadastrado" (valor total investido em
+materiais) da tela de configuracoes - nao e necessario. Removido o card, o
+calculo `materialInventoryValue` (so existia pra alimentar esse card) e o
+import agora nao usado de `useMemo`; grid dos cards de resumo passou de 3
+pra 2 colunas. Lint/build de frontend limpos. Commit `cd73453`.
+
+## 2026-08-16 - Taxa de erro nao pode zerar o calculo + remocao de "Hora tecnica"
+
+Pedido do Yuri: (1) ajustar as formulas pra que taxas nao preenchidas
+(taxa de cartao, administrativa, erro) sejam ignoradas no calculo em vez de
+zerar o resultado quando usadas multiplicando; (2) remover completamente o
+campo "Hora tecnica" (formulario de custos, formulas e sistema) - ele nao
+lembra pra que foi criado e nao ve uso atual.
+
+**Taxa de erro (`taxa_erro`) — causa raiz real, nao so hipotetica.** A
+pesquisa no codigo mostrou que `taxa_cartao`/`taxa_administrativa` ja eram
+seguras: a formula padrao do sistema sempre as somou primeiro dentro de um
+unico fator multiplicador (`taxa_cartao + taxa_administrativa`) antes de
+multiplicar pelo subtotal - uma taxa zerada ali ja contribuia zero, nunca
+zerava o resultado inteiro. `taxa_erro`, porem, tinha um defeito de design
+genuino: no registro de variaveis da tela de formulas
+(`formula.service.ts`, `systemVariableMeta`), ela era documentada como um
+**multiplicador direto** ("Taxa ou multiplicador de erro", tipo `FLOAT`,
+valor de exemplo `1.2`, ou seja, o proprio sistema sugeria usa-la como
+`custo_base * taxa_erro`, onde 1.0 = neutro) - mas o valor real que chegava
+no calculo (`CalculationService.ts`, `taxa_erro: settings.errorRate`) vinha
+direto do campo "Taxa de erro" em Custos Fixos, que tem **default 0**. Ou
+seja: qualquer empresa que criasse uma formula customizada seguindo a
+propria sugestao do sistema, e nao preenchesse "Taxa de erro", teria o
+orcamento **sempre zerado** - um bug real, nao so um risco teorico.
+- **Correcao**: `taxa_erro` virou tipo `PERCENTAGE` (igual taxa_cartao/
+  administrativa) - o valor gravado (0-100%) e dividido por 100 antes de
+  entrar na formula (`CalculationService.ts`), e a formula padrao do
+  sistema passou a somar as tres taxas no mesmo fator multiplicativo:
+  `(custo_base * (1 + margem_lucro)) + (custo_base * (1 + margem_lucro) *
+  (taxa_cartao + taxa_administrativa + taxa_erro))`. Com isso, "nao
+  preenchida" (0) sempre significa "contribui zero pro fator", nunca
+  "multiplica o resultado inteiro por zero" - pras tres taxas, de forma
+  consistente. `taxas_percentuais` (soma das taxas, disponivel como
+  variavel de conveniencia) passou a incluir `taxa_erro` tambem.
+  `resources.validator.ts`: `errorRate` ganhou `.max(100)` (mesma faixa das
+  outras duas). Label do campo no formulario: "Taxa de erro (%)" (antes sem
+  unidade, ambiguidade que contribuiu pro bug de design).
+- **Limite conhecido, documentado e aceito**: isso protege a formula padrao
+  e qualquer formula customizada que siga a mesma convencao (somar as taxas
+  antes de multiplicar) - o motor de formulas e algebra generica
+  (`expr-eval`), entao uma empresa AINDA poderia escrever uma formula
+  ingenua que multiplica o preco inteiro direto por uma variavel (ex.:
+  `custo_base * taxa_cartao` como a formula INTEIRA, nao um termo somado) e
+  zerar o proprio orcamento - nao da pra prevenir isso sem analisar a
+  arvore sintatica da expressao, fora de escopo desta rodada. O que foi
+  corrigido e a convencao que o sistema realmente usa e ensina (formula
+  padrao + template de nova formula), que agora e segura pras tres taxas.
+- Novo campo `errorFeeAmount` no breakdown (`CalculationMoneyBreakdown`),
+  mesma logica de `cardFeeAmount`/`administrativeFeeAmount` (so populado
+  no caminho `SYSTEM_FALLBACK`, mantem `feesTotal` consistente); nova linha
+  "Taxa de erro" na tela da calculadora, mesmo padrao das outras duas.
+
+**Remocao de "Hora tecnica" (`technicalHourRate`).** Removido de ponta a
+ponta: migracao `20260816120000_remove_technical_hour_rate` (dropa
+`pricing_settings.technical_hour_rate`,
+`print_items.applied_technical_hour_rate`, `print_items.labor_cost`);
+`schema.prisma`, `resources.validator.ts`, `settings.service.ts`,
+`CalculationService.ts` (removido `laborCost`/`mao_obra`/
+`valor_hora_tecnica` de `baseCost`, das variaveis de formula e do
+breakdown - `baseCost` agora e so material+energia+depreciacao+manutencao),
+`formula-engine.ts` (`mao_obra`/`valor_hora_tecnica` fora de
+`INTERNAL_VARIABLES`), `formula.service.ts` (removidas as entradas do
+registro de variaveis; descricao de `custo_base` atualizada), `quote.service.ts`
+(removido de ambas as direcoes do mapeamento de snapshot), tipos
+compartilhados (`ProductionSettings`, `CalculationMoneyBreakdown`,
+`CalculationAppliedRates`, `QuoteItemSnapshot`), formulario de Custos Fixos
+(campo "Hora tecnica (R$)" removido), pagina de formulas (default settings),
+calculadora (linha "Mao de obra" removida do breakdown de producao).
+- `CalculationService.test.ts`: fixture `baseSettings` sem `technicalHourRate`;
+  valores fixados (`baseCost`/`finalPrice`) recalculados sem o custo de mao
+  de obra (`baseCost` 56.24->16.24, `finalPrice` 78.23->22.59, etc.) -
+  comentario da regressao historica atualizado explicando o recalculo.
+  Adicionados 2 testes novos cobrindo diretamente o pedido do Yuri: taxas
+  zeradas nao zeram o preco, e `taxa_erro` soma sua parcela igual as outras
+  duas.
+- Precisou aplicar a migracao + `prisma generate` (sem lock de DLL desta
+  vez, o `tsx watch` ja estava parado).
+- Validado: lint/build limpos em shared/backend/frontend, suite de backend
+  80/80 (1 falha isolada de `email-template-test.routes.test.ts` no run
+  completo foi confirmada como flake de poluicao entre arquivos de teste -
+  reproduzida 0/2 vezes rodando isolada ou a suite completa de novo - nao
+  e regressao desta mudanca). Testado ao vivo no navegador: criado
+  maquina+material, "Taxa de erro" setada pra 10% -> preco final incorporou
+  a taxa (R$13,50); voltada pra 0% -> preco caiu pro valor sem taxa
+  (R$12,27), nao zerou; tela de formulas confirma a formula padrao
+  atualizada e "Hora tecnica"/mao_obra ausentes da lista de variaveis.

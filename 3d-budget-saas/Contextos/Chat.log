@@ -1251,3 +1251,54 @@ abre um modal com o HTML renderizado.
   modal - a previa mostrou o texto editado (nao o salvo), confirmando que
   reflete o estado atual do formulario; fechado sem salvar, confirmado
   que o template no banco ficou intocado.
+
+## 2026-08-16 - Botao de testar e-mail
+
+Pedido do Yuri: botao "Testar" ao lado de cada template em
+`/admin/email-templates` que abre um modal pra preencher um e-mail e
+manda um teste daquele template pra esse endereco, usando o mesmo
+mecanismo de envio do sistema.
+
+- `email.service.ts`: `send()` deixou de retornar `void` e passou a
+  retornar `{ status: "SENT"|"FAILED"|"SKIPPED_INACTIVE"; error: string |
+  null }` - compativel com todos os call sites existentes (que so
+  ignoravam o retorno, `void emailService.sendX()` continua funcionando
+  normalmente). Novo `SendOptions.force` (bypassa o gate de
+  `template.isActive` - so faz sentido pro teste, onde o admin quer testar
+  mesmo um template ainda desativado). Novo metodo `sendTest(key, to)`
+  monta as variaveis a partir do `sampleValue` de cada uma no registro
+  `EMAIL_TEMPLATE_VARIABLES` (mesmo dado que already alimenta o
+  "Visualizar") e chama `send()` com `force: true` - **exatamente o mesmo
+  caminho** que um envio de verdade (mesmo `resendClient`, mesmo
+  `EmailLog`), so os dados sao de exemplo. `logoUrl` e excluido do mapa de
+  amostras (o valor no registro e um caminho relativo, so funciona pro
+  truque de preview no proprio navegador - `send()` ja calcula a URL
+  absoluta certa sozinho).
+- Novo endpoint `POST /admin/email-templates/:id/test` (`{ to }`,
+  validado com zod) - busca o template pelo id, chama `sendTest`, grava
+  `ADMIN_EMAIL_TEMPLATE_TESTED` no audit log (com o resultado), sempre
+  responde 200 com o resultado real (`SENT`/`FAILED` + mensagem de erro) -
+  nao e um erro HTTP quando o envio falha, e informacao de diagnostico pro
+  admin ver na hora. Rate limiter novo (`emailTestRateLimiter`, 10/min) -
+  a rota ja e admin-only, so protege contra clique repetido/script por
+  acidente.
+- Frontend: botao "Testar e-mail" (icone `Send`) na coluna Acoes da
+  tabela, abre um modal pequeno (campo de e-mail + "Enviar teste").
+  Sucesso mostra toast e fecha o modal; falha mostra toast com o erro
+  literal devolvido pelo backend (ex.: "Falha ao enviar: RESEND_API_KEY
+  not configured") - propositalmente cru, e uma ferramenta de diagnostico
+  pro admin, nao uma mensagem generica pro usuario final.
+- Testes novos: `email-template-test.routes.test.ts` (5 testes de
+  integracao - 403 pra nao-admin, envio bem sucedido gravando EmailLog
+  certo, envio com falha reportado sem lancar, e-mail invalido rejeitado,
+  funciona mesmo com o template desativado) e ajuste no
+  `email.service.test.ts` existente (o teste de "nunca lanca" passou a
+  conferir o resultado retornado em vez de `undefined`). Suite: 65 -> 70
+  testes.
+- Validado ao vivo no navegador: clicado Testar na "Conta criada",
+  preenchido um e-mail, enviado - toast mostrou "Falha ao enviar:
+  RESEND_API_KEY not configured" (esperado, sem chave real neste
+  ambiente); confirmado no banco que o `EmailLog` gravou com o assunto ja
+  com o valor de exemplo substituido ("Oficina 3D Exemplo") e que o
+  `AuditLog` registrou `ADMIN_EMAIL_TEMPLATE_TESTED` com o resultado.
+  70/70 testes de backend, lint/build de shared/backend/frontend limpos.

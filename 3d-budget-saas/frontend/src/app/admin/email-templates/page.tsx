@@ -2,11 +2,22 @@
 
 import type {
   EmailTemplateResource,
+  EmailTemplateTestResult,
   EmailTemplateUpdatePayload,
   EmailTemplateVariable,
 } from "@3d-budget/shared";
 import axios from "axios";
-import { Edit3, Eye, Mail, RefreshCcw, Save, ShieldAlert, X } from "lucide-react";
+import {
+  Edit3,
+  Eye,
+  Loader2,
+  Mail,
+  RefreshCcw,
+  Save,
+  Send,
+  ShieldAlert,
+  X,
+} from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
@@ -86,6 +97,9 @@ export default function AdminEmailTemplatesPage() {
   const [selected, setSelected] = useState<EmailTemplateResource | null>(null);
   const [form, setForm] = useState<EmailTemplateFormState | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [testTarget, setTestTarget] = useState<EmailTemplateResource | null>(null);
+  const [testEmail, setTestEmail] = useState("");
+  const [isSendingTest, setIsSendingTest] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [isAccessDenied, setIsAccessDenied] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -147,6 +161,55 @@ export default function AdminEmailTemplatesPage() {
 
   const openPreview = (bodyHtml: string, variables: EmailTemplateVariable[]) => {
     setPreviewHtml(buildPreviewHtml(bodyHtml, variables));
+  };
+
+  const openTestModal = (template: EmailTemplateResource) => {
+    setTestTarget(template);
+    setTestEmail("");
+  };
+
+  const closeTestModal = () => {
+    setTestTarget(null);
+    setTestEmail("");
+  };
+
+  const handleSendTest = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!testTarget) {
+      return;
+    }
+
+    setIsSendingTest(true);
+
+    try {
+      const { data } = await api.post<EmailTemplateTestResult>(
+        `/admin/email-templates/${testTarget.id}/test`,
+        { to: testEmail },
+      );
+
+      if (data.status === "SENT") {
+        showToast({
+          tone: "success",
+          message: `E-mail de teste enviado para ${testEmail}.`,
+        });
+        closeTestModal();
+      } else {
+        showToast({
+          tone: "danger",
+          message: data.error
+            ? `Falha ao enviar: ${data.error}`
+            : "Nao foi possivel enviar o e-mail de teste.",
+        });
+      }
+    } catch (error) {
+      showToast({
+        tone: "danger",
+        message: getApiErrorMessage(error, "Nao foi possivel enviar o e-mail de teste."),
+      });
+    } finally {
+      setIsSendingTest(false);
+    }
   };
 
   const insertVariable = (name: string) => {
@@ -320,6 +383,15 @@ export default function AdminEmailTemplatesPage() {
                             >
                               <Edit3 className="h-4 w-4" />
                             </button>
+                            <button
+                              type="button"
+                              title="Testar e-mail"
+                              aria-label="Testar e-mail"
+                              onClick={() => openTestModal(template)}
+                              className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
+                            >
+                              <Send className="h-4 w-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -482,6 +554,65 @@ export default function AdminEmailTemplatesPage() {
               sandbox=""
               className="h-[70vh] w-full bg-white"
             />
+          </div>
+        </div>
+      ) : null}
+
+      {testTarget ? (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center bg-black/70 px-4 py-6"
+          onClick={closeTestModal}
+        >
+          <div
+            className="w-full max-w-sm rounded-lg border border-border bg-background p-5 shadow-panel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Testar e-mail</h2>
+                <p className="text-xs text-muted">{testTarget.name}</p>
+              </div>
+              <button
+                type="button"
+                title="Fechar"
+                aria-label="Fechar"
+                onClick={closeTestModal}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form className="grid min-w-0 gap-4" onSubmit={handleSendTest}>
+              <label className="grid min-w-0 gap-2 text-sm font-medium">
+                Enviar para
+                <input
+                  type="email"
+                  value={testEmail}
+                  onChange={(event) => setTestEmail(event.target.value)}
+                  required
+                  autoFocus
+                  placeholder="voce@empresa.com"
+                  className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                />
+              </label>
+              <p className="text-xs text-muted">
+                Envia de verdade pelo mesmo mecanismo do sistema (Resend), com
+                valores de exemplo no lugar das variaveis.
+              </p>
+              <button
+                type="submit"
+                disabled={isSendingTest}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isSendingTest ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                Enviar teste
+              </button>
+            </form>
           </div>
         </div>
       ) : null}

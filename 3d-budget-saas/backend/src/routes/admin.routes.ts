@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { adminController } from "../controllers/admin.controller";
 import { analyticsController } from "../controllers/analytics.controller";
+import { emailTestRateLimiter } from "../middlewares/rate-limit-middleware";
 
 export const adminRoutes = Router();
 
@@ -38,4 +39,10 @@ adminRoutes.get("/email-templates", (request, response, next) =>
 
 adminRoutes.patch("/email-templates/:id", (request, response, next) =>
   adminController.updateEmailTemplate(request, response, next),
+);
+
+adminRoutes.post(
+  "/email-templates/:id/test",
+  emailTestRateLimiter,
+  (request, response, next) => adminController.testEmailTemplate(request, response, next),
 );

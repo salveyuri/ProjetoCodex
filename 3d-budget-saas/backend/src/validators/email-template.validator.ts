@@ -12,4 +12,11 @@ export const emailTemplateUpdateSchema = z
     message: "At least one field is required.",
   });
 
+export const emailTemplateTestSchema = z
+  .object({
+    to: z.string().trim().toLowerCase().email("Invalid email address."),
+  })
+  .strict();
+
 export type EmailTemplateUpdateInput = z.infer<typeof emailTemplateUpdateSchema>;
+export type EmailTemplateTestInput = z.infer<typeof emailTemplateTestSchema>;

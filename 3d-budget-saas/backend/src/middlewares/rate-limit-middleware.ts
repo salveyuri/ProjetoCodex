@@ -94,6 +94,20 @@ export const resetPasswordRateLimiter = rateLimit({
   ),
 });
 
+// Admin-only (mounted under /admin, already gated by adminMiddleware), but
+// still a real send through Resend — a generous cap just guards against an
+// accidental rapid-fire click/script, not abuse from an untrusted caller.
+export const emailTestRateLimiter = rateLimit({
+  windowMs: oneMinute,
+  limit: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: createRateLimitHandler(
+    "RATE_LIMIT_EMAIL_TEST",
+    "Too many test emails sent from this IP. Try again in one minute.",
+  ),
+});
+
 export const calculationRateLimiter = rateLimit({
   windowMs: oneMinute,
   limit: 30,

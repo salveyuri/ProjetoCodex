@@ -1,6 +1,8 @@
 import type {
   AdminUserResource,
+  EmailTemplateKey,
   EmailTemplateResource,
+  EmailTemplateTestResult,
   PlanResource,
 } from "@3d-budget/shared";
 import type { Prisma } from "@prisma/client";
@@ -9,6 +11,7 @@ import { ZodError } from "zod";
 import { AppError } from "../middlewares/error-handler";
 import { adminService } from "../services/admin.service";
 import { auditLogService } from "../services/audit-log.service";
+import { emailService } from "../services/email.service";
 import {
   emailTemplateService,
   toEmailTemplateResource,
@@ -16,7 +19,10 @@ import {
 import { planService, toPlanResource } from "../services/plan.service";
 import { idParamSchema } from "../validators/common.validator";
 import { adminUserUpdateSchema } from "../validators/admin.validator";
-import { emailTemplateUpdateSchema } from "../validators/email-template.validator";
+import {
+  emailTemplateTestSchema,
+  emailTemplateUpdateSchema,
+} from "../validators/email-template.validator";
 import { planCreateSchema, planUpdateSchema } from "../validators/plan.validator";
 
 const toValidationError = (error: ZodError): AppError =>
@@ -180,6 +186,32 @@ export class AdminController {
         metadata: { changedFields: Object.keys(input) },
       });
       response.status(200).json(template);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async testEmailTemplate(
+    request: Request,
+    response: Response<EmailTemplateTestResult>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { id } = idParamSchema.parse(request.params);
+      const { to } = emailTemplateTestSchema.parse(request.body);
+      const template = await emailTemplateService.getById(id);
+      const result = await emailService.sendTest(
+        template.key as EmailTemplateKey,
+        to,
+      );
+      await auditLogService.record({
+        action: "ADMIN_EMAIL_TEMPLATE_TESTED",
+        entityType: "EmailTemplate",
+        entityId: id,
+        actorUserId: request.auth?.userId,
+        metadata: { to, key: template.key, result: result.status },
+      });
+      response.status(200).json(result);
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);
     }

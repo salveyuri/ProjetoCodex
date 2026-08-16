@@ -1,7 +1,8 @@
+import type { EmailSendStatus } from "@3d-budget/shared";
 import { prisma } from "../config/prisma";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
-import type { EmailTemplateKey } from "./email-templates";
+import { EMAIL_TEMPLATE_VARIABLES, type EmailTemplateKey } from "./email-templates";
 import { resendClient } from "./resend-client";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -66,19 +67,32 @@ const substituteHtml = (
 
 interface SendOptions {
   dedupeKey?: string;
+  // Bypasses the "template must be isActive" gate — only meant for
+  // sendTest() below, where the whole point is letting an admin check a
+  // template (including one they haven't activated yet) rather than
+  // simulating what a real trigger would do.
+  force?: boolean;
+}
+
+export interface EmailSendResult {
+  status: EmailSendStatus;
+  error: string | null;
 }
 
 export class EmailService {
-  // Renders and sends one templated email. Never throws — callers fire
-  // this without awaiting (see the call sites in auth.service.ts,
+  // Renders and sends one templated email. Never throws — most callers
+  // fire this without awaiting (see the call sites in auth.service.ts,
   // webhook.controller.ts, quote.service.ts) because a Resend outage must
-  // never fail or slow down the action the email rides along with.
+  // never fail or slow down the action the email rides along with. The
+  // returned result exists for callers that DO want to know what
+  // happened (sendTest() below, surfaced to the admin UI) — everyone else
+  // is free to ignore it.
   async send(
     key: EmailTemplateKey,
     to: string,
     variables: Record<string, string>,
     options: SendOptions = {},
-  ): Promise<void> {
+  ): Promise<EmailSendResult> {
     try {
       if (options.dedupeKey) {
         const alreadySent = await prisma.emailLog.findUnique({
@@ -91,13 +105,13 @@ export class EmailService {
             { key, dedupeKey: options.dedupeKey },
             "Email already sent for this dedupe key, skipping",
           );
-          return;
+          return { status: "SENT", error: null };
         }
       }
 
       const template = await prisma.emailTemplate.findUnique({ where: { key } });
 
-      if (!template || !template.isActive) {
+      if (!template || (!template.isActive && !options.force)) {
         await prisma.emailLog.create({
           data: {
             templateKey: key,
@@ -111,7 +125,12 @@ export class EmailService {
           { key, to, found: Boolean(template) },
           "Email template missing or inactive — skipping send",
         );
-        return;
+        return {
+          status: "SKIPPED_INACTIVE",
+          error: template
+            ? "Template esta inativo."
+            : "Template nao encontrado.",
+        };
       }
 
       const allVariables = {
@@ -133,9 +152,36 @@ export class EmailService {
           dedupeKey: options.dedupeKey,
         },
       });
+
+      return {
+        status: result.error ? "FAILED" : "SENT",
+        error: result.error,
+      };
     } catch (error) {
       logger.error({ err: error, key, to }, "Unexpected error sending email");
+      return {
+        status: "FAILED",
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
+  }
+
+  // Sends a real email through the exact same path as every real trigger
+  // (send(), Resend, EmailLog) but to an address the admin chooses, filled
+  // with the same sampleValue data the "Visualizar" preview uses — so what
+  // lands in the inbox matches what the preview showed. logoUrl is
+  // excluded: it's a relative path in the registry (fine for the
+  // preview's own-origin trick in the frontend), but send() already
+  // computes the real absolute URL itself and would have it overridden by
+  // a broken relative one otherwise.
+  async sendTest(key: EmailTemplateKey, to: string): Promise<EmailSendResult> {
+    const sampleVariables = Object.fromEntries(
+      EMAIL_TEMPLATE_VARIABLES[key]
+        .filter((variable) => variable.name !== "logoUrl")
+        .map((variable) => [variable.name, variable.sampleValue]),
+    );
+
+    return this.send(key, to, sampleVariables, { force: true });
   }
 
   async sendAccountCreated(userId: string): Promise<void> {

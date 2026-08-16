@@ -63,16 +63,17 @@ describe("EmailService.send", () => {
     expect(subject).toContain("Empresa & Filhos Linha injetada");
   });
 
-  it("never throws even when Resend fails", async () => {
+  it("never throws even when Resend fails, and reports the failure", async () => {
     vi.spyOn(resendClient, "send").mockRejectedValue(new Error("network down"));
 
-    await expect(
-      emailService.send("ACCOUNT_CREATED", "user@example.com", {
-        accountName: "Empresa Teste",
-        email: "user@example.com",
-        planName: "Free",
-        loginUrl: "https://example.com/login",
-      }),
-    ).resolves.toBeUndefined();
+    const result = await emailService.send("ACCOUNT_CREATED", "user@example.com", {
+      accountName: "Empresa Teste",
+      email: "user@example.com",
+      planName: "Free",
+      loginUrl: "https://example.com/login",
+    });
+
+    expect(result.status).toBe("FAILED");
+    expect(result.error).toBe("network down");
   });
 });

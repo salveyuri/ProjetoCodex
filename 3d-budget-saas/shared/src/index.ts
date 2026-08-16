@@ -633,6 +633,17 @@ export interface EmailTemplateUpdatePayload {
   isActive?: boolean;
 }
 
+export type EmailSendStatus = "SENT" | "FAILED" | "SKIPPED_INACTIVE";
+
+export interface EmailTemplateTestPayload {
+  to: string;
+}
+
+export interface EmailTemplateTestResult {
+  status: EmailSendStatus;
+  error: string | null;
+}
+
 export interface ForgotPasswordPayload {
   email: string;
 }

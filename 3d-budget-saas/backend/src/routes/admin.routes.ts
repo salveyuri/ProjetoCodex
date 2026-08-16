@@ -46,3 +46,19 @@ adminRoutes.post(
   emailTestRateLimiter,
   (request, response, next) => adminController.testEmailTemplate(request, response, next),
 );
+
+adminRoutes.get("/system-formulas", (request, response, next) =>
+  adminController.systemFormulas(request, response, next),
+);
+
+adminRoutes.post("/system-formulas", (request, response, next) =>
+  adminController.createSystemFormula(request, response, next),
+);
+
+adminRoutes.patch("/system-formulas/:id", (request, response, next) =>
+  adminController.updateSystemFormula(request, response, next),
+);
+
+adminRoutes.delete("/system-formulas/:id", (request, response, next) =>
+  adminController.deleteSystemFormula(request, response, next),
+);

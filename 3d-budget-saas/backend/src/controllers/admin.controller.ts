@@ -4,6 +4,7 @@ import type {
   EmailTemplateResource,
   EmailTemplateTestResult,
   PlanResource,
+  SystemFormulaResource,
 } from "@3d-budget/shared";
 import type { Prisma } from "@prisma/client";
 import type { NextFunction, Request, Response } from "express";
@@ -17,6 +18,10 @@ import {
   toEmailTemplateResource,
 } from "../services/email-template.service";
 import { planService, toPlanResource } from "../services/plan.service";
+import {
+  systemFormulaService,
+  toSystemFormulaResource,
+} from "../services/system-formula.service";
 import { idParamSchema } from "../validators/common.validator";
 import { adminUserUpdateSchema } from "../validators/admin.validator";
 import {
@@ -24,6 +29,10 @@ import {
   emailTemplateUpdateSchema,
 } from "../validators/email-template.validator";
 import { planCreateSchema, planUpdateSchema } from "../validators/plan.validator";
+import {
+  systemFormulaSchema,
+  systemFormulaUpdateSchema,
+} from "../validators/system-formula.validator";
 
 const toValidationError = (error: ZodError): AppError =>
   new AppError("Invalid request payload.", 400, "VALIDATION_ERROR", {
@@ -212,6 +221,94 @@ export class AdminController {
         metadata: { to, key: template.key, result: result.status },
       });
       response.status(200).json(result);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async systemFormulas(
+    _request: Request,
+    response: Response<SystemFormulaResource[]>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const formulas = await systemFormulaService.listAll();
+      response.status(200).json(formulas);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createSystemFormula(
+    request: Request,
+    response: Response<SystemFormulaResource>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const input = systemFormulaSchema.parse(request.body);
+      const formula = await systemFormulaService.create(input);
+      await auditLogService.record({
+        action: input.isDefault
+          ? "ADMIN_SYSTEM_FORMULA_CREATED_AS_DEFAULT"
+          : "ADMIN_SYSTEM_FORMULA_CREATED",
+        entityType: "SystemFormula",
+        entityId: formula.id,
+        actorUserId: request.auth?.userId,
+        after: toAuditJson(formula),
+        metadata: { code: formula.code },
+      });
+      response.status(201).json(formula);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async updateSystemFormula(
+    request: Request,
+    response: Response<SystemFormulaResource>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { id } = idParamSchema.parse(request.params);
+      const input = systemFormulaUpdateSchema.parse(request.body);
+      const before = toSystemFormulaResource(await systemFormulaService.getById(id));
+      const formula = await systemFormulaService.update(id, input);
+      await auditLogService.record({
+        action:
+          !before.isDefault && formula.isDefault
+            ? "ADMIN_SYSTEM_FORMULA_DEFAULT_CHANGED"
+            : "ADMIN_SYSTEM_FORMULA_UPDATED",
+        entityType: "SystemFormula",
+        entityId: id,
+        actorUserId: request.auth?.userId,
+        before: toAuditJson(before),
+        after: toAuditJson(formula),
+        metadata: { changedFields: Object.keys(input) },
+      });
+      response.status(200).json(formula);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async deleteSystemFormula(
+    request: Request,
+    response: Response<void>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { id } = idParamSchema.parse(request.params);
+      const before = toSystemFormulaResource(await systemFormulaService.getById(id));
+      await systemFormulaService.delete(id);
+      await auditLogService.record({
+        action: "ADMIN_SYSTEM_FORMULA_DELETED",
+        entityType: "SystemFormula",
+        entityId: id,
+        actorUserId: request.auth?.userId,
+        before: toAuditJson(before),
+        metadata: { code: before.code },
+      });
+      response.status(204).send();
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);
     }

@@ -361,6 +361,14 @@ export default function FormulasPage() {
 
   const saveFormula = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (
+      selectedFormulaId &&
+      formulas.find((formula) => formula.id === selectedFormulaId)?.isSystem
+    ) {
+      return;
+    }
+
     setIsSavingFormula(true);
     setFormulaError(null);
 
@@ -538,6 +546,11 @@ export default function FormulasPage() {
     }
   };
 
+  const selectedFormula = formulas.find(
+    (formula) => formula.id === selectedFormulaId,
+  );
+  const isSelectedSystemFormula = selectedFormula?.isSystem ?? false;
+
   return (
     <MainLayout>
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -591,6 +604,9 @@ export default function FormulasPage() {
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
+                        {formula.isSystem ? (
+                          <StatusBadge tone="neutral">Sistema</StatusBadge>
+                        ) : null}
                         {formula.isDefault ? (
                           <StatusBadge tone="success">Padrao</StatusBadge>
                         ) : null}
@@ -607,7 +623,7 @@ export default function FormulasPage() {
                         className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-primary/40 px-3 text-sm font-semibold text-primary transition hover:bg-primary/10"
                       >
                         <Pencil className="h-4 w-4" />
-                        Editar
+                        {formula.isSystem ? "Ver" : "Editar"}
                       </button>
                     </div>
                   </div>
@@ -653,13 +669,24 @@ export default function FormulasPage() {
                       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                         <PanelTitle
                           icon={FlaskConical}
-                          title={selectedFormulaId ? "Editar formula" : "Nova formula"}
-                          subtitle="O backend faz dry run antes de salvar."
+                          title={
+                            isSelectedSystemFormula
+                              ? "Formula do sistema"
+                              : selectedFormulaId
+                                ? "Editar formula"
+                                : "Nova formula"
+                          }
+                          subtitle={
+                            isSelectedSystemFormula
+                              ? "Somente leitura — editavel so por um admin."
+                              : "O backend faz dry run antes de salvar."
+                          }
                         />
                         <div className="flex flex-wrap items-center gap-2">
                           <ToggleLabel
                             label="Ativa"
                             checked={formulaForm.isActive}
+                            disabled={isSelectedSystemFormula}
                             onChange={(checked) =>
                               setFormulaForm((current) => ({
                                 ...current,
@@ -670,6 +697,7 @@ export default function FormulasPage() {
                           <ToggleLabel
                             label="Padrao"
                             checked={formulaForm.isDefault}
+                            disabled={isSelectedSystemFormula}
                             onChange={(checked) =>
                               setFormulaForm((current) => ({
                                 ...current,
@@ -702,7 +730,8 @@ export default function FormulasPage() {
                             }))
                           }
                           required
-                          className="min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary"
+                          disabled={isSelectedSystemFormula}
+                          className="min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </label>
 
@@ -722,8 +751,9 @@ export default function FormulasPage() {
                           }}
                           required
                           rows={7}
+                          disabled={isSelectedSystemFormula}
                           className={cn(
-                            "min-h-44 w-full min-w-0 resize-y rounded-lg border bg-background px-3 py-3 font-mono text-sm outline-none transition",
+                            "min-h-44 w-full min-w-0 resize-y rounded-lg border bg-background px-3 py-3 font-mono text-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-60",
                             previewError || formulaError
                               ? "border-danger/60 focus:border-danger"
                               : "border-border focus:border-primary focus:shadow-[0_0_0_1px_rgba(99,102,241,0.35)]",
@@ -747,20 +777,20 @@ export default function FormulasPage() {
                         />
                       </div>
 
+                      {isSelectedSystemFormula ? (
+                        <Alert tone="warning">
+                          Formula do sistema — visivel pra todas as empresas, mas
+                          so um admin pode editar (Admin &gt; Formulas).
+                        </Alert>
+                      ) : null}
+
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        {selectedFormulaId ? (
+                        {selectedFormulaId && !isSelectedSystemFormula ? (
                           <button
                             type="button"
-                            disabled={
-                              formulas.find((formula) => formula.id === selectedFormulaId)
-                                ?.isSystem
-                            }
                             onClick={() => {
-                              const selected = formulas.find(
-                                (formula) => formula.id === selectedFormulaId,
-                              );
-                              if (selected) {
-                                void deleteFormula(selected);
+                              if (selectedFormula) {
+                                void deleteFormula(selectedFormula);
                               }
                             }}
                             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-danger/40 px-4 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50"
@@ -772,14 +802,16 @@ export default function FormulasPage() {
                           <span />
                         )}
 
-                        <button
-                          type="submit"
-                          disabled={isSavingFormula}
-                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-70"
-                        >
-                          <Save className="h-4 w-4" />
-                          {isSavingFormula ? "Validando..." : "Salvar formula"}
-                        </button>
+                        {!isSelectedSystemFormula ? (
+                          <button
+                            type="submit"
+                            disabled={isSavingFormula}
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-70"
+                          >
+                            <Save className="h-4 w-4" />
+                            {isSavingFormula ? "Validando..." : "Salvar formula"}
+                          </button>
+                        ) : null}
                       </div>
                     </form>
                   </Card>
@@ -983,15 +1015,23 @@ const ToggleLabel = ({
   label,
   checked,
   onChange,
+  disabled = false,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
 }) => (
-  <label className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm text-muted">
+  <label
+    className={cn(
+      "inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm text-muted",
+      disabled && "cursor-not-allowed opacity-50",
+    )}
+  >
     <input
       type="checkbox"
       checked={checked}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.checked)}
     />
     {label}
@@ -1073,12 +1113,13 @@ const Alert = ({
   tone,
 }: {
   children: React.ReactNode;
-  tone: "danger";
+  tone: "danger" | "warning";
 }) => (
   <div
     className={cn(
       "flex items-start gap-2 rounded-lg border px-3 py-2 text-sm",
       tone === "danger" && "border-danger/40 bg-danger/10 text-danger",
+      tone === "warning" && "border-warning/40 bg-warning/10 text-warning",
     )}
   >
     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

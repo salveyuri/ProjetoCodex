@@ -793,3 +793,43 @@ complexidade nova (ex.: uma claim extra ligando os dois). Na pratica o
 efeito e suave: o access token da aba atual continua valido ate expirar
 (~15min, `JWT_EXPIRES_IN`), so o proximo silent refresh e que vai falhar e
 pedir login de novo - nao e um logout imediato/brusco.
+
+## 2026-08-17 - Fórmulas do sistema: recurso global admin-only, não mais copia por empresa
+
+### Por que uma tabela nova em vez de "so proteger a edicao" na tabela existente
+
+A alternativa mais simples seria manter `ensureDefaultFormula` criando a
+copia por empresa, so adicionando uma trava (`isSystem` bloqueia `update`/
+`delete`). Rejeitada porque nao resolve o problema de fundo: teria N copias
+independentes (uma por empresa) do "mesmo" texto, cada uma podendo
+divergir silenciosamente se algum dia o texto padrao mudar (empresas
+antigas ficariam com a copia velha pra sempre, sem forma de sincronizar).
+Uma tabela global (`system_formulas`) com N=poucas linhas, editada uma vez
+pelo admin e refletida na hora pra todo mundo, e o modelo certo pra algo
+que e, por definicao, "do sistema" - a mesma logica ja usada pra
+`EmailTemplate` (tambem global, tambem admin-only).
+
+### `Quote.formulaId` continua so apontando pra formula da propria empresa
+
+Cogitado adicionar uma segunda FK (`Quote.systemFormulaId`) pra permitir
+que um orcamento referencie uma formula do sistema diretamente. Descartado
+por escopo: `formulaId` nao e exposto na UI de criacao de orcamento hoje
+(so via API, nao usado por nenhuma tela) - adicionar uma FK nova pra um
+caminho que ninguem usa e complexidade sem uso real. Em vez disso, quando
+o calculo resolve pra uma formula do sistema, ela e representada com
+`id: null` (mesma convencao que o fallback hardcoded `SYSTEM_DEFAULT_
+FORMULA` ja usava) - o orcamento salvo simplesmente nao guarda qual
+formula do sistema foi usada (so o resultado calculado, que e o que
+importa pro snapshot financeiro). Se um dia a UI passar a deixar escolher
+formula por orcamento, revisitar essa decisao.
+
+### Protecao contra edicao e em duas camadas, nao so no frontend
+
+O frontend esconde os controles de editar/salvar/excluir quando a formula
+selecionada e do sistema, mas a garantia de verdade e no backend:
+`FormulaService.update()/delete()` sempre passam por `findOwnedFormula`,
+que so busca na tabela `formulas` **filtrada por `companyId`** - um id de
+`system_formulas` nunca existe la, entao a tentativa cai automaticamente
+no mesmo 403 `FORMULA_FORBIDDEN` que qualquer id invalido/de outra empresa
+já causava. Nenhum código novo de "if isSystem, bloqueia" foi necessário
+no service - a segregação por tabela já resolve isso estruturalmente.

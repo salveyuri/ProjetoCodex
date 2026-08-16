@@ -1524,3 +1524,75 @@ opcao de trocar a senha nesta tela; (3) o campo E-mail nao deve nem aparecer
   alterada..." e o teste de integracao correspondente confirma que a sessao
   antiga parou de funcionar e a nova senha loga. Lint limpo em
   backend/frontend, 85/85 testes de backend.
+
+## 2026-08-17 - Fórmulas do sistema viram recurso global (admin), corrige bug real de taxas
+
+Pedido do Yuri, com print: numa empresa, aplicar taxa de cartao (5%) e
+administrativa (2%) estava **reduzindo** o preco em vez de aumentar. Pediu
+tambem uma tela admin pra criar/editar formulas padrao do sistema,
+visiveis pra todas as empresas mas nao editaveis por elas.
+
+**Causa raiz do bug (nao era so a formula padrao - era o design todo).**
+`FormulaService.ensureDefaultFormula()` criava, pra cada empresa, uma
+**copia privada e totalmente editavel** de "Formula Padrao do Sistema" (um
+registro normal na tabela `formulas`, sem nenhuma protecao a nivel de
+banco). A empresa do print tinha editado a propria copia removendo o termo
+aditivo de base, sobrando so
+`custo_base * (1+margem_lucro) * (taxa_cartao+taxa_administrativa)` - isso
+calcula so a FATIA da taxa (um valor pequeno, R$1,75 no print) em vez do
+preco total, parecendo "reduzir" o preco ao subir as taxas. Nada impedia
+isso - `update()` da formula da empresa nao tinha guarda nenhuma contra
+editar o "default" (so `delete()` bloqueava).
+
+**Correcao estrutural: fórmulas do sistema viram um recurso global,
+gerenciado só pelo admin.** Nova tabela `system_formulas` (migracao
+`20260817090000_system_formulas`, seed com 1 linha ja corrigida e
+`DELETE FROM formulas WHERE code = 'system_default'` - remove as copias
+privadas de toda empresa, inclusive as quebradas). `ensureDefaultFormula`
+foi **removido inteiramente** - nao existe mais copia por empresa pra
+quebrar.
+- `FormulaService.list()` agora mescla as formulas proprias da empresa com
+  todas as `SystemFormula` ativas (`isSystem: true` computado de verdade,
+  antes era so `code === "system_default"` - hack que so cobria uma
+  formula).
+- `FormulaService.getFormulaForCalculation()`: cadeia de fallback -
+  formulaId explicito → formula propria da empresa, depois formula do
+  sistema (403 se nao achar em nenhuma) → sem formulaId → default da
+  propria empresa, depois default global → `null` (constante hardcoded
+  `SYSTEM_DEFAULT_FORMULA`, so bootstrap se `system_formulas` estiver
+  vazia). Uma formula do sistema resolvida vem com `id: null` (sem linha
+  em `formulas`, nao da pra persistir em `Quote.formulaId` - mesmo
+  comportamento que o fallback hardcoded ja tinha; `formulaId` nao e
+  campo exposto na UI de criar orcamento hoje, entao sem impacto visivel).
+- Novo `SystemFormulaService` (`system-formula.service.ts`) - CRUD
+  completo, expressao validada so contra `INTERNAL_VARIABLES` (sem
+  variaveis customizadas de empresa, ja que e global), `isDefault` exclusivo
+  (marcar uma desmarca as outras numa transacao), delete bloqueado se for a
+  formula padrao (precisa promover outra primeiro).
+- Admin: `GET/POST/PATCH/DELETE /admin/system-formulas`
+  (`admin.controller.ts`/`admin.routes.ts`, mesmo padrao de audit log dos
+  Planos), tela nova `/admin/system-formulas` (tabela + modal criar/editar,
+  mesmo layout de `/admin/plans`), item novo no dropdown Admin do menu
+  (`Sigma` icon).
+- Empresa: biblioteca de formulas mostra badge "Sistema" nas formulas
+  globais; ao selecionar uma, o editor fica **read-only** (nome/equacao/
+  toggles desabilitados, sem botao Salvar nem Excluir, aviso "editavel so
+  por um admin") - reforcado tambem no backend (`findOwnedFormula` so
+  busca na tabela `formulas` da propria empresa, um id de `system_formulas`
+  nunca bate ali, 403 automatico mesmo se alguem burlar o frontend).
+- Testes novos (`system-formula.routes.test.ts`, 7): admin CRUD completo,
+  troca de padrao ao criar outra com `isDefault: true`, bloqueio de excluir
+  a padrao, rejeita variavel desconhecida na expressao, empresa nao-admin
+  bloqueada, empresa ve a formula do sistema na propria lista mas
+  PUT/DELETE nela falham, e o teste que reproduz o bug relatado: mesmo
+  orcamento calculado com taxas em 0% vs com 5%+2% - o preco com taxa **tem
+  que ser maior**, nunca menor. Suite: 85 -> 92 testes.
+- Validado ao vivo: recriado o cenario do print (maquina+material+orcamento
+  reais) - com taxas em 0%, preco R$12,27; com 5% cartao + 2%
+  administrativa, preco R$13,13 (aumentou, como devia). Biblioteca de
+  formulas mostra a formula do sistema com badge "Sistema"+"Padrao" e
+  botao "Ver" (nao "Editar"); selecionada, todos os campos ficam
+  desabilitados e nao ha botao Salvar/Excluir. Tela `/admin/system-formulas`
+  testada criando e excluindo uma formula extra, item "Admin Formulas"
+  confirmado no dropdown do menu. Lint/build limpos em
+  shared/backend/frontend, 92/92 testes de backend.

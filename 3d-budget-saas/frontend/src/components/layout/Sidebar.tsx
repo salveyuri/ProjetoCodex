@@ -20,6 +20,7 @@ import {
   PlusCircle,
   Settings,
   ShieldCheck,
+  Sigma,
   UsersRound,
   type LucideIcon,
   X,
@@ -56,6 +57,7 @@ const adminNavigation: NavigationItem[] = [
   { href: "/admin/users" as Route, label: "Admin Users", icon: UsersRound },
   { href: "/admin/plans" as Route, label: "Admin Planos", icon: Package },
   { href: "/admin/email-templates" as Route, label: "Admin E-mails", icon: Mail },
+  { href: "/admin/system-formulas" as Route, label: "Admin Formulas", icon: Sigma },
 ];
 
 export const Sidebar = ({

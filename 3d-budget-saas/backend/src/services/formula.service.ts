@@ -19,8 +19,6 @@ import {
   getAvailableVariableNames,
   type FormulaVariables,
   INTERNAL_VARIABLES,
-  SYSTEM_DEFAULT_FORMULA,
-  SYSTEM_DEFAULT_FORMULA_CODE,
   validateFormulaExpression,
 } from "./formula-engine";
 import {
@@ -28,6 +26,7 @@ import {
   settingsService,
 } from "./settings.service";
 import { auditLogService } from "./audit-log.service";
+import { systemFormulaService } from "./system-formula.service";
 
 type FormulaRow = {
   id: string;
@@ -142,14 +141,17 @@ const systemVariableMeta: Record<
 const toRuntimeValue = (value: number, type: CustomVariableType): number =>
   type === "PERCENTAGE" ? value / 100 : value;
 
-const toFormulaResource = (formula: FormulaRow): FormulaResource => ({
+const toFormulaResource = (
+  formula: FormulaRow,
+  isSystem = false,
+): FormulaResource => ({
   id: formula.id,
   code: formula.code,
   name: formula.name,
   expression: formula.expression,
   isActive: formula.isActive,
   isDefault: formula.isDefault,
-  isSystem: formula.code === SYSTEM_DEFAULT_FORMULA_CODE,
+  isSystem,
   createdAt: formula.createdAt.toISOString(),
   updatedAt: formula.updatedAt.toISOString(),
 });
@@ -188,14 +190,22 @@ const throwFormulaForbidden = (): never => {
 };
 
 export class FormulaService {
+  // Merges the company's own (editable) formulas with every active global
+  // system formula (read-only — see Contextos/Decisoes.md, 2026-08-17) so
+  // the "Biblioteca" list shows both.
   async list(companyId: string): Promise<FormulaResource[]> {
-    await this.ensureDefaultFormula(companyId);
-    const formulas = await prisma.formula.findMany({
-      where: { companyId },
-      orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
-    });
+    const [companyFormulas, systemFormulas] = await Promise.all([
+      prisma.formula.findMany({
+        where: { companyId },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+      }),
+      systemFormulaService.listActive(),
+    ]);
 
-    return formulas.map(toFormulaResource);
+    return [
+      ...companyFormulas.map((formula) => toFormulaResource(formula, false)),
+      ...systemFormulas.map((formula) => toFormulaResource(formula, true)),
+    ];
   }
 
   async variables(companyId: string): Promise<FormulaVariable[]> {
@@ -424,7 +434,7 @@ export class FormulaService {
   ): Promise<void> {
     const formula = await this.findOwnedFormula(companyId, formulaId);
 
-    if (formula.isDefault || formula.code === SYSTEM_DEFAULT_FORMULA_CODE) {
+    if (formula.isDefault) {
       throw new AppError(
         "Default formula cannot be deleted.",
         409,
@@ -456,71 +466,66 @@ export class FormulaService {
     });
   }
 
+  /**
+   * Resolves the formula to use for a calculation. Fallback chain:
+   * explicit formulaId → company's own formulas, then global system
+   * formulas (403 if it matches neither) → no formulaId → the company's
+   * own isDefault formula, then the global default → `null` (the caller,
+   * calculateQuoteBreakdown, falls back to the hardcoded SYSTEM_DEFAULT_
+   * FORMULA constant — a bootstrap safety net for the theoretical case
+   * where the system_formulas table has no rows at all).
+   *
+   * A resolved system formula is returned with `id: null` — it has no row
+   * in the `formulas` table, so nothing here can be persisted as
+   * `Quote.formulaId` (that FK only points at company formulas). This
+   * mirrors exactly how the hardcoded fallback constant already behaves.
+   */
   async getFormulaForCalculation(
     companyId: string,
     formulaId?: string,
-  ): Promise<FormulaRow | null> {
-    await this.ensureDefaultFormula(companyId);
-
+  ): Promise<{ id: string | null; name: string; expression: string } | null> {
     if (formulaId) {
-      const formula = await prisma.formula.findFirst({
+      const companyFormula = await prisma.formula.findFirst({
         where: { id: formulaId, companyId, isActive: true },
       });
 
-      if (formula) {
-        return formula;
+      if (companyFormula) {
+        return companyFormula;
+      }
+
+      const systemFormula = await systemFormulaService.getActiveById(formulaId);
+
+      if (systemFormula) {
+        return {
+          id: null,
+          name: systemFormula.name,
+          expression: systemFormula.expression,
+        };
       }
 
       throwFormulaForbidden();
     }
 
-    return prisma.formula.findFirst({
+    const companyDefault = await prisma.formula.findFirst({
       where: { companyId, isActive: true, isDefault: true },
       orderBy: { updatedAt: "desc" },
     });
-  }
 
-  async ensureDefaultFormula(companyId: string): Promise<void> {
-    const existingDefault = await prisma.formula.findFirst({
-      where: { companyId, isDefault: true },
-      select: { id: true, isActive: true },
-    });
-
-    if (existingDefault) {
-      if (!existingDefault.isActive) {
-        await prisma.formula.updateMany({
-          where: { id: existingDefault.id, companyId },
-          data: { isActive: true },
-        });
-      }
-
-      return;
+    if (companyDefault) {
+      return companyDefault;
     }
 
-    const existingSystem = await prisma.formula.findFirst({
-      where: { companyId, code: SYSTEM_DEFAULT_FORMULA_CODE },
-      select: { id: true },
-    });
+    const systemDefault = await systemFormulaService.getDefault();
 
-    if (existingSystem) {
-      await prisma.formula.updateMany({
-        where: { id: existingSystem.id, companyId },
-        data: { isDefault: true, isActive: true },
-      });
-      return;
+    if (systemDefault) {
+      return {
+        id: null,
+        name: systemDefault.name,
+        expression: systemDefault.expression,
+      };
     }
 
-    await prisma.formula.create({
-      data: {
-        companyId,
-        code: SYSTEM_DEFAULT_FORMULA.code,
-        name: SYSTEM_DEFAULT_FORMULA.name,
-        expression: SYSTEM_DEFAULT_FORMULA.expression,
-        coefficients: {},
-        isActive: true,
-        isDefault: true,
-      },
-    });
+    return null;
   }
 
   private async findOwnedFormula(

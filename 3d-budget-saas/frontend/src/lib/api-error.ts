@@ -41,6 +41,9 @@ const KNOWN_ERROR_MESSAGES: Record<string, string> = {
   RATE_LIMIT_RESET_PASSWORD: "Muitas tentativas. Aguarde um minuto e tente novamente.",
   CURRENT_PASSWORD_INVALID: "Senha atual incorreta.",
   RATE_LIMIT_CHANGE_PASSWORD: "Muitas tentativas. Aguarde um minuto e tente novamente.",
+  SYSTEM_FORMULA_NOT_FOUND: "Esta formula do sistema nao foi encontrada.",
+  SYSTEM_FORMULA_DEFAULT_DELETE_BLOCKED:
+    "A formula padrao nao pode ser excluida. Torne outra formula padrao primeiro.",
 };
 
 const DEFAULT_FALLBACK =

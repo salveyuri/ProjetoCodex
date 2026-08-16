@@ -517,6 +517,29 @@ export interface FormulaPayload {
   isDefault?: boolean;
 }
 
+// Global, admin-managed formulas — visible read-only to every company
+// (merged into their `GET /formulas` list, flagged via `FormulaResource.
+// isSystem`), never editable/deletable by them. Same shape as
+// FormulaResource/FormulaPayload minus `isSystem` (a system formula is
+// never NOT a system formula).
+export interface SystemFormulaResource {
+  id: string;
+  code: string;
+  name: string;
+  expression: string;
+  isActive: boolean;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SystemFormulaPayload {
+  name: string;
+  expression: string;
+  isActive?: boolean;
+  isDefault?: boolean;
+}
+
 export interface FormulaVariable {
   name: string;
   label: string;

@@ -302,6 +302,23 @@ model Formula {
   @@map("formulas")
 }
 
+// Global, admin-managed formulas. Visible read-only to every company (merged
+// into their formula list) but never editable/deletable by them - only via
+// the admin screen. Replaces the old per-company mutable copy of "the
+// system default" (see Contextos/Decisoes.md, 2026-08-17).
+model SystemFormula {
+  id         String   @id @default(uuid()) @db.Uuid
+  code       String   @unique
+  name       String
+  expression String
+  isActive   Boolean  @default(true) @map("is_active")
+  isDefault  Boolean  @default(false) @map("is_default")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("system_formulas")
+}
+
 model Quote {
   id               String      @id @default(uuid()) @db.Uuid
   companyId        String      @map("company_id") @db.Uuid

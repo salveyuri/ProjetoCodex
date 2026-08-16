@@ -1,8 +1,12 @@
 "use client";
 
-import type { EmailTemplateResource, EmailTemplateUpdatePayload } from "@3d-budget/shared";
+import type {
+  EmailTemplateResource,
+  EmailTemplateUpdatePayload,
+  EmailTemplateVariable,
+} from "@3d-budget/shared";
 import axios from "axios";
-import { Edit3, Mail, RefreshCcw, Save, ShieldAlert, X } from "lucide-react";
+import { Edit3, Eye, Mail, RefreshCcw, Save, ShieldAlert, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
@@ -39,11 +43,49 @@ const toPayload = (form: EmailTemplateFormState): EmailTemplateUpdatePayload => 
   isActive: form.isActive,
 });
 
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+// Mirrors EmailService's substitution rule on the backend (escape every
+// variable except pre-rendered "...Html" fragments) so the preview matches
+// what a real send would produce. Uses each variable's sampleValue since
+// there's no real user/company/payment to pull data from here — logoUrl
+// specifically resolves against this app's own origin, where the real logo
+// file (frontend/public/logo_full.webp) actually lives.
+const buildPreviewHtml = (
+  bodyHtml: string,
+  variables: EmailTemplateVariable[],
+): string => {
+  const sampleValues: Record<string, string> = {};
+
+  for (const variable of variables) {
+    sampleValues[variable.name] =
+      variable.name === "logoUrl"
+        ? `${window.location.origin}${variable.sampleValue}`
+        : variable.sampleValue;
+  }
+
+  return bodyHtml.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+    if (!(key in sampleValues)) {
+      return "";
+    }
+
+    const value = sampleValues[key];
+    return key.endsWith("Html") ? value : escapeHtml(value);
+  });
+};
+
 export default function AdminEmailTemplatesPage() {
   const { isLoading: isAuthLoading, token, refreshUser } = useAuth();
   const [templates, setTemplates] = useState<EmailTemplateResource[]>([]);
   const [selected, setSelected] = useState<EmailTemplateResource | null>(null);
   const [form, setForm] = useState<EmailTemplateFormState | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [isAccessDenied, setIsAccessDenied] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,6 +143,10 @@ export default function AdminEmailTemplatesPage() {
   const closeModal = () => {
     setSelected(null);
     setForm(null);
+  };
+
+  const openPreview = (bodyHtml: string, variables: EmailTemplateVariable[]) => {
+    setPreviewHtml(buildPreviewHtml(bodyHtml, variables));
   };
 
   const insertVariable = (name: string) => {
@@ -253,15 +299,28 @@ export default function AdminEmailTemplatesPage() {
                           </StatusBadge>
                         </td>
                         <td className="px-5 py-4">
-                          <button
-                            type="button"
-                            title="Editar"
-                            aria-label="Editar"
-                            onClick={() => openModal(template)}
-                            className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              title="Visualizar"
+                              aria-label="Visualizar"
+                              onClick={() =>
+                                openPreview(template.bodyHtml, template.availableVariables)
+                              }
+                              className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Editar"
+                              aria-label="Editar"
+                              onClick={() => openModal(template)}
+                              className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -368,15 +427,61 @@ export default function AdminEmailTemplatesPage() {
                 />
               </label>
 
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-70"
-              >
-                <Save className="h-4 w-4" />
-                Salvar
-              </button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => openPreview(form.bodyHtml, selected.availableVariables)}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-primary transition hover:bg-primary/20"
+                >
+                  <Eye className="h-4 w-4" />
+                  Visualizar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-70"
+                >
+                  <Save className="h-4 w-4" />
+                  Salvar
+                </button>
+              </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {previewHtml !== null ? (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center bg-black/70 px-4 py-6"
+          onClick={() => setPreviewHtml(null)}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-background shadow-panel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-border p-4">
+              <div>
+                <h2 className="text-lg font-semibold">Pre-visualizacao</h2>
+                <p className="text-xs text-muted">
+                  Renderizado com valores de exemplo - nada e enviado de verdade.
+                </p>
+              </div>
+              <button
+                type="button"
+                title="Fechar"
+                aria-label="Fechar"
+                onClick={() => setPreviewHtml(null)}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <iframe
+              title="Pre-visualizacao do e-mail"
+              srcDoc={previewHtml}
+              sandbox=""
+              className="h-[70vh] w-full bg-white"
+            />
           </div>
         </div>
       ) : null}

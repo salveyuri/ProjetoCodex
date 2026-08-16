@@ -1213,3 +1213,41 @@ commitar.
   confirmada/renovada continuam dependendo do webhook de producao ser
   cadastrado de verdade (sao reacao a um evento que aconteceu, nao dá pra
   "puxar" do mesmo jeito que a fatura futura).
+
+## 2026-08-16 - Botao de pre-visualizar nos templates de e-mail
+
+Pedido do Yuri: botao "Visualizar" na tela `/admin/email-templates` que
+abre um modal com o HTML renderizado.
+
+- `backend/src/services/email-templates.ts`: cada variavel do registro
+  `EMAIL_TEMPLATE_VARIABLES` ganhou `sampleValue` (valor ficticio mas
+  plausivel - "Oficina 3D Exemplo", "R$ 49,90", etc. - `itemsHtml` ganhou
+  um par de linhas de tabela de exemplo). Nunca enviado de verdade, so
+  alimenta a pre-visualizacao; `EmailService.send()` continua preenchendo
+  com dado real. Tipo `EmailTemplateVariable` (shared) ganhou o mesmo
+  campo.
+- `admin/email-templates/page.tsx`: `buildPreviewHtml()` espelha a mesma
+  regra de substituicao do backend (escapa toda variavel, exceto chaves
+  terminadas em `Html`, que passam raw) - a pre-visualizacao mostra
+  exatamente o que um envio de verdade produziria. `logoUrl`
+  especificamente resolve pro proprio dominio do app
+  (`window.location.origin + sampleValue`), ja que o arquivo real
+  (`frontend/public/logo_full.webp`) existe la - a logo aparece de
+  verdade na previa, nao um link fake.
+- Botao "Visualizar" (icone `Eye`) em dois lugares, mesmo modal: na
+  coluna Acoes da tabela (previa do template salvo) e dentro do modal de
+  edicao, ao lado de Salvar (previa do HTML sendo editado, **antes** de
+  salvar - util pro fluxo de ajustar o HTML e conferir sem precisar
+  salvar toda hora). HTML renderizado num `<iframe sandbox="" srcDoc=...>`
+  - sandbox vazio (sem `allow-same-origin`, sem scripts) isola o preview
+  do resto da pagina admin, e sem risco mesmo que o HTML tenha algo
+  malicioso (so admin edita, mas defesa em profundidade nao custa nada
+  aqui).
+- Validado: lint+build de shared/backend/frontend limpos, 65/65 testes de
+  backend. Testado ao vivo no navegador: clicar em Visualizar na tabela
+  abre o modal com `{{accountName}}` etc. todos substituidos (confirmado
+  via `srcdoc` sem nenhum `{{` residual), logo resolvendo pro arquivo real
+  local; editado o textarea sem salvar e clicado Visualizar de dentro do
+  modal - a previa mostrou o texto editado (nao o salvo), confirmando que
+  reflete o estado atual do formulario; fechado sem salvar, confirmado
+  que o template no banco ficou intocado.

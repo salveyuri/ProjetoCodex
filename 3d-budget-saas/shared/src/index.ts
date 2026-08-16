@@ -610,6 +610,7 @@ export type EmailTemplateKey =
 export interface EmailTemplateVariable {
   name: string;
   description: string;
+  sampleValue: string;
 }
 
 export interface EmailTemplateResource {

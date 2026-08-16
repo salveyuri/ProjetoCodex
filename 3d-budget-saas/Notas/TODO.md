@@ -209,6 +209,21 @@ Passo") em 2026-08-12.
       vai pro dono da conta, não pro cliente. Se um dia fizer sentido
       mandar direto pro cliente, precisa de um campo novo + migração.
 
+## Perfil do usuário + preferências de e-mail (implementado em 2026-08-16)
+
+- [x] Aba "Perfil" em `/dashboard/settings` (nome editável, e-mail
+      travado, 3 preferências de e-mail: financeiro/orçamentos/
+      newsletter). `PATCH /auth/me`, `User.name` + 3 booleanos novos.
+      Contas/reset de senha nunca são bloqueados por preferência. Ver
+      `Contextos/Decisoes.md` (2026-08-16).
+- [ ] Newsletter ainda não existe como funcionalidade de verdade — só o
+      toggle de preferência foi criado, pronto pra quando existir um
+      disparo de newsletter de fato.
+- [ ] Dropdown "Admin" no menu lateral agrupa os 4 links admin — sem
+      pendência conhecida, só registrando que existe caso o Yuri queira
+      adicionar mais itens admin no futuro (entram automaticamente no
+      mesmo grupo via `adminNavigation` em `Sidebar.tsx`).
+
 ## Próximo passo geral
 
 Pós-MVP: preparar deploy, seeds, testes automatizados, monitoramento externo

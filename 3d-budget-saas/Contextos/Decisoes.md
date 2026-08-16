@@ -652,3 +652,81 @@ disparos com o `customerName` e destinatario corretos.
 real) e `email.service.test.ts` (3, unitario - escaping de HTML,
 nao-escaping de assunto, `send()` nunca lanca mesmo com o Resend
 falhando). Suite total: 58 -> 65 testes, todos passando.
+
+## 2026-08-16 - Perfil do usuario + preferencias de e-mail por categoria
+
+Duas mudancas relacionadas: menu Admin virou um grupo colapsavel, e o
+usuario ganhou uma tela de perfil onde edita seu proprio nome e escolhe
+quais categorias de e-mail automatico quer receber.
+
+### Preferencias sao por usuario, nao por empresa
+
+`notifyFinancialEmails`/`notifyQuoteEmails`/`notifyNewsletter` ficam em
+`User`, nao em `Company` - segue o mesmo raciocinio de `fuso_horario` no
+projeto `atendimentos_app` (preferencia de exibicao/notificacao e
+individual de quem usa o sistema, nao da empresa). Como hoje so existe um
+`User` por `Company` (1:1), na pratica o efeito e o mesmo, mas o campo no
+lugar certo evita ter que migrar de novo se um dia a empresa tiver
+multiplos usuarios.
+
+### Gating vive nos metodos de conveniencia, nao no `send()` generico
+
+`EmailService.send()` so recebe `to: string` cru, sem nocao de qual
+`User`/`Company` esta por tras - nao da pra checar preferencia ali sem
+inventar contexto que ele nao tem. A checagem foi colocada em cada um dos
+4 metodos de conveniencia que ja tinham esse contexto
+(`sendSubscriptionConfirmed/Renewed/Expiring` = financeiro,
+`sendQuoteSummary` = orcamentos), logo apos o `select` que ja buscava o
+`user.email` - so precisou adicionar o booleano relevante no mesmo
+`select`. `sendAccountCreated` e `sendPasswordReset` foram deliberadamente
+deixados de fora dessa checagem (e de qualquer checagem futura de
+preferencia) - e um requisito duro do Yuri, nao uma omissao.
+
+Quando uma preferencia bloqueia o envio, grava um `EmailLog` com status
+novo `SKIPPED_PREFERENCE` em vez de simplesmente nao fazer nada -
+mesmo espirito do `SKIPPED_INACTIVE` que ja existia pra template
+desativado, mantem a tela de Logs como fonte unica de "o que aconteceu
+com cada tentativa de envio", incluindo os que nunca chegaram a tentar.
+
+### `User.name` fecha uma lacuna preexistente
+
+`fullName` sempre foi validado no cadastro (`registerSchema`) mas nunca
+gravado em lugar nenhum - um campo morto. Adicionar `User.name` e gravar
+`input.fullName` nele em `register()` resolveu isso como efeito colateral
+natural de dar ao usuario algo para editar no perfil (o pedido era
+"editar informacoes, exceto o e-mail" - nome e a informacao pessoal obvia
+pra isso, sem inventar campo novo sem uso).
+
+### E-mail imutavel garantido no validador, nao so na UI
+
+`updateProfileSchema` usa `.strict()` e nao inclui `email` no shape -
+entao mandar `email` no payload de `PATCH /auth/me` derruba a
+requisicao inteira com 400 `VALIDATION_ERROR`, em vez de silenciosamente
+ignorar o campo. Reforça a regra no lugar que importa (o contrato da API),
+nao so escondendo o campo no formulario do frontend.
+
+### Atualizacao do usuario local sem rotacionar sessao
+
+`AuthContext` ganhou `updateUser(nextUser)`, que so expoe o `persistUser`
+que ja existia internamente (grava em `localStorage` + `setUser`). A tela
+de Perfil usa isso depois de um `PATCH /auth/me` bem-sucedido, em vez de
+chamar `refreshUser()` (que existia antes) - `refreshUser()` troca o
+refresh token cookie a cada chamada (rotacao de sessao), efeito colateral
+desnecessario so pra atualizar o nome/preferencias em tela.
+
+### Dropdown Admin no menu lateral
+
+Os 4 links `/admin/*` (BI, Users, Planos, E-mails) saíram do array flat
+`navigation` pra um `adminNavigation` separado, renderizado dentro de um
+grupo colapsavel com estado proprio (`useState`). Nao usa nenhuma lib de
+menu nova - e um `<div>` com um botao toggle (`ChevronDown` que gira) e
+uma lista condicional por baixo, seguindo exatamente os mesmos padroes de
+classe Tailwind (collapsed/mobile/ativo) que os outros itens do menu ja
+usavam.
+
+### Testes novos
+
+5 em `auth.routes.test.ts` (`PATCH /auth/me`) e 3 em
+`email.service.test.ts` (gating de preferencia, incluindo confirmar que
+`sendAccountCreated` ignora as 3 preferencias). Suite total: 70 -> 78
+testes, todos passando.

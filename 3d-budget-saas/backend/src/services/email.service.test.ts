@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import request from "supertest";
+import { app } from "../app";
+import { prisma } from "../config/prisma";
+import { registerTestCompany } from "../test-utils/register-test-company";
 import { emailService } from "./email.service";
 import { resendClient } from "./resend-client";
+
+const authHeader = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 /**
  * Same convention as the route integration tests: hits the real dev
@@ -75,5 +81,122 @@ describe("EmailService.send", () => {
 
     expect(result.status).toBe("FAILED");
     expect(result.error).toBe("network down");
+  });
+});
+
+describe("Email preference gating", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("skips sendQuoteSummary when the user opted out of quote emails, and logs SKIPPED_PREFERENCE", async () => {
+    const company = await registerTestCompany(app, "email-pref-quotes");
+
+    await request(app)
+      .patch("/api/auth/me")
+      .set(authHeader(company.token))
+      .send({ emailPreferences: { quotes: false } });
+
+    const machine = await request(app)
+      .post("/api/machines")
+      .set(authHeader(company.token))
+      .send({ name: "Pref Machine", type: "FDM", price: 3000, powerConsumptionWatts: 120 });
+    const material = await request(app)
+      .post("/api/materials")
+      .set(authHeader(company.token))
+      .send({
+        brand: "PLA Pref",
+        type: "FILAMENT",
+        color: "Azul",
+        totalWeightGrams: 1000,
+        purchasePrice: 100,
+      });
+    const quote = await request(app)
+      .post("/api/quotes")
+      .set(authHeader(company.token))
+      .send({
+        customerName: "Cliente Pref",
+        items: [
+          {
+            modelName: "Peca",
+            weightGrams: 100,
+            printTimeHours: 2,
+            machineId: machine.body.id,
+            materialId: material.body.id,
+          },
+        ],
+      });
+
+    const sendSpy = vi.spyOn(resendClient, "send");
+
+    await emailService.sendQuoteSummary(company.companyId, quote.body.id, "APPROVED");
+
+    expect(sendSpy).not.toHaveBeenCalled();
+    const log = await prisma.emailLog.findFirst({
+      where: { templateKey: "QUOTE_SUMMARY", toEmail: company.email },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(log?.status).toBe("SKIPPED_PREFERENCE");
+
+    // Opting back in lets the same trigger send normally.
+    await request(app)
+      .patch("/api/auth/me")
+      .set(authHeader(company.token))
+      .send({ emailPreferences: { quotes: true } });
+    sendSpy.mockResolvedValue({ id: "resend-id", error: null });
+
+    await emailService.sendQuoteSummary(company.companyId, quote.body.id, "APPROVED");
+
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips sendSubscriptionConfirmed when the user opted out of financial emails", async () => {
+    const company = await registerTestCompany(app, "email-pref-financial");
+
+    await request(app)
+      .patch("/api/auth/me")
+      .set(authHeader(company.token))
+      .send({ emailPreferences: { financial: false } });
+
+    const payment = await prisma.payment.create({
+      data: {
+        companyId: company.companyId,
+        asaasPaymentId: `pay_pref_${Date.now()}`,
+        status: "CONFIRMED",
+        value: 49.9,
+        dueDate: new Date(),
+        rawPayload: {},
+      },
+    });
+
+    const sendSpy = vi.spyOn(resendClient, "send");
+
+    await emailService.sendSubscriptionConfirmed(company.companyId, payment.id);
+
+    expect(sendSpy).not.toHaveBeenCalled();
+    const log = await prisma.emailLog.findFirst({
+      where: { templateKey: "SUBSCRIPTION_CONFIRMED", toEmail: company.email },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(log?.status).toBe("SKIPPED_PREFERENCE");
+  });
+
+  it("never gates sendAccountCreated on any preference", async () => {
+    const company = await registerTestCompany(app, "email-pref-account-created");
+
+    await request(app)
+      .patch("/api/auth/me")
+      .set(authHeader(company.token))
+      .send({
+        emailPreferences: { financial: false, quotes: false, newsletter: false },
+      });
+
+    const sendSpy = vi
+      .spyOn(resendClient, "send")
+      .mockResolvedValue({ id: "resend-id", error: null });
+
+    await emailService.sendAccountCreated(company.userId);
+
+    expect(sendSpy).toHaveBeenCalledTimes(1);
   });
 });

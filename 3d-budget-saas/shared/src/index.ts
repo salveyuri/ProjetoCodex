@@ -107,12 +107,25 @@ export interface AuthCompany {
   subscriptionStatus: SubscriptionStatus;
 }
 
+export interface EmailPreferences {
+  financial: boolean;
+  quotes: boolean;
+  newsletter: boolean;
+}
+
 export interface AuthUser {
   id: string;
   email: string;
+  name: string | null;
   role: UserRole;
   isActive: boolean;
+  emailPreferences: EmailPreferences;
   company: AuthCompany | null;
+}
+
+export interface UpdateProfilePayload {
+  name?: string;
+  emailPreferences?: Partial<EmailPreferences>;
 }
 
 export interface AuthResponse {
@@ -633,7 +646,11 @@ export interface EmailTemplateUpdatePayload {
   isActive?: boolean;
 }
 
-export type EmailSendStatus = "SENT" | "FAILED" | "SKIPPED_INACTIVE";
+export type EmailSendStatus =
+  | "SENT"
+  | "FAILED"
+  | "SKIPPED_INACTIVE"
+  | "SKIPPED_PREFERENCE";
 
 export interface EmailTemplateTestPayload {
   to: string;

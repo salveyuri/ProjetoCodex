@@ -1302,3 +1302,79 @@ mecanismo de envio do sistema.
   com o valor de exemplo substituido ("Oficina 3D Exemplo") e que o
   `AuditLog` registrou `ADMIN_EMAIL_TEMPLATE_TESTED` com o resultado.
   70/70 testes de backend, lint/build de shared/backend/frontend limpos.
+
+## 2026-08-16 - Dropdown Admin no menu + Perfil do usuario e preferencias de e-mail
+
+Pedido do Yuri: (1) transformar os 4 itens "Admin *" do menu lateral num
+unico dropdown "Admin" que expande as opcoes por baixo; (2) tela de perfil
+onde o usuario edita suas proprias informacoes (menos o e-mail, que fica
+travado) e escolhe quais categorias de e-mail quer receber - financeiros
+(assinatura), orcamentos (exportado/aprovado) e newsletter (ainda nao
+existe, so o toggle por enquanto); e-mail de conta criada e de reset de
+senha nunca podem ser bloqueados por essas preferencias.
+
+- `Sidebar.tsx`: os 4 links admin saíram do array flat `navigation` e
+  viraram `adminNavigation`, renderizados dentro de um bloco colapsavel
+  (`useState(isAdminSectionActive)` como estado inicial, assim quem ja
+  esta numa pagina `/admin/*` chega com o grupo aberto). Segue exatamente
+  os mesmos padroes visuais dos itens normais (colapsado/mobile/estado
+  ativo via `pathname.startsWith`), so com um botao toggle (`ChevronDown`
+  que gira) no lugar do link no nivel do grupo.
+- Migracao `20260816090000_user_profile_and_email_preferences`: adiciona
+  `users.name` (nullable) e 3 booleanos - `notify_financial_emails`
+  (default true), `notify_quote_emails` (default true),
+  `notify_newsletter` (default false). Aproveitado pra fechar uma lacuna
+  que ja existia: `fullName` sempre foi validado no registro mas nunca
+  persistido em lugar nenhum - agora `register()` grava em `User.name`.
+- `AuthUser` (shared) ganhou `name: string | null` e
+  `emailPreferences: EmailPreferences` (`{financial, quotes, newsletter}`).
+  Novo `UpdateProfilePayload` (name opcional, emailPreferences parcial
+  opcional) - sem campo `email` nenhum, e o `updateProfileSchema`
+  (`.strict()`) do backend rejeita a requisicao inteira (400
+  VALIDATION_ERROR) se o cliente tentar mandar `email` junto, entao a
+  trava "nao da pra mudar e-mail por aqui" e reforcada no validador, nao
+  so por omissao na UI.
+- Novo `PATCH /auth/me` (mesmo `authMiddleware` do `GET /auth/me`,
+  qualquer usuario autenticado edita so o proprio perfil, sem checagem de
+  admin). `AuthService.updateProfile()` faz update parcial (so grava os
+  campos realmente enviados) e devolve o `AuthUser` fresco.
+- Gating dos e-mails: os 4 metodos que ja buscavam
+  `company.user.select({email:true})` em `email.service.ts`
+  (`sendSubscriptionConfirmed/Renewed/Expiring` e `sendQuoteSummary`)
+  passaram a selecionar tambem o booleano relevante e, se desligado,
+  gravam um `EmailLog` com status novo `SKIPPED_PREFERENCE` (mesmo
+  espirito do `SKIPPED_INACTIVE` que ja existia pra template desativado -
+  fica visivel pro admin na tela de Logs) e retornam sem chamar `send()`.
+  `sendAccountCreated`/`sendPasswordReset` foram **propositalmente
+  intocados** - continuam disparando sempre, sem checar preferencia
+  nenhuma, exatamente como pedido.
+- Nova aba "Perfil" em `/dashboard/settings` (mesmo padrao de abas ja
+  usado por Impressoras/Materiais/Custos Fixos): campo Nome (editavel),
+  campo E-mail (`disabled`, com nota explicando por que), 3 checkboxes de
+  preferencia com legenda do que cada uma cobre. Salvar chama
+  `PATCH /auth/me` e atualiza o `AuthContext` direto com a resposta (novo
+  `updateUser` exposto no contexto, que so chama o `persistUser` que ja
+  existia internamente) - evitado usar `refreshUser()` pra isso de
+  proposito, porque ele rotaciona o refresh token toda vez (efeito
+  colateral desnecessario so pra recarregar o perfil).
+- Testes novos: 5 em `auth.routes.test.ts` (`PATCH /auth/me` - sem token,
+  atualiza nome, atualiza preferencias sem mexer no nome, rejeita payload
+  com `email` - 400 VALIDATION_ERROR, confirmado que o `GET /me` depois
+  mostra o e-mail original intocado -, rejeita payload vazio) e 3 em
+  `email.service.test.ts` (`sendQuoteSummary` pula e grava
+  `SKIPPED_PREFERENCE` quando desligado, volta a mandar normal quando
+  reativado via o proprio `PATCH /auth/me`; `sendSubscriptionConfirmed`
+  pula do mesmo jeito; `sendAccountCreated` manda mesmo com as 3
+  preferencias desligadas). Suite: 70 -> 78 testes, todos passando.
+- Precisou parar o `tsx watch` do backend duas vezes (uma pra
+  `prisma generate` depois da migracao, outra pra `npm run build` -
+  mesmo lock de DLL do Windows ja documentado) e religar depois - Yuri
+  autorizou eu mesmo encerrar/religar o processo nesta sessao.
+- Validado ao vivo no navegador: promovido temporariamente um usuario de
+  teste a ADMIN via `prisma.user.update` direto (revertido pra USER no
+  final), confirmado que o dropdown "Admin" aparece so pra ADMIN e expande
+  os 4 links certos; na aba Perfil, editado nome e ligado o toggle de
+  newsletter, salvo (toast "Perfil atualizado."), recarregado a pagina e
+  confirmado que persistiu (nome e checkbox), com o campo E-mail sempre
+  `disabled` mostrando o e-mail original. Lint/build limpos em
+  shared/backend/frontend, 78/78 testes de backend.

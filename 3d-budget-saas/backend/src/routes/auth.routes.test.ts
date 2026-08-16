@@ -115,6 +115,87 @@ describe("GET /api/auth/me", () => {
   });
 });
 
+describe("PATCH /api/auth/me", () => {
+  it("rejects requests without a bearer token", async () => {
+    const response = await request(app).patch("/api/auth/me").send({ name: "Nova" });
+
+    expect(response.status).toBe(401);
+  });
+
+  it("updates the display name and returns the fresh user, register() also fills it in initially", async () => {
+    const email = uniqueEmail("profile-name");
+    const registerResponse = await registerAsNewClient(email);
+    const token = registerResponse.body.token as string;
+    expect(registerResponse.body.user.name).toBe("Integration Test");
+
+    const response = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Novo Nome" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.name).toBe("Novo Nome");
+    expect(response.body.email).toBe(email);
+  });
+
+  it("updates email preferences without touching the name", async () => {
+    const email = uniqueEmail("profile-prefs");
+    const registerResponse = await registerAsNewClient(email);
+    const token = registerResponse.body.token as string;
+    expect(registerResponse.body.user.emailPreferences).toEqual({
+      financial: true,
+      quotes: true,
+      newsletter: false,
+    });
+
+    const response = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ emailPreferences: { financial: false, newsletter: true } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.emailPreferences).toEqual({
+      financial: false,
+      quotes: true,
+      newsletter: true,
+    });
+    expect(response.body.name).toBe("Integration Test");
+  });
+
+  it("rejects a payload that tries to change the email", async () => {
+    const email = uniqueEmail("profile-email-locked");
+    const registerResponse = await registerAsNewClient(email);
+    const token = registerResponse.body.token as string;
+
+    const response = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: "someone-else@example.com" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
+
+    const meResponse = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`);
+    expect(meResponse.body.email).toBe(email);
+  });
+
+  it("rejects an empty payload", async () => {
+    const email = uniqueEmail("profile-empty");
+    const registerResponse = await registerAsNewClient(email);
+    const token = registerResponse.body.token as string;
+
+    const response = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`)
+      .send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
+  });
+});
+
 describe("POST /api/auth/refresh", () => {
   it("exchanges a valid refresh cookie for a new access token", async () => {
     const email = uniqueEmail("refresh");

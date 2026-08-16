@@ -23,6 +23,10 @@ authRoutes.get("/me", authMiddleware, (request, response, next) =>
   authController.me(request, response, next),
 );
 
+authRoutes.patch("/me", authMiddleware, (request, response, next) =>
+  authController.updateProfile(request, response, next),
+);
+
 // refresh/logout/logout-all intentionally don't require authMiddleware:
 // they only need the httpOnly refresh cookie, so they keep working even
 // when the short-lived access token has already expired.

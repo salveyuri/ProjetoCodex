@@ -80,6 +80,25 @@ export interface EmailSendResult {
 }
 
 export class EmailService {
+  // Records an opt-out skip in EmailLog (mirrors the SKIPPED_INACTIVE path
+  // in send()) so it's still visible to an admin in the Logs screen, even
+  // though no template render/Resend call happens.
+  private async skipForPreference(key: EmailTemplateKey, to: string): Promise<void> {
+    await prisma.emailLog.create({
+      data: {
+        templateKey: key,
+        toEmail: to,
+        subject: key,
+        status: "SKIPPED_PREFERENCE",
+      },
+    });
+    logger.info(
+      { key, to },
+      "Recipient opted out of this email category — skipping send",
+    );
+  }
+
+
   // Renders and sends one templated email. Never throws — most callers
   // fire this without awaiting (see the call sites in auth.service.ts,
   // webhook.controller.ts, quote.service.ts) because a Resend outage must
@@ -226,12 +245,20 @@ export class EmailService {
     const [company, payment] = await Promise.all([
       prisma.company.findUnique({
         where: { id: companyId },
-        include: { user: { select: { email: true } }, plan: { select: { name: true } } },
+        include: {
+          user: { select: { email: true, notifyFinancialEmails: true } },
+          plan: { select: { name: true } },
+        },
       }),
       prisma.payment.findUnique({ where: { id: paymentId } }),
     ]);
 
     if (!company || !payment) {
+      return;
+    }
+
+    if (!company.user.notifyFinancialEmails) {
+      await this.skipForPreference("SUBSCRIPTION_CONFIRMED", company.user.email);
       return;
     }
 
@@ -255,12 +282,20 @@ export class EmailService {
     const [company, payment] = await Promise.all([
       prisma.company.findUnique({
         where: { id: companyId },
-        include: { user: { select: { email: true } }, plan: { select: { name: true } } },
+        include: {
+          user: { select: { email: true, notifyFinancialEmails: true } },
+          plan: { select: { name: true } },
+        },
       }),
       prisma.payment.findUnique({ where: { id: paymentId } }),
     ]);
 
     if (!company || !payment) {
+      return;
+    }
+
+    if (!company.user.notifyFinancialEmails) {
+      await this.skipForPreference("SUBSCRIPTION_RENEWED", company.user.email);
       return;
     }
 
@@ -285,12 +320,20 @@ export class EmailService {
     const [company, payment] = await Promise.all([
       prisma.company.findUnique({
         where: { id: companyId },
-        include: { user: { select: { email: true } }, plan: { select: { name: true } } },
+        include: {
+          user: { select: { email: true, notifyFinancialEmails: true } },
+          plan: { select: { name: true } },
+        },
       }),
       prisma.payment.findUnique({ where: { id: paymentId } }),
     ]);
 
     if (!company || !payment || !payment.dueDate) {
+      return;
+    }
+
+    if (!company.user.notifyFinancialEmails) {
+      await this.skipForPreference("SUBSCRIPTION_EXPIRING", company.user.email);
       return;
     }
 
@@ -320,7 +363,7 @@ export class EmailService {
     const [company, quote] = await Promise.all([
       prisma.company.findUnique({
         where: { id: companyId },
-        include: { user: { select: { email: true } } },
+        include: { user: { select: { email: true, notifyQuoteEmails: true } } },
       }),
       prisma.quote.findFirst({
         where: { id: quoteId, companyId },
@@ -329,6 +372,11 @@ export class EmailService {
     ]);
 
     if (!company || !quote) {
+      return;
+    }
+
+    if (!company.user.notifyQuoteEmails) {
+      await this.skipForPreference("QUOTE_SUMMARY", company.user.email);
       return;
     }
 

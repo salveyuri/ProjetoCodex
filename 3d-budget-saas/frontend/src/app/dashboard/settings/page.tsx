@@ -1,12 +1,15 @@
 "use client";
 
 import type {
+  AuthUser,
+  EmailPreferences,
   MachineCatalogResource,
   MachinePayload,
   MachineResource,
   MaterialPayload,
   MaterialResource,
   ProductionSettings,
+  UpdateProfilePayload,
 } from "@3d-budget/shared";
 import {
   Cpu,
@@ -16,6 +19,7 @@ import {
   Save,
   Settings2,
   Trash2,
+  User,
   X,
   Zap,
 } from "lucide-react";
@@ -35,7 +39,7 @@ import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
 
-type ActiveTab = "machines" | "materials" | "costs";
+type ActiveTab = "machines" | "materials" | "costs" | "profile";
 
 type ModalState =
   | { type: "machine"; mode: "create"; item?: undefined }
@@ -129,6 +133,7 @@ const tabs = [
   { id: "machines" as const, label: "Impressoras", icon: Cpu },
   { id: "materials" as const, label: "Materiais", icon: Layers3 },
   { id: "costs" as const, label: "Custos Fixos", icon: Zap },
+  { id: "profile" as const, label: "Perfil", icon: User },
 ];
 
 const toMoney = (value: number): string =>
@@ -166,7 +171,7 @@ const toMaterialForm = (material: MaterialResource): MaterialFormState => ({
 });
 
 export default function SettingsPage() {
-  const { isLoading: isAuthLoading, token } = useAuth();
+  const { isLoading: isAuthLoading, token, user, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<ActiveTab>("machines");
   const [machines, setMachines] = useState<MachineResource[]>([]);
   const [materials, setMaterials] = useState<MaterialResource[]>([]);
@@ -179,6 +184,20 @@ export default function SettingsPage() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
+    financial: true,
+    quotes: true,
+    newsletter: false,
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setProfileName(user.name ?? "");
+      setEmailPreferences(user.emailPreferences);
+    }
+  }, [user]);
 
   const showToast = useCallback((nextToast: ToastState) => {
     setToast(nextToast);
@@ -344,6 +363,26 @@ export default function SettingsPage() {
       showToast({ tone: "success", message: "Material excluido." });
     } catch (error) {
       showToast({ tone: "danger", message: getApiErrorMessage(error, "Nao foi possivel concluir a operacao.") });
+    }
+  };
+
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSavingProfile(true);
+
+    const payload: UpdateProfilePayload = {
+      name: profileName.trim(),
+      emailPreferences,
+    };
+
+    try {
+      const { data } = await api.patch<AuthUser>("/auth/me", payload);
+      updateUser(data);
+      showToast({ tone: "success", message: "Perfil atualizado." });
+    } catch (error) {
+      showToast({ tone: "danger", message: getApiErrorMessage(error, "Nao foi possivel concluir a operacao.") });
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -634,6 +673,115 @@ export default function SettingsPage() {
                   <Save className="h-4 w-4" />
                   Salvar custos
                 </button>
+              </div>
+            </form>
+          </ResourcePanel>
+        ) : null}
+
+        {!isLoading && activeTab === "profile" ? (
+          <ResourcePanel title="Perfil">
+            <form
+              className="grid max-w-xl gap-6"
+              onSubmit={(event) => void saveProfile(event)}
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="grid min-w-0 gap-2 text-sm font-medium">
+                  Nome
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={(event) => setProfileName(event.target.value)}
+                    required
+                    minLength={2}
+                    maxLength={160}
+                    className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                  />
+                </label>
+                <label className="grid min-w-0 gap-2 text-sm font-medium">
+                  E-mail
+                  <input
+                    type="email"
+                    value={user?.email ?? ""}
+                    disabled
+                    className="h-11 w-full min-w-0 cursor-not-allowed rounded-lg border border-border bg-surface px-3 text-muted outline-none"
+                  />
+                  <span className="text-xs font-normal text-muted">
+                    O e-mail nao pode ser alterado.
+                  </span>
+                </label>
+              </div>
+
+              <div className="grid gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Preferencias de e-mail
+                  </h3>
+                  <p className="text-xs text-muted">
+                    E-mails de criacao de conta e redefinicao de senha sao
+                    sempre enviados, independente destas preferencias.
+                  </p>
+                </div>
+
+                <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={emailPreferences.financial}
+                    onChange={(event) =>
+                      setEmailPreferences((current) => ({
+                        ...current,
+                        financial: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>
+                    E-mails financeiros
+                    <span className="ml-2 font-normal text-muted">
+                      assinatura confirmada, renovada ou perto de vencer
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={emailPreferences.quotes}
+                    onChange={(event) =>
+                      setEmailPreferences((current) => ({
+                        ...current,
+                        quotes: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>
+                    E-mails de orcamentos
+                    <span className="ml-2 font-normal text-muted">
+                      orcamento exportado ou aprovado
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={emailPreferences.newsletter}
+                    onChange={(event) =>
+                      setEmailPreferences((current) => ({
+                        ...current,
+                        newsletter: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>
+                    Newsletter
+                    <span className="ml-2 font-normal text-muted">
+                      novidades do Pricify3D (em breve)
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              <div>
+                <SubmitButton isSaving={isSavingProfile} />
               </div>
             </form>
           </ResourcePanel>

@@ -4,9 +4,11 @@ import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   BarChart3,
   Calculator,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Code2,
@@ -49,6 +51,13 @@ const navigation: NavigationItem[] = [
   { href: "/dashboard/settings", label: "Configuracoes", icon: Settings },
 ];
 
+const adminNavigation: NavigationItem[] = [
+  { href: "/admin/analytics" as Route, label: "Admin BI", icon: ShieldCheck },
+  { href: "/admin/users" as Route, label: "Admin Users", icon: UsersRound },
+  { href: "/admin/plans" as Route, label: "Admin Planos", icon: Package },
+  { href: "/admin/email-templates" as Route, label: "Admin E-mails", icon: Mail },
+];
+
 export const Sidebar = ({
   collapsed,
   open,
@@ -57,15 +66,9 @@ export const Sidebar = ({
 }: SidebarProps) => {
   const pathname = usePathname();
   const { user } = useAuth();
-  const items = user?.role === "ADMIN"
-    ? [
-        ...navigation,
-        { href: "/admin/analytics" as Route, label: "Admin BI", icon: ShieldCheck },
-        { href: "/admin/users" as Route, label: "Admin Users", icon: UsersRound },
-        { href: "/admin/plans" as Route, label: "Admin Planos", icon: Package },
-        { href: "/admin/email-templates" as Route, label: "Admin E-mails", icon: Mail },
-      ]
-    : navigation;
+  const isAdmin = user?.role === "ADMIN";
+  const isAdminSectionActive = pathname.startsWith("/admin");
+  const [adminOpen, setAdminOpen] = useState(isAdminSectionActive);
 
   return (
     <>
@@ -126,13 +129,11 @@ export const Sidebar = ({
       </div>
 
       <nav className="mt-8 grid gap-2">
-        {items.map((item) => {
+        {navigation.map((item) => {
           const Icon = item.icon;
           const isActive =
             item.href === "/dashboard"
               ? pathname === item.href
-              : item.href.startsWith("/admin")
-                ? pathname.startsWith(item.href)
               : item.href === "/dashboard/quotes/new"
                 ? pathname === item.href
               : item.href === "/dashboard/settings"
@@ -160,6 +161,61 @@ export const Sidebar = ({
             </Link>
           );
         })}
+
+        {isAdmin ? (
+          <div className="grid gap-2">
+            <button
+              type="button"
+              onClick={() => setAdminOpen((current) => !current)}
+              title={collapsed ? "Admin" : undefined}
+              aria-expanded={adminOpen}
+              className={cn(
+                "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted transition hover:bg-surface hover:text-foreground",
+                collapsed && "lg:justify-center lg:px-0",
+                isAdminSectionActive &&
+                  "border border-primary/30 bg-primary/10 text-primary",
+              )}
+            >
+              <ShieldCheck className="h-5 w-5" />
+              <span className={cn("flex-1 text-left", collapsed && "lg:hidden")}>
+                Admin
+              </span>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 shrink-0 transition-transform",
+                  adminOpen && "rotate-180",
+                  collapsed && "lg:hidden",
+                )}
+              />
+            </button>
+
+            {adminOpen ? (
+              <div className={cn("grid gap-2 pl-4", collapsed && "lg:pl-0")}>
+                {adminNavigation.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname.startsWith(item.href);
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      title={collapsed ? item.label : undefined}
+                      className={cn(
+                        "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted transition hover:bg-surface hover:text-foreground",
+                        collapsed && "lg:justify-center lg:px-0",
+                        isActive &&
+                          "border border-primary/30 bg-primary/10 text-primary",
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                      <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </nav>
     </aside>
     </>

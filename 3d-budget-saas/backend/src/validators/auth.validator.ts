@@ -49,7 +49,34 @@ export const resetPasswordSchema = z
   })
   .strict();
 
+// Email is deliberately not accepted here — `.strict()` rejects it outright
+// rather than silently ignoring it, so the "email is immutable" rule holds
+// even if a client tries to send it.
+export const updateProfileSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(2, "Name must have at least 2 characters.")
+      .max(160, "Name must have at most 160 characters.")
+      .optional(),
+    emailPreferences: z
+      .object({
+        financial: z.boolean().optional(),
+        quotes: z.boolean().optional(),
+        newsletter: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (value) => value.name !== undefined || value.emailPreferences !== undefined,
+    { message: "At least one field must be provided." },
+  );
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

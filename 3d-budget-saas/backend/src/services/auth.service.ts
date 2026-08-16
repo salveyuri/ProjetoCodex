@@ -14,6 +14,7 @@ import type {
   LoginInput,
   RegisterInput,
   ResetPasswordInput,
+  UpdateProfileInput,
 } from "../validators/auth.validator";
 
 interface JwtAccessTokenPayload {
@@ -44,8 +45,12 @@ const companySelect = {
 const toAuthUser = (user: {
   id: string;
   email: string;
+  name: string | null;
   role: UserRole;
   isActive: boolean;
+  notifyFinancialEmails: boolean;
+  notifyQuoteEmails: boolean;
+  notifyNewsletter: boolean;
   company: {
     id: string;
     name: string;
@@ -56,8 +61,14 @@ const toAuthUser = (user: {
 }): AuthUser => ({
   id: user.id,
   email: user.email,
+  name: user.name,
   role: user.role,
   isActive: user.isActive,
+  emailPreferences: {
+    financial: user.notifyFinancialEmails,
+    quotes: user.notifyQuoteEmails,
+    newsletter: user.notifyNewsletter,
+  },
   company: user.company
     ? {
         id: user.company.id,
@@ -157,6 +168,7 @@ export class AuthService {
         data: {
           email: input.email,
           passwordHash,
+          name: input.fullName,
           role: UserRole.USER,
           company: {
             create: {
@@ -439,6 +451,29 @@ export class AuthService {
     if (!user.isActive) {
       throw new AppError("User account is inactive.", 403, "ACCOUNT_INACTIVE");
     }
+
+    return toAuthUser(user);
+  }
+
+  /** Updates the caller's own profile. Email is never accepted here — it's
+   * immutable through this endpoint by design. */
+  async updateProfile(userId: string, input: UpdateProfileInput): Promise<AuthUser> {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.emailPreferences?.financial !== undefined
+          ? { notifyFinancialEmails: input.emailPreferences.financial }
+          : {}),
+        ...(input.emailPreferences?.quotes !== undefined
+          ? { notifyQuoteEmails: input.emailPreferences.quotes }
+          : {}),
+        ...(input.emailPreferences?.newsletter !== undefined
+          ? { notifyNewsletter: input.emailPreferences.newsletter }
+          : {}),
+      },
+      include: { company: { select: companySelect } },
+    });
 
     return toAuthUser(user);
   }

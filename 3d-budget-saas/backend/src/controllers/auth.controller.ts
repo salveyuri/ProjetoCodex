@@ -9,6 +9,7 @@ import {
   loginSchema,
   registerSchema,
   resetPasswordSchema,
+  updateProfileSchema,
 } from "../validators/auth.validator";
 
 const toValidationError = (error: ZodError): AppError =>
@@ -93,6 +94,24 @@ export class AuthController {
       response.status(200).json(user);
     } catch (error) {
       next(error);
+    }
+  }
+
+  async updateProfile(
+    request: Request,
+    response: Response<AuthUser>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!request.userId) {
+        throw new AppError("Missing authenticated user.", 401, "AUTH_REQUIRED");
+      }
+
+      const input = updateProfileSchema.parse(request.body);
+      const user = await authService.updateProfile(request.userId, input);
+      response.status(200).json(user);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
     }
   }
 

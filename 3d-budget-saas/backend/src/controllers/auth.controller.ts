@@ -5,6 +5,7 @@ import { env } from "../config/env";
 import { AppError } from "../middlewares/error-handler";
 import { authService } from "../services/auth.service";
 import {
+  changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
@@ -110,6 +111,24 @@ export class AuthController {
       const input = updateProfileSchema.parse(request.body);
       const user = await authService.updateProfile(request.userId, input);
       response.status(200).json(user);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async changePassword(
+    request: Request,
+    response: Response<void>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!request.userId) {
+        throw new AppError("Missing authenticated user.", 401, "AUTH_REQUIRED");
+      }
+
+      const input = changePasswordSchema.parse(request.body);
+      await authService.changePassword(request.userId, input);
+      response.status(204).send();
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);
     }

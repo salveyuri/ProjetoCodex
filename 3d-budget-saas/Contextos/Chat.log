@@ -1473,3 +1473,54 @@ calculadora (linha "Mao de obra" removida do breakdown de producao).
   a taxa (R$13,50); voltada pra 0% -> preco caiu pro valor sem taxa
   (R$12,27), nao zerou; tela de formulas confirma a formula padrao
   atualizada e "Hora tecnica"/mao_obra ausentes da lista de variaveis.
+
+## 2026-08-16 - Revisao da aba Perfil: nome da empresa, trocar senha, remove e-mail
+
+Pedido do Yuri: a aba Perfil ja mostrava o nome atual pra edicao (confirmado
+que ja funcionava - conta de teste usada antes tinha ficado sem empresa por
+causa de uma limpeza manual minha apos outro teste, nao era bug), mas
+faltava: (1) poder editar o nome da empresa junto com o nome pessoal; (2)
+opcao de trocar a senha nesta tela; (3) o campo E-mail nao deve nem aparecer
+(so estava desabilitado antes).
+
+- `UpdateProfilePayload` (shared) ganhou `companyName?: string`.
+  `updateProfileSchema` aceita o campo (mesmo min/max de `registerSchema`) e
+  o `.refine()` de "pelo menos um campo" passou a considerar os tres
+  (nome/empresa/preferencias).
+- `AuthService.updateProfile()`: quando `companyName` vem no payload, atualiza
+  `Company.name` (`where: { userId }`, unico) **dentro da mesma transacao**,
+  antes de buscar o `User` com `include: company` - se fizesse na ordem
+  inversa, o `company` incluso na resposta viria com o nome antigo (captura
+  antes do update). `Company.userId` e o lado que guarda a FK (nao
+  `User.companyId` - confirmado no schema), entao o update usa
+  `company.update({ where: { userId } })`.
+- Novo `AuthService.changePassword(userId, input)`: exige a senha atual
+  (`bcrypt.compare` contra o hash salvo - 401 `CURRENT_PASSWORD_INVALID` se
+  nao bater), grava o novo hash e **revoga todos os refresh tokens do
+  usuario** - mesmo padrao ja usado em `resetPassword` (troca de senha e
+  evento que deve invalidar sessoes velhas em outros dispositivos). Novo
+  endpoint `PATCH /auth/password` (`authMiddleware` +
+  `changePasswordRateLimiter`, 5/min, mesma cadencia de
+  `resetPasswordRateLimiter`), `changePasswordSchema` reusa o `passwordSchema`
+  ja exportado.
+- Frontend: aba Perfil agora tem "Nome" e "Nome da empresa" lado a lado (sem
+  campo E-mail nenhum, nem desabilitado); painel novo "Alterar senha"
+  (senha atual + nova + confirmar, validacao de confirmacao no cliente antes
+  de mandar pro backend) logo abaixo. `SubmitButton` ganhou prop `label`
+  opcional (default "Salvar") pra poder dizer "Alterar senha" no botao do
+  painel novo sem duplicar o componente.
+- Testes novos em `auth.routes.test.ts`: `companyName` atualiza junto do
+  nome (confirmado no `PATCH /auth/me` de volta), e 4 testes de
+  `PATCH /auth/password` (sem token, senha atual errada, fluxo completo -
+  confirma que o refresh token antigo para de funcionar e login com a senha
+  nova funciona, senha nova fraca rejeitada). Suite: 80 -> 85 testes.
+- Validado ao vivo no navegador com conta nova (a conta usada nos testes
+  anteriores desta sessao tinha ficado sem `Company` por causa da minha
+  propria limpeza manual apos o teste de formulas - confirmado que era so
+  dado de teste zoado, nao bug, testando de novo com conta fresca): nome e
+  nome da empresa vieram preenchidos, editados os dois, salvo, recarregada a
+  pagina e confirmado que persistiu; troca de senha com senha atual errada
+  mostrou "Senha atual incorreta"; com a senha certa mostrou "Senha
+  alterada..." e o teste de integracao correspondente confirma que a sessao
+  antiga parou de funcionar e a nova senha loga. Lint limpo em
+  backend/frontend, 85/85 testes de backend.

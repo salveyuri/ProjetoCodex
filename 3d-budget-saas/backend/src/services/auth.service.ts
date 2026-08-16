@@ -10,6 +10,7 @@ import { AppError } from "../middlewares/error-handler";
 import { emailService, PASSWORD_RESET_TOKEN_TTL_MINUTES } from "./email.service";
 import { planService } from "./plan.service";
 import type {
+  ChangePasswordInput,
   ForgotPasswordInput,
   LoginInput,
   RegisterInput,
@@ -455,27 +456,81 @@ export class AuthService {
     return toAuthUser(user);
   }
 
-  /** Updates the caller's own profile. Email is never accepted here — it's
-   * immutable through this endpoint by design. */
+  /** Updates the caller's own profile (and, if provided, their company's
+   * name). Email is never accepted here — it's immutable through this
+   * endpoint by design. Company name is updated first, inside the same
+   * transaction, so the `include: company` on the user update below always
+   * reflects the fresh value instead of a stale pre-update snapshot. */
   async updateProfile(userId: string, input: UpdateProfileInput): Promise<AuthUser> {
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.emailPreferences?.financial !== undefined
-          ? { notifyFinancialEmails: input.emailPreferences.financial }
-          : {}),
-        ...(input.emailPreferences?.quotes !== undefined
-          ? { notifyQuoteEmails: input.emailPreferences.quotes }
-          : {}),
-        ...(input.emailPreferences?.newsletter !== undefined
-          ? { notifyNewsletter: input.emailPreferences.newsletter }
-          : {}),
-      },
-      include: { company: { select: companySelect } },
+    const user = await prisma.$transaction(async (transaction) => {
+      if (input.companyName !== undefined) {
+        await transaction.company.update({
+          where: { userId },
+          data: { name: input.companyName },
+        });
+      }
+
+      return transaction.user.update({
+        where: { id: userId },
+        data: {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.emailPreferences?.financial !== undefined
+            ? { notifyFinancialEmails: input.emailPreferences.financial }
+            : {}),
+          ...(input.emailPreferences?.quotes !== undefined
+            ? { notifyQuoteEmails: input.emailPreferences.quotes }
+            : {}),
+          ...(input.emailPreferences?.newsletter !== undefined
+            ? { notifyNewsletter: input.emailPreferences.newsletter }
+            : {}),
+        },
+        include: { company: { select: companySelect } },
+      });
     });
 
     return toAuthUser(user);
+  }
+
+  /**
+   * Changes the caller's own password. Requires re-entering the current
+   * password — a defense against a stolen/left-open access token being
+   * used to lock the real account owner out. Revokes every refresh token
+   * for the user afterwards, same "force re-login everywhere" behavior as
+   * resetPassword — a password change is exactly the kind of event that
+   * should invalidate stale sessions on other devices.
+   */
+  async changePassword(userId: string, input: ChangePasswordInput): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+
+    if (!user) {
+      throw new AppError("Authenticated user not found.", 401, "USER_NOT_FOUND");
+    }
+
+    const currentPasswordMatches = await bcrypt.compare(
+      input.currentPassword,
+      user.passwordHash,
+    );
+
+    if (!currentPasswordMatches) {
+      throw new AppError(
+        "Current password is incorrect.",
+        401,
+        "CURRENT_PASSWORD_INVALID",
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(input.newPassword, PASSWORD_SALT_ROUNDS);
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
+      prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
   }
 }
 

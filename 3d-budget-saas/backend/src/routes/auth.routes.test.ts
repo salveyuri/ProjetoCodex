@@ -138,6 +138,22 @@ describe("PATCH /api/auth/me", () => {
     expect(response.body.email).toBe(email);
   });
 
+  it("updates the company name alongside the display name", async () => {
+    const email = uniqueEmail("profile-company-name");
+    const registerResponse = await registerAsNewClient(email);
+    const token = registerResponse.body.token as string;
+    expect(registerResponse.body.user.company.name).toBe("Integration Test Co");
+
+    const response = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Novo Nome", companyName: "Nova Empresa Ltda" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.name).toBe("Novo Nome");
+    expect(response.body.company.name).toBe("Nova Empresa Ltda");
+  });
+
   it("updates email preferences without touching the name", async () => {
     const email = uniqueEmail("profile-prefs");
     const registerResponse = await registerAsNewClient(email);
@@ -190,6 +206,70 @@ describe("PATCH /api/auth/me", () => {
       .patch("/api/auth/me")
       .set("Authorization", `Bearer ${token}`)
       .send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+describe("PATCH /api/auth/password", () => {
+  it("rejects requests without a bearer token", async () => {
+    const response = await request(app)
+      .patch("/api/auth/password")
+      .send({ currentPassword: "Abcdef12", newPassword: "NovaSenha12" });
+
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects the wrong current password", async () => {
+    const email = uniqueEmail("change-pw-wrong");
+    const registerResponse = await registerAsNewClient(email);
+    const token = registerResponse.body.token as string;
+
+    const response = await request(app)
+      .patch("/api/auth/password")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ currentPassword: "WrongPassword1", newPassword: "NovaSenha12" });
+
+    expect(response.status).toBe(401);
+    expect(response.body.code).toBe("CURRENT_PASSWORD_INVALID");
+  });
+
+  it("changes the password and revokes existing sessions", async () => {
+    const email = uniqueEmail("change-pw-ok");
+    const registerResponse = await registerAsNewClient(email);
+    const token = registerResponse.body.token as string;
+    const refreshCookie = registerResponse.headers["set-cookie"][0] as string;
+
+    const response = await request(app)
+      .patch("/api/auth/password")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ currentPassword: "Abcdef12", newPassword: "NovaSenha12" });
+
+    expect(response.status).toBe(204);
+
+    // The old session's refresh token no longer works...
+    const refreshResponse = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", refreshCookie);
+    expect(refreshResponse.status).toBe(401);
+
+    // ...but logging in again works with the new password.
+    const loginResponse = await request(app)
+      .post("/api/auth/login")
+      .send({ email, password: "NovaSenha12" });
+    expect(loginResponse.status).toBe(200);
+  });
+
+  it("rejects a weak new password", async () => {
+    const email = uniqueEmail("change-pw-weak");
+    const registerResponse = await registerAsNewClient(email);
+    const token = registerResponse.body.token as string;
+
+    const response = await request(app)
+      .patch("/api/auth/password")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ currentPassword: "Abcdef12", newPassword: "short" });
 
     expect(response.status).toBe(400);
     expect(response.body.code).toBe("VALIDATION_ERROR");

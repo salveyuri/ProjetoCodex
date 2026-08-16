@@ -94,6 +94,21 @@ export const resetPasswordRateLimiter = rateLimit({
   ),
 });
 
+// Authenticated (requires a valid access token, unlike forgot/reset-password
+// which are for a caller who can't log in yet), but a sensitive-enough
+// action to keep to the same cadence as reset-password rather than the
+// generic global limiter.
+export const changePasswordRateLimiter = rateLimit({
+  windowMs: oneMinute,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: createRateLimitHandler(
+    "RATE_LIMIT_CHANGE_PASSWORD",
+    "Too many password change attempts. Try again in one minute.",
+  ),
+});
+
 // Admin-only (mounted under /admin, already gated by adminMiddleware), but
 // still a real send through Resend — a generous cap just guards against an
 // accidental rapid-fire click/script, not abuse from an untrusted caller.

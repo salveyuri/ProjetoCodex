@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authController } from "../controllers/auth.controller";
 import { authMiddleware } from "../middlewares/auth-middleware";
 import {
+  changePasswordRateLimiter,
   forgotPasswordRateLimiter,
   loginRateLimiter,
   refreshRateLimiter,
@@ -25,6 +26,13 @@ authRoutes.get("/me", authMiddleware, (request, response, next) =>
 
 authRoutes.patch("/me", authMiddleware, (request, response, next) =>
   authController.updateProfile(request, response, next),
+);
+
+authRoutes.patch(
+  "/password",
+  authMiddleware,
+  changePasswordRateLimiter,
+  (request, response, next) => authController.changePassword(request, response, next),
 );
 
 // refresh/logout/logout-all intentionally don't require authMiddleware:

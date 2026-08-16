@@ -39,6 +39,8 @@ const KNOWN_ERROR_MESSAGES: Record<string, string> = {
   RATE_LIMIT_FORGOT_PASSWORD:
     "Muitas tentativas. Aguarde 15 minutos e tente novamente.",
   RATE_LIMIT_RESET_PASSWORD: "Muitas tentativas. Aguarde um minuto e tente novamente.",
+  CURRENT_PASSWORD_INVALID: "Senha atual incorreta.",
+  RATE_LIMIT_CHANGE_PASSWORD: "Muitas tentativas. Aguarde um minuto e tente novamente.",
 };
 
 const DEFAULT_FALLBACK =

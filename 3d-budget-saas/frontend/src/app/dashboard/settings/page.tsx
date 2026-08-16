@@ -183,16 +183,22 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [profileName, setProfileName] = useState("");
+  const [profileCompanyName, setProfileCompanyName] = useState("");
   const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
     financial: true,
     quotes: true,
     newsletter: false,
   });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
     if (user) {
       setProfileName(user.name ?? "");
+      setProfileCompanyName(user.company?.name ?? "");
       setEmailPreferences(user.emailPreferences);
     }
   }, [user]);
@@ -362,6 +368,7 @@ export default function SettingsPage() {
 
     const payload: UpdateProfilePayload = {
       name: profileName.trim(),
+      companyName: profileCompanyName.trim(),
       emailPreferences,
     };
 
@@ -373,6 +380,32 @@ export default function SettingsPage() {
       showToast({ tone: "danger", message: getApiErrorMessage(error, "Nao foi possivel concluir a operacao.") });
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const changePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (newPassword !== confirmNewPassword) {
+      showToast({ tone: "danger", message: "A confirmacao nao corresponde a nova senha." });
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      await api.patch("/auth/password", { currentPassword, newPassword });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      showToast({
+        tone: "success",
+        message: "Senha alterada. Outros dispositivos precisarao entrar novamente.",
+      });
+    } catch (error) {
+      showToast({ tone: "danger", message: getApiErrorMessage(error, "Nao foi possivel concluir a operacao.") });
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -672,16 +705,16 @@ export default function SettingsPage() {
                   />
                 </label>
                 <label className="grid min-w-0 gap-2 text-sm font-medium">
-                  E-mail
+                  Nome da empresa
                   <input
-                    type="email"
-                    value={user?.email ?? ""}
-                    disabled
-                    className="h-11 w-full min-w-0 cursor-not-allowed rounded-lg border border-border bg-surface px-3 text-muted outline-none"
+                    type="text"
+                    value={profileCompanyName}
+                    onChange={(event) => setProfileCompanyName(event.target.value)}
+                    required
+                    minLength={2}
+                    maxLength={160}
+                    className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
                   />
-                  <span className="text-xs font-normal text-muted">
-                    O e-mail nao pode ser alterado.
-                  </span>
                 </label>
               </div>
 
@@ -756,6 +789,60 @@ export default function SettingsPage() {
 
               <div>
                 <SubmitButton isSaving={isSavingProfile} />
+              </div>
+            </form>
+          </ResourcePanel>
+        ) : null}
+
+        {!isLoading && activeTab === "profile" ? (
+          <ResourcePanel title="Alterar senha">
+            <form
+              className="grid max-w-xl gap-4 sm:grid-cols-2"
+              onSubmit={(event) => void changePassword(event)}
+            >
+              <label className="grid min-w-0 gap-2 text-sm font-medium sm:col-span-2">
+                Senha atual
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  required
+                  minLength={1}
+                  autoComplete="current-password"
+                  className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                />
+              </label>
+              <label className="grid min-w-0 gap-2 text-sm font-medium">
+                Nova senha
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                />
+              </label>
+              <label className="grid min-w-0 gap-2 text-sm font-medium">
+                Confirmar nova senha
+                <input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(event) => setConfirmNewPassword(event.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                />
+              </label>
+              <p className="text-xs text-muted sm:col-span-2">
+                Minimo de 8 caracteres, com letra maiuscula, minuscula e
+                numero. Ao alterar, outros dispositivos precisarao entrar
+                novamente.
+              </p>
+              <div className="sm:col-span-2">
+                <SubmitButton isSaving={isChangingPassword} label="Alterar senha" />
               </div>
             </form>
           </ResourcePanel>
@@ -1212,13 +1299,19 @@ const NumberField = ({
   );
 };
 
-const SubmitButton = ({ isSaving }: { isSaving: boolean }) => (
+const SubmitButton = ({
+  isSaving,
+  label = "Salvar",
+}: {
+  isSaving: boolean;
+  label?: string;
+}) => (
   <button
     type="submit"
     disabled={isSaving}
     className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-70"
   >
     <Save className="h-4 w-4" />
-    Salvar
+    {label}
   </button>
 );

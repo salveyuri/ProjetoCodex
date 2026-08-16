@@ -125,7 +125,13 @@ export interface AuthUser {
 
 export interface UpdateProfilePayload {
   name?: string;
+  companyName?: string;
   emailPreferences?: Partial<EmailPreferences>;
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface AuthResponse {

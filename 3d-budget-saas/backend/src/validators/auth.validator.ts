@@ -60,6 +60,12 @@ export const updateProfileSchema = z
       .min(2, "Name must have at least 2 characters.")
       .max(160, "Name must have at most 160 characters.")
       .optional(),
+    companyName: z
+      .string()
+      .trim()
+      .min(2, "Company name must have at least 2 characters.")
+      .max(160, "Company name must have at most 160 characters.")
+      .optional(),
     emailPreferences: z
       .object({
         financial: z.boolean().optional(),
@@ -71,12 +77,23 @@ export const updateProfileSchema = z
   })
   .strict()
   .refine(
-    (value) => value.name !== undefined || value.emailPreferences !== undefined,
+    (value) =>
+      value.name !== undefined ||
+      value.companyName !== undefined ||
+      value.emailPreferences !== undefined,
     { message: "At least one field must be provided." },
   );
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required."),
+    newPassword: passwordSchema,
+  })
+  .strict();
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

@@ -777,3 +777,19 @@ formula `mao_obra`/`valor_hora_tecnica` removidas do whitelist
 (`INTERNAL_VARIABLES`) - uma formula customizada que ja usasse essas
 variaveis passa a falhar validacao (`FORMULA_UNKNOWN_VARIABLE`) na proxima
 edicao; nenhuma formula existente no banco de dev as usava.
+
+## 2026-08-16 - Trocar senha revoga todas as sessoes, nao so as outras
+
+`PATCH /auth/password` segue exatamente o mesmo padrao de seguranca que
+`resetPassword` (via e-mail) ja usava: apos trocar a senha, **todo**
+refresh token do usuario e revogado, incluindo o da propria sessao que fez
+a troca - nao so "os outros dispositivos". Alternativa considerada e
+descartada: preservar a sessao atual (poupar o refresh token de quem
+mandou a requisicao). Nao foi implementada porque o endpoint autentica via
+access token (header `Authorization`), e o refresh token correspondente
+fica so no cookie httpOnly - o backend nao tem como saber, a partir do
+access token, qual refresh token especifico poupar sem adicionar
+complexidade nova (ex.: uma claim extra ligando os dois). Na pratica o
+efeito e suave: o access token da aba atual continua valido ate expirar
+(~15min, `JWT_EXPIRES_IN`), so o proximo silent refresh e que vai falhar e
+pedir login de novo - nao e um logout imediato/brusco.

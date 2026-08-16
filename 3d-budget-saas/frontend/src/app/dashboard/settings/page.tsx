@@ -27,7 +27,6 @@ import {
   FormEvent,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -235,14 +234,6 @@ export default function SettingsPage() {
     }
   }, [isAuthLoading, loadResources]);
 
-  const materialInventoryValue = useMemo(
-    () =>
-      materials.reduce(
-        (total, material) => total + material.purchasePrice,
-        0,
-      ),
-    [materials],
-  );
 
   const openMachineModal = (machine?: MachineResource) => {
     setMachineForm(machine ? toMachineForm(machine) : emptyMachineForm);
@@ -423,7 +414,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2">
           <Card className="min-h-32 p-5">
             <p className="text-sm text-muted">Impressoras</p>
             <p className="mt-3 text-3xl font-semibold">{machines.length}</p>
@@ -431,12 +422,6 @@ export default function SettingsPage() {
           <Card className="min-h-32 p-5">
             <p className="text-sm text-muted">Materiais</p>
             <p className="mt-3 text-3xl font-semibold">{materials.length}</p>
-          </Card>
-          <Card className="min-h-32 p-5">
-            <p className="text-sm text-muted">Estoque cadastrado</p>
-            <p className="mt-3 text-3xl font-semibold">
-              {toMoney(materialInventoryValue)}
-            </p>
           </Card>
         </section>
 

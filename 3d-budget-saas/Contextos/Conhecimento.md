@@ -228,3 +228,48 @@ se repetir se alguém mexer nesse código sem saber.
   no Windows sem nenhuma asserção quebrando (worker crash, não assertion
   error), suspeitar do pool de execução antes de assumir que é um teste
   ruim.
+
+## Bug de produção: `ERR_MODULE_NOT_FOUND` no `shared` depois de dividir `index.ts` em vários arquivos (2026-08-17)
+
+- **Sintoma:** depois de um deploy (`git pull` + `docker compose build` +
+  `migrate deploy` + `up -d`), o container do backend entrou em loop de
+  restart. `docker compose logs backend` mostrou:
+  `Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/app/shared/dist/countries' imported from /app/shared/dist/index.js`.
+  Do lado do navegador isso aparecia como **502** em qualquer chamada de
+  API (`/api/auth/refresh` etc) - o Nginx não conseguia falar com um
+  backend que não subia.
+- **Causa raiz:** `shared/src/index.ts` ganhou um novo arquivo separado
+  (`countries.ts`) e um `export * from "./countries";` sem extensão. O
+  pacote `shared` é consumido de **duas formas diferentes** neste
+  monorepo: o **backend** roda o `dist/index.js` **compilado** direto com
+  `node dist/server.js` (ESM nativo do Node, que **exige** a extensão
+  `.js` em imports relativos); o **frontend** aponta
+  `"@3d-budget/shared"` direto pro **código-fonte** via
+  `frontend/tsconfig.json` (`"paths": {"@3d-budget/shared": ["../shared/src"]}`),
+  resolvido pelo Turbopack, que **não** aceita a extensão `.js` apontando
+  pra um arquivo `.ts`. Ou seja: qualquer forma de escrever esse import
+  (`"./countries"` ou `"./countries.js"`) quebra um dos dois lados -
+  nenhuma opção de extensão funciona pros dois consumidores ao mesmo
+  tempo. Isso nunca tinha aparecido antes porque `shared/src/index.ts`
+  sempre foi um arquivo único, sem nenhum import relativo interno.
+- **Fix:** eliminar a fronteira de módulo - o conteúdo de `countries.ts`
+  foi movido de volta pra dentro do próprio `index.ts` (sem nenhum
+  `export * from`/`import` relativo). Resolve os dois consumidores por
+  igual, já que não existe mais nenhum caminho de arquivo pra resolver.
+- **Aprendizado:** dentro de `shared/src/`, **nunca dividir em múltiplos
+  arquivos com import/export relativo entre eles** - manter tudo num
+  `index.ts` só (mesmo que fique grande, como listas de dados estáticas).
+  Se um dia for inevitável dividir, teria que alinhar
+  `shared/tsconfig.json` (`moduleResolution`) e o path alias do frontend
+  pra resolver de forma consistente nos dois lados - not trivial, evitar
+  enquanto der.
+- **Aprendizado maior:** `npm run build`/`tsc --noEmit` (o que rodo pra
+  verificar antes de entregar) **não pega esse tipo de bug**, porque
+  `moduleResolution: "Bundler"` do `shared/tsconfig.json` é permissivo
+  sobre extensão em import relativo - o erro só aparece rodando o
+  `dist/` de verdade com `node` puro (o que acontece só em produção,
+  dentro do Docker). A partir de agora, depois de qualquer mudança em
+  `shared/src/`, rodar
+  `node -e "import('./shared/dist/index.js').then(m=>console.log(Object.keys(m)))"`
+  (ou de fato subir `node dist/server.js` localmente por alguns segundos)
+  como parte da verificação, além do `tsc --noEmit` de sempre.

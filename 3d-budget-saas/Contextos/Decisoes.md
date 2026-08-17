@@ -833,3 +833,121 @@ que so busca na tabela `formulas` **filtrada por `companyId`** - um id de
 no mesmo 403 `FORMULA_FORBIDDEN` que qualquer id invalido/de outra empresa
 já causava. Nenhum código novo de "if isSystem, bloqueia" foi necessário
 no service - a segregação por tabela já resolve isso estruturalmente.
+
+## 2026-08-17 - Redesenho do motor de precificação: fórmula calculada uma vez por orçamento, não por mesa
+
+### O bug relatado e a causa raiz
+
+O Yuri reportou (com prints) que aumentar as horas de pintura/acabamento
+inflava o subtotal de **cada mesa** pelo mesmo delta - com 2 mesas, ambas
+subiam R$78,09 ao mudar pintura de 5h para 8h. Causa raiz confirmada em
+`quote.service.ts`: o método privado `calculateItems` montava UM
+`quoteCalculationContext` com `paintingHours`/`finishingHours` do
+orçamento inteiro e espalhava esse mesmo contexto, sem alteração, em
+`calculationService.calculateWithResolvedContext` chamado **uma vez por
+item**, independente. Como a fórmula usa `horas_pintura`/`horas_acabamento`
+como se fossem do orçamento todo, cada mesa recontava o custo de
+pintura/acabamento do zero.
+
+### Modelo novo: dois estágios, fórmula roda uma vez
+
+Substituído por um pipeline de dois estágios em `CalculationService.ts`
+(`calculateAggregate`, chamado tanto por `calculateQuoteBreakdown` -
+caso N=1, usado pela Calculadora avulsa - quanto por `calculateQuote` -
+caso N mesas, usado pelo preview e pela criação/edição de orçamento):
+
+1. **Por mesa (aritmética pura, sem fórmula)**: `materialCost = custo_por_g
+   * peso`, `energyCost = consumo_kw * horas_impressao * custo_kwh`,
+   `depreciationCost`/`maintenanceCost` iguais a antes. A soma dos quatro é
+   o **custo bruto da mesa** (`rawCost`) - é isso que aparece como
+   "Custo da mesa" na tela, nunca incluindo taxa de erro, taxas, margem
+   ou pós-processamento.
+2. **Uma vez pro orçamento inteiro**: soma os quatro custos de todas as
+   mesas; `printCost = materialCost + energyCost` (só esses dois, por
+   pedido explícito do Yuri); `errorCostAmount = printCost * taxa_erro`
+   (a taxa de erro **não** incide sobre depreciação/manutenção);
+   `custo_base = printCost + errorCostAmount + depreciationCost +
+   maintenanceCost`; pintura/acabamento somados **uma única vez**
+   (`valor_hora_pintura*horas_pintura + valor_hora_acabamento*
+   horas_acabamento`). A fórmula (padrão do sistema ou customizada da
+   empresa - decisão explícita do Yuri: vale pra **todas**, não só a
+   padrão) é avaliada **uma vez** contra essas variáveis agregadas.
+
+Três perguntas de escopo foram tiradas a limpo com o Yuri antes de
+implementar (todas resolvidas com a opção recomendada): depreciação/
+manutenção continuam por mesa (só pintura/acabamento saíram do nível "por
+mesa"); o "subtotal" exibido por mesa é o custo bruto, sem nada de taxas/
+margem/pós-processamento (o preço com tudo aplicado só existe no total do
+orçamento); e a mudança vale pra toda fórmula, não só a padrão do sistema.
+
+### `taxas_percentuais` volta a significar só cartão+administrativa
+
+Numa correção anterior nesta mesma sessão (bug do "%% zerava o preço"),
+`taxas_percentuais` tinha passado a incluir `taxa_erro` pra evitar que uma
+taxa de erro zerada zerasse a fórmula. Isso deixou de ser necessário: como
+`taxa_erro` agora é aplicada **antes** da fórmula rodar (embutida em
+`custo_base`, como um valor aditivo, nunca multiplicativo), uma taxa de
+erro em 0% simplesmente não soma nada - não há mais risco de zerar o
+preço por causa dela. `taxas_percentuais` voltou a ser só
+`taxa_cartao + taxa_administrativa`, que é como a própria fórmula do Yuri
+usa esse nome. `taxa_erro` continua disponível como variável avulsa pra
+quem quiser referenciá-la numa fórmula customizada.
+
+### Nova fórmula padrão do sistema (adotada literalmente do pedido do Yuri)
+
+`(custo_base + (valor_hora_acabamento * horas_acabamento) +
+(valor_hora_pintura * horas_pintura)) * (1 + taxas_percentuais +
+margem_lucro)` - substituiu a fórmula anterior (que compunha dois fatores
+multiplicativos, `custo_base*(1+margem)*(1+taxas)`) por uma única soma
+antes de multiplicar, formato que o próprio Yuri já usava. Isso muda os
+valores numéricos de qualquer orçamento existente que dependa da fórmula
+padrão (ex.: no fixture de teste, R$22,59 virou R$22,25) - mudança
+estrutural deliberada, não regressão. Migration
+`20260817120000_update_default_formula_pricing_model` faz o `UPDATE` na
+linha `system_formulas` com `code = 'system_default'`.
+
+### Taxa de cartão/administrativa e margem viram estimativas de exibição uniformes
+
+Como a fórmula é texto livre, não há como saber quanto dela é "taxa" vs
+"margem" no resultado - antes disso só era calculado quando a fórmula era
+o fallback do sistema (fórmula customizada zerava `cardFeeAmount`/
+`administrativeFeeAmount` de propósito). Isso mudou: agora
+`cardFeeAmount`/`administrativeFeeAmount` são sempre `subtotal * taxa`
+(estimativa best-effort) e `marginAmount` é o resto (`finalPrice -
+subtotal - taxas`, nunca negativo), **uniformemente**, seja a fórmula
+padrão ou customizada. Efeito colateral esperado: um teste antigo que
+esperava `cardFeeAmount = 0` pra fórmula customizada foi atualizado pra
+esperar o valor calculado.
+
+### `QuoteItemSnapshot.marginAmount`/`feesTotal` ficam sempre zero
+
+Sem migração de schema: as colunas continuam existindo (reuso, não
+remoção), mas como taxas/margem só existem no nível do orçamento agora,
+não faz sentido mais atribuir uma fatia arbitrária pra cada mesa - os
+campos ficam `0` daqui pra frente. `Quote.totalAmount` passa a ser o único
+lugar onde mora o preço final de verdade (o resultado da avaliação única
+da fórmula), não mais uma soma de `finalPrice` por item.
+
+### Novo endpoint `POST /quotes/preview`
+
+O formulário "Novo orçamento" antes calculava um preview por mesa
+(N chamadas paralelas a `POST /calculate`) e somava os resultados no
+cliente - o mesmo desenho que causava o bug (cada chamada recontava
+pintura/acabamento). Endpoint novo recebe o orçamento inteiro (todas as
+mesas + horas de pós-processamento) numa chamada só e devolve o mesmo
+`calculateQuote` que `create`/`update` usam internamente - preview e
+salvamento **nunca podem divergir**, porque é literalmente o mesmo código.
+
+### `analytics.service.ts`: receita/lucro por orçamento, não por item
+
+Consequência direta: `item.finalPrice` deixou de carregar margem/taxas/
+pós-processamento (agora = `item.baseCost`, custo bruto). O código que
+somava `item.finalPrice` por item pra montar receita/lucro (mensal e
+export CSV) foi reescrito pra calcular **uma vez por orçamento**
+(`revenue = quote.totalAmount`, `profit = max(totalAmount - somaDosCustos
+Brutos, 0)`) e só então **alocar de volta** pra cada item, proporcional à
+fatia de custo bruto daquele item no orçamento (`allocateShare`) - usado
+tanto no `materialMix` (receita por tipo de material) quanto nas colunas
+`finalPrice`/`profit` do export CSV. Sem essa mudança, `profit` teria
+virado sempre `0` (já que `finalPrice == baseCost` por item) e `revenue`
+subestimaria qualquer orçamento com margem/taxas/pós-processamento.

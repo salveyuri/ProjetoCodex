@@ -1,10 +1,12 @@
 import type {
   PaginatedQuoteList,
+  QuotePreviewResponse,
   QuoteResource,
 } from "@3d-budget/shared";
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { AppError } from "../middlewares/error-handler";
+import { calculationService } from "../services/CalculationService";
 import { emailService } from "../services/email.service";
 import { quotePdfService } from "../services/quote-pdf.service";
 import { quoteService } from "../services/quote.service";
@@ -13,6 +15,7 @@ import { idParamSchema } from "../validators/common.validator";
 import {
   quoteCreateSchema,
   quoteListQuerySchema,
+  quotePreviewSchema,
   quoteUpdateSchema,
 } from "../validators/quote.validator";
 
@@ -72,6 +75,26 @@ export class QuoteController {
           `attachment; filename="${pdf.filename}"`,
         )
         .send(pdf.buffer);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  /**
+   * Live, unsaved preview of a whole quote-in-progress — computed through
+   * the exact same aggregate engine `create`/`update` use, so what the
+   * form shows before saving always matches what gets persisted.
+   */
+  async preview(
+    request: Request,
+    response: Response<QuotePreviewResponse>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const companyId = getAuthenticatedCompanyId(request);
+      const input = quotePreviewSchema.parse(request.body);
+      const result = await calculationService.calculateQuote(companyId, input);
+      response.status(200).json(result);
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);
     }

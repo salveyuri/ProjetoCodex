@@ -13,6 +13,12 @@ quoteRoutes.get("/", (request, response, next) =>
 );
 
 quoteRoutes.post(
+  "/preview",
+  calculationRateLimiter,
+  (request, response, next) => quoteController.preview(request, response, next),
+);
+
+quoteRoutes.post(
   "/",
   calculationRateLimiter,
   requireUsageLimit("MONTHLY_QUOTES"),

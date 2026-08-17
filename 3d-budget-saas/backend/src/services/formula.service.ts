@@ -43,34 +43,39 @@ const systemVariableMeta: Record<
   (typeof INTERNAL_VARIABLES)[number],
   { description: string; type: CustomVariableType; previewValue: number }
 > = {
-  peso: { description: "Peso da mesa em gramas.", type: "FLOAT", previewValue: 100 },
+  peso: {
+    description: "Soma do peso de todas as mesas do orcamento, em gramas.",
+    type: "FLOAT",
+    previewValue: 100,
+  },
   tempo: {
-    description: "Tempo estimado de impressao em horas.",
+    description: "Soma do tempo de impressao de todas as mesas, em horas.",
     type: "FLOAT",
     previewValue: 2,
   },
   material_cost: {
-    description: "Custo de material da mesa.",
+    description: "Custo total de material somado de todas as mesas do orcamento.",
     type: "FLOAT",
     previewValue: 10,
   },
   energia_total: {
-    description: "Custo total de energia da mesa.",
+    description: "Custo total de energia somado de todas as mesas do orcamento.",
     type: "FLOAT",
     previewValue: 0.24,
   },
   depreciacao_maquina: {
-    description: "Custo de depreciacao da maquina para o tempo informado.",
+    description: "Custo de depreciacao somado de todas as mesas do orcamento.",
     type: "FLOAT",
     previewValue: 6,
   },
   manutencao_maquina: {
-    description: "Custo de manutencao da maquina para o tempo informado.",
+    description: "Custo de manutencao somado de todas as mesas do orcamento.",
     type: "FLOAT",
     previewValue: 3,
   },
   custo_base: {
-    description: "Soma de material, energia, depreciacao e manutencao.",
+    description:
+      "Custo total do orcamento: material + energia (com taxa de erro aplicada) + depreciacao + manutencao, somados de todas as mesas. Calculado uma unica vez pro orcamento inteiro, nao por mesa.",
     type: "FLOAT",
     previewValue: 19.24,
   },
@@ -96,17 +101,17 @@ const systemVariableMeta: Record<
   },
   taxas_percentuais: {
     description:
-      "Soma das taxas percentuais (cartao, administrativa e erro). No teste, digite 10 para simular 0.10.",
+      "Soma da taxa de cartao com a administrativa (nao inclui taxa de erro - essa ja entra dentro de custo_base). No teste, digite 7 para simular 0.07.",
     type: "PERCENTAGE",
-    previewValue: 10,
+    previewValue: 7,
   },
   consumo_kw: {
-    description: "Consumo da maquina em kW.",
+    description: "Soma do consumo (kW) das maquinas de todas as mesas do orcamento.",
     type: "FLOAT",
     previewValue: 0.12,
   },
   horas_pintura: {
-    description: "Horas totais estimadas para pintura do orcamento.",
+    description: "Horas totais estimadas para pintura do orcamento inteiro (nao por mesa).",
     type: "FLOAT",
     previewValue: 1,
   },
@@ -116,7 +121,8 @@ const systemVariableMeta: Record<
     previewValue: 35,
   },
   horas_acabamento: {
-    description: "Horas totais estimadas para acabamento ou lixamento.",
+    description:
+      "Horas totais estimadas para acabamento ou lixamento do orcamento inteiro (nao por mesa).",
     type: "FLOAT",
     previewValue: 1.5,
   },
@@ -132,7 +138,7 @@ const systemVariableMeta: Record<
   },
   taxa_erro: {
     description:
-      "Taxa de erro/desperdicio. Se nao preenchida (0), nao afeta o calculo. No teste, digite 3 para simular 0.03.",
+      "Taxa de erro/desperdicio, aplicada so sobre material+energia (nunca sobre depreciacao/manutencao) e ja embutida em custo_base. Se nao preenchida (0), nao afeta o calculo. No teste, digite 3 para simular 0.03.",
     type: "PERCENTAGE",
     previewValue: 3,
   },

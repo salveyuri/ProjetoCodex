@@ -64,7 +64,8 @@ const defaultSettings: ProductionSettings = {
 
 const emptyFormulaForm: FormulaFormState = {
   name: "",
-  expression: "(custo_base * (1 + margem_lucro)) + (custo_base * taxa_cartao)",
+  expression:
+    "(custo_base + (valor_hora_acabamento * horas_acabamento) + (valor_hora_pintura * horas_pintura)) * (1 + taxas_percentuais + margem_lucro)",
   isActive: true,
   isDefault: false,
 };
@@ -84,12 +85,13 @@ const typeDescriptions: Record<CustomVariableType, string> = {
 // Only custo_base is a derived/composite variable today — shown as an
 // always-visible breakdown line under it (and folded into the hover
 // tooltip) so nobody has to guess what it's made of before building a
-// formula on top of it. Keep in sync with CalculationService.ts's baseCost
-// computation (materialCost + energyCost + depreciationCost +
-// maintenanceCost).
+// formula on top of it. Keep in sync with CalculationService.ts's
+// calculateAggregate (taxa_erro applies only to material+energia, summed
+// across every mesa of the quote — never per mesa, never on depreciacao/
+// manutencao).
 const variableBreakdowns: Partial<Record<string, string>> = {
   custo_base:
-    "material_cost + energia_total + depreciacao_maquina + manutencao_maquina",
+    "(material_cost + energia_total) * (1 + taxa_erro) + depreciacao_maquina + manutencao_maquina",
 };
 
 const typeOptions: Array<{ value: CustomVariableType; label: string }> = [

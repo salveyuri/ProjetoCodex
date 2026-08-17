@@ -1619,3 +1619,81 @@ valor, indicando quais variaveis ela usa.
   calculada: custo_base = material_cost + energia_total +
   depreciacao_maquina + manutencao_maquina". Lint/build de frontend
   limpos.
+
+## 2026-08-17 - Bug: horas de pintura/acabamento duplicavam por mesa - redesenho do motor de precificacao
+
+Pedido do Yuri (com 2 prints do form "Novo Orcamento"): ao aumentar horas
+de pintura de 5h para 8h, o subtotal de Mesa 1 E de Mesa 2 subiam pelo
+MESMO delta (R$78,09 cada) - nao deveria acontecer, pintura/acabamento
+devem influenciar so o total do orcamento, nao o valor de cada mesa. Junto
+com o relato, o Yuri especificou a formula de calculo que queria (mesa =
+impressao+material com taxa de erro so sobre isso; pintura/acabamento
+somados uma vez; cartao/administrativo/margem por cima de tudo).
+
+- Causa raiz confirmada em `quote.service.ts`: `calculateItems` montava um
+  `quoteCalculationContext` com as horas do orcamento inteiro e espalhava
+  ele, sem alteracao, em cada calculo POR ITEM (`calculateWithResolved
+  Context` chamado uma vez por mesa) - cada mesa recontava pintura/
+  acabamento do zero.
+- 3 perguntas de escopo tiradas com `AskUserQuestion` antes de implementar
+  (todas respondidas com a opcao recomendada): depreciacao/manutencao
+  continuam por mesa; subtotal exibido por mesa = custo bruto (sem taxas/
+  margem/pos-processamento); a mudanca vale pra toda formula, nao so a
+  padrao do sistema.
+- Motor reescrito em `CalculationService.ts`: `calculateAggregate` (novo,
+  exportado pra teste) roda em 2 estagios - por mesa (so aritmetica, sem
+  formula: material+energia+depreciacao+manutencao = "custo da mesa") e
+  uma vez pro orcamento inteiro (soma tudo, taxa de erro so sobre
+  material+energia, pintura/acabamento somados uma unica vez, formula
+  avaliada UMA VEZ contra as variaveis agregadas). `calculateQuoteBreakdown`
+  (Calculadora avulsa) virou wrapper fino (N=1) do mesmo motor -
+  Calculadora e orcamentos nunca podem divergir.
+- Nova formula padrao do sistema (texto do proprio Yuri, agora corrigida
+  pra rodar uma vez por orcamento):
+  `(custo_base + (valor_hora_acabamento * horas_acabamento) +
+  (valor_hora_pintura * horas_pintura)) * (1 + taxas_percentuais +
+  margem_lucro)` - migration `20260817120000_update_default_formula_
+  pricing_model` faz o UPDATE na linha `system_formulas` (`code =
+  'system_default'`).
+- `taxas_percentuais` volta a ser so cartao+administrativa (taxa_erro
+  passou a ser embutida em `custo_base` upstream, aditiva, entao nao
+  precisa mais estar misturada em `taxas_percentuais` pra evitar zerar o
+  preco). `cardFeeAmount`/`administrativeFeeAmount`/`marginAmount` agora
+  sao estimativas de exibicao calculadas uniformemente (formula padrao OU
+  customizada - antes so a padrao ganhava esse calculo).
+- Novo endpoint `POST /quotes/preview` (validator/controller/rota) -
+  recebe o orcamento inteiro numa chamada so e roda o MESMO
+  `calculationService.calculateQuote` que `create`/`update` usam - preview
+  e salvamento nunca podem divergir. `quote.service.ts` reescrito pra usar
+  esse metodo (removido `calculateItems`/`aggregateCalculations` antigos);
+  `Quote.totalAmount` passa a ser o unico lugar com o preco final de
+  verdade (nao mais soma de `finalPrice` por item - esses ficam sempre
+  iguais ao custo bruto da mesa, `marginAmount`/`feesTotal` sempre 0).
+- Frontend do "Novo orcamento" (`useQuoteForm.ts`, `PrintItemCard.tsx`,
+  `QuoteSummary.tsx`, `QuoteForm.tsx`) trocado de N chamadas paralelas a
+  `/calculate` (uma por mesa, mesmo desenho que causava o bug) pra uma
+  chamada so a `/quotes/preview`; cada mesa mostra seu `rawCost` (label
+  "Custo da mesa"), o total vem do `breakdown.finalPrice` agregado.
+  Calculadora avulsa (`dashboard/calculator/page.tsx`) atualizada pro
+  campo renomeado `errorCostAmount` (era `errorFeeAmount`) + nova linha
+  `postProcessingCost` + `maintenanceCost` no breakdown.
+- `analytics.service.ts`: receita/lucro deixaram de ser somados por item
+  (`item.finalPrice` sempre igual a `baseCost` agora, lucro teria virado
+  sempre 0) - reescrito pra calcular uma vez por orcamento
+  (`quote.totalAmount` - custo bruto total) e alocar de volta pra cada
+  item proporcional ao custo bruto (`allocateShare`), usado no
+  `materialMix` e nas colunas do export CSV.
+- Testes: `CalculationService.test.ts` reescrito (valores re-pinados,
+  `errorFeeAmount` -> `errorCostAmount`, taxas uniformes pra formula
+  customizada) + 3 testes novos que reproduzem o bug relatado direto no
+  motor agregado (`postProcessingCost` identico com 1 ou 2 mesas; delta de
+  preco por hora de pintura identico com 1 ou 2 mesas; custo de mesa
+  nunca muda com pintura/acabamento). Suite: 95/95 passando (9 arquivos).
+- Validado ao vivo recriando o cenario exato do print: empresa nova,
+  maquina+material configurados, hora de pintura R$10, 2 mesas (Mesa 1:
+  100g/2h, Mesa 2: 150g/3h). Com pintura=5h: Mesa 1 R$11,44, Mesa 2
+  R$17,16, total R$102,18. Com pintura=8h: Mesa 1 e Mesa 2 **inalteradas**
+  (R$11,44 / R$17,16), total R$141,18 (delta R$39,00 = 3h extra * R$10 *
+  1,30 de margem - exatamente uma vez, nao dobrado). Orcamento salvo
+  confirma o mesmo total (R$141,18) que o preview mostrou. Migration
+  aplicada, lint/build/test limpos em shared/backend/frontend.

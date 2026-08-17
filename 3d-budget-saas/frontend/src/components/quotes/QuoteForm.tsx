@@ -24,7 +24,7 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
     machines,
     materials,
     formulas,
-    tablePreviews,
+    itemPreviewByLocalId,
     savedQuote,
     toasts,
     dismissToast,
@@ -60,7 +60,9 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
               {quoteId ? "Editar orcamento" : "Novo orcamento"}
             </h1>
             <p className="mt-2 max-w-2xl text-base text-muted">
-              Cada mesa e calculada individualmente e somada no valor final.
+              Cada mesa mostra seu custo de producao; pintura, acabamento,
+              taxas e margem sao aplicados uma unica vez sobre o orcamento
+              inteiro.
             </p>
           </div>
           <StatusBadge tone={quoteStatusTones[form.status]}>
@@ -181,7 +183,7 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
                   index={index}
                   machines={machines}
                   materials={materials}
-                  preview={tablePreviews[table.localId] ?? null}
+                  preview={itemPreviewByLocalId[table.localId] ?? null}
                   canRemove={form.tables.length > 1}
                   isLoadingResources={isLoadingResources}
                   missingResources={missingResources}

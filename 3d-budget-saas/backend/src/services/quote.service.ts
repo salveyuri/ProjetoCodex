@@ -1,5 +1,6 @@
 import type {
   PaginatedQuoteList,
+  QuoteItemCostPreview,
   QuoteItemSnapshot,
   QuoteListItem,
   QuoteResource,
@@ -10,10 +11,11 @@ import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
 import { billingService } from "./billing.service";
 import { cacheService, companyAnalyticsCacheKeyPrefix } from "./cache.service";
-import { calculationService } from "./CalculationService";
+import {
+  calculationService,
+  type QuoteCalculationResult,
+} from "./CalculationService";
 import { emailService } from "./email.service";
-import { formulaService } from "./formula.service";
-import { settingsService } from "./settings.service";
 import type {
   QuoteCreateInput,
   QuoteListQuery,
@@ -46,35 +48,14 @@ const quoteListInclude = {
 
 type QuoteWithItems = Prisma.QuoteGetPayload<{ include: typeof quoteInclude }>;
 type QuoteListRow = Prisma.QuoteGetPayload<{ include: typeof quoteListInclude }>;
-type QuoteCalculation = Awaited<ReturnType<typeof calculationService.calculate>>;
 type QuoteItemInput = QuoteCreateInput["items"][number];
 
 const toNumber = (value: Prisma.Decimal): number => Number(value.toString());
 
 const decimal = (value: number): Prisma.Decimal => new Prisma.Decimal(value);
 
-const sumDecimal = (
-  values: number[],
-): Prisma.Decimal =>
-  values.reduce(
-    (total, value) => total.add(decimal(value)),
-    new Prisma.Decimal(0),
-  );
-
-const aggregateCalculations = (calculations: QuoteCalculation[]) => ({
-  totalAmount: sumDecimal(
-    calculations.map((calculation) => calculation.breakdown.finalPrice),
-  ),
-  totalPrintHours: sumDecimal(
-    calculations.map((calculation) => calculation.input.printTimeHours),
-  ),
-  totalWeightGrams: sumDecimal(
-    calculations.map((calculation) => calculation.input.weightGrams),
-  ),
-});
-
-const getAppliedFormulaId = (calculations: QuoteCalculation[]): string | null =>
-  calculations.find((calculation) => calculation.formula.id)?.formula.id ?? null;
+const sumDecimal = (values: number[]): Prisma.Decimal =>
+  values.reduce((total, value) => total.add(decimal(value)), new Prisma.Decimal(0));
 
 const toQuoteItemInput = (
   item: QuoteWithItems["printItems"][number],
@@ -84,16 +65,6 @@ const toQuoteItemInput = (
   materialId: item.materialId,
   weightGrams: toNumber(item.materialWeightGrams),
   printTimeHours: toNumber(item.estimatedPrintTimeHours),
-});
-
-const buildQuoteCalculationContext = (
-  paintingHours: number,
-  finishingHours: number,
-  quoteItemsCount: number,
-) => ({
-  paintingHours,
-  finishingHours,
-  quoteItemsCount,
 });
 
 // "Access denied." on purpose: doesn't confirm a company-ownership check
@@ -178,29 +149,37 @@ const toQuoteListItem = (quote: QuoteListRow): QuoteListItem => {
   };
 };
 
+// Each print item snapshots its own RAW production cost only — material +
+// energy + depreciation + maintenance, no error rate/fees/margin/post-
+// processing (those only exist once at the whole-quote level, computed
+// once by calculateQuote — see Contextos/Decisoes.md, 2026-08-17).
+// marginAmount/feesTotal stay at 0: they're no longer a meaningful
+// per-item figure, but the columns remain (no schema migration needed).
 const toPrintItemSnapshotData = (
   input: QuoteItemInput,
-  calculation: QuoteCalculation,
+  machineId: string,
+  materialId: string,
+  itemPreview: QuoteItemCostPreview,
+  rates: QuoteCalculationResult["rates"],
 ): Prisma.PrintItemUncheckedCreateWithoutQuoteInput => ({
   modelName: input.modelName,
-  machineId: calculation.resources.machine.id,
-  materialId: calculation.resources.material.id,
-  estimatedPrintTimeHours: calculation.input.printTimeHours,
-  materialWeightGrams: calculation.input.weightGrams,
-  calculatedCost: calculation.breakdown.finalPrice,
-  materialCost: calculation.breakdown.materialCost,
-  energyCost: calculation.breakdown.energyCost,
-  depreciationCost: calculation.breakdown.depreciationCost,
-  maintenanceCost: calculation.breakdown.maintenanceCost,
-  baseCost: calculation.breakdown.baseCost,
-  marginAmount: calculation.breakdown.marginAmount,
-  feesTotal: calculation.breakdown.feesTotal,
-  finalPrice: calculation.breakdown.finalPrice,
-  appliedMarginPercent: calculation.rates.desiredMarginPercent,
-  appliedEnergyCostPerKwh: calculation.rates.energyCostPerKwh,
-  appliedCardFeePercent: calculation.rates.cardFeePercent,
-  appliedAdministrativeFeePercent:
-    calculation.rates.administrativeFeePercent,
+  machineId,
+  materialId,
+  estimatedPrintTimeHours: input.printTimeHours,
+  materialWeightGrams: input.weightGrams,
+  calculatedCost: itemPreview.rawCost,
+  materialCost: itemPreview.materialCost,
+  energyCost: itemPreview.energyCost,
+  depreciationCost: itemPreview.depreciationCost,
+  maintenanceCost: itemPreview.maintenanceCost,
+  baseCost: itemPreview.rawCost,
+  marginAmount: 0,
+  feesTotal: 0,
+  finalPrice: itemPreview.rawCost,
+  appliedMarginPercent: rates.desiredMarginPercent,
+  appliedEnergyCostPerKwh: rates.energyCostPerKwh,
+  appliedCardFeePercent: rates.cardFeePercent,
+  appliedAdministrativeFeePercent: rates.administrativeFeePercent,
 });
 
 export class QuoteService {
@@ -244,35 +223,37 @@ export class QuoteService {
     companyId: string,
     input: QuoteCreateInput,
   ): Promise<QuoteResource> {
-    const quoteCalculationContext = buildQuoteCalculationContext(
-      input.paintingHours,
-      input.finishingHours,
-      input.items.length,
-    );
-    const calculations = await this.calculateItems(
-      companyId,
-      input.items,
-      input.formulaId,
-      quoteCalculationContext,
-    );
-    const aggregation = aggregateCalculations(calculations);
-    const appliedFormulaId = getAppliedFormulaId(calculations);
+    const result = await calculationService.calculateQuote(companyId, {
+      items: input.items,
+      formulaId: input.formulaId,
+      paintingHours: input.paintingHours,
+      finishingHours: input.finishingHours,
+    });
+    const totalWeightGrams = sumDecimal(input.items.map((item) => item.weightGrams));
+    const totalPrintHours = sumDecimal(input.items.map((item) => item.printTimeHours));
+
     const quote = await prisma.$transaction(async (transaction) => {
       const created = await transaction.quote.create({
         data: {
           companyId,
-          formulaId: appliedFormulaId,
+          formulaId: result.formula.id,
           customerName: input.customerName,
           status: input.status as QuoteStatus,
-          totalAmount: aggregation.totalAmount,
-          totalPrintHours: aggregation.totalPrintHours,
-          totalWeightGrams: aggregation.totalWeightGrams,
+          totalAmount: result.breakdown.finalPrice,
+          totalPrintHours,
+          totalWeightGrams,
           paintingHours: input.paintingHours,
           finishingHours: input.finishingHours,
           validUntil: input.validUntil,
           printItems: {
             create: input.items.map((item, index) =>
-              toPrintItemSnapshotData(item, calculations[index]),
+              toPrintItemSnapshotData(
+                item,
+                item.machineId,
+                item.materialId,
+                result.items[index],
+                result.rates,
+              ),
             ),
           },
         },
@@ -301,25 +282,23 @@ export class QuoteService {
       input.finishingHours !== undefined;
     const itemsForCalculation = input.items ?? existing.printItems.map(toQuoteItemInput);
     const formulaId = input.formulaId ?? existing.formulaId ?? undefined;
-    const paintingHours =
-      input.paintingHours ?? toNumber(existing.paintingHours);
-    const finishingHours =
-      input.finishingHours ?? toNumber(existing.finishingHours);
-    const quoteCalculationContext = buildQuoteCalculationContext(
-      paintingHours,
-      finishingHours,
-      itemsForCalculation.length,
-    );
-    const calculations = shouldRecalculate
-      ? await this.calculateItems(
-          companyId,
-          itemsForCalculation,
+    const paintingHours = input.paintingHours ?? toNumber(existing.paintingHours);
+    const finishingHours = input.finishingHours ?? toNumber(existing.finishingHours);
+
+    const result = shouldRecalculate
+      ? await calculationService.calculateQuote(companyId, {
+          items: itemsForCalculation,
           formulaId,
-          quoteCalculationContext,
-        )
+          paintingHours,
+          finishingHours,
+        })
       : null;
-    const aggregation = calculations ? aggregateCalculations(calculations) : null;
-    const appliedFormulaId = calculations ? getAppliedFormulaId(calculations) : undefined;
+    const totalWeightGrams = result
+      ? sumDecimal(itemsForCalculation.map((item) => item.weightGrams))
+      : undefined;
+    const totalPrintHours = result
+      ? sumDecimal(itemsForCalculation.map((item) => item.printTimeHours))
+      : undefined;
 
     const quote = await prisma.$transaction(async (transaction) => {
       const updateResult = await transaction.quote.updateMany({
@@ -328,10 +307,10 @@ export class QuoteService {
           customerName: input.customerName,
           validUntil: input.validUntil,
           status: input.status as QuoteStatus | undefined,
-          formulaId: appliedFormulaId,
-          totalAmount: aggregation?.totalAmount,
-          totalPrintHours: aggregation?.totalPrintHours,
-          totalWeightGrams: aggregation?.totalWeightGrams,
+          formulaId: result ? result.formula.id : undefined,
+          totalAmount: result?.breakdown.finalPrice,
+          totalPrintHours,
+          totalWeightGrams,
           paintingHours: input.paintingHours,
           finishingHours: input.finishingHours,
         },
@@ -341,7 +320,7 @@ export class QuoteService {
         throwQuoteForbidden();
       }
 
-      if (shouldRecalculate && calculations) {
+      if (shouldRecalculate && result) {
         await transaction.printItem.deleteMany({
           where: { quote: { id: quoteId, companyId } },
         });
@@ -350,7 +329,13 @@ export class QuoteService {
             transaction.printItem.create({
               data: {
                 quoteId,
-                ...toPrintItemSnapshotData(item, calculations[index]),
+                ...toPrintItemSnapshotData(
+                  item,
+                  item.machineId,
+                  item.materialId,
+                  result.items[index],
+                  result.rates,
+                ),
               },
             }),
           ),
@@ -404,35 +389,6 @@ export class QuoteService {
     }
 
     return quote as QuoteWithItems;
-  }
-
-  /**
-   * Resolves `settings`/`formula` once for the whole quote (every item
-   * shares them) instead of once per item, then calculates each item in
-   * parallel. Avoids refetching the same settings/formula N times for a
-   * quote with N print items.
-   */
-  private async calculateItems(
-    companyId: string,
-    items: QuoteItemInput[],
-    formulaId: string | undefined,
-    quoteCalculationContext: ReturnType<typeof buildQuoteCalculationContext>,
-  ): Promise<QuoteCalculation[]> {
-    const [settings, formula] = await Promise.all([
-      settingsService.get(companyId),
-      formulaService.getFormulaForCalculation(companyId, formulaId),
-    ]);
-
-    return Promise.all(
-      items.map((item) =>
-        calculationService.calculateWithResolvedContext(
-          companyId,
-          { ...item, ...quoteCalculationContext, formulaId },
-          settings,
-          formula,
-        ),
-      ),
-    );
   }
 }
 

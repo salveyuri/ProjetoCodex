@@ -1,9 +1,9 @@
 "use client";
 
 import type {
-  CalculationResponse,
   MachineResource,
   MaterialResource,
+  QuoteItemCostPreview,
 } from "@3d-budget/shared";
 import { Clock3, Scale, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -17,7 +17,7 @@ interface PrintItemCardProps {
   index: number;
   machines: MachineResource[];
   materials: MaterialResource[];
-  preview: CalculationResponse | null;
+  preview: QuoteItemCostPreview | null;
   canRemove: boolean;
   isLoadingResources: boolean;
   missingResources: boolean;
@@ -50,7 +50,7 @@ export const PrintItemCard = ({
       </div>
       <div className="flex items-center gap-2">
         <StatusBadge tone={preview ? "success" : "warning"}>
-          {preview ? toMoney(preview.breakdown.finalPrice) : "aguardando"}
+          {preview ? toMoney(preview.rawCost) : "aguardando"}
         </StatusBadge>
         <button
           type="button"
@@ -124,9 +124,9 @@ export const PrintItemCard = ({
         disabled={fieldsDisabled}
       />
       <div className="grid min-h-11 min-w-0 content-end gap-1 rounded-lg border border-border bg-background px-3 py-2">
-        <span className="text-xs uppercase text-muted">Subtotal</span>
+        <span className="text-xs uppercase text-muted">Custo da mesa</span>
         <span className="text-sm font-semibold text-foreground">
-          {preview ? toMoney(preview.breakdown.finalPrice) : "--"}
+          {preview ? toMoney(preview.rawCost) : "--"}
         </span>
       </div>
     </div>

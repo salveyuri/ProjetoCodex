@@ -1,9 +1,11 @@
 import type {
+  CalculationAppliedRates,
   CalculationRequest,
   CalculationResponse,
   MachineType,
   MaterialType,
   ProductionSettings,
+  QuoteItemCostPreview,
 } from "@3d-budget/shared";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
@@ -52,6 +54,23 @@ export interface CalculationFormulaInput {
   } | null;
 }
 
+const machineSelect = {
+  id: true,
+  name: true,
+  type: true,
+  powerConsumptionKw: true,
+  depreciationCostPerHour: true,
+  maintenanceCostPerHour: true,
+} as const;
+
+const materialSelect = {
+  id: true,
+  brand: true,
+  type: true,
+  color: true,
+  costPerGram: true,
+} as const;
+
 const ROUNDING_MODE = Prisma.Decimal.ROUND_HALF_UP;
 
 const decimal = (value: DecimalValue): Prisma.Decimal => new Prisma.Decimal(value);
@@ -74,53 +93,159 @@ const toRoundedNumber = (value: Prisma.Decimal, decimalPlaces: number): number =
 const toCurrencyNumber = (value: Prisma.Decimal): number =>
   toRoundedNumber(value, 2);
 
-const toPositiveCurrencyDelta = (
-  finalPrice: Prisma.Decimal,
-  baseCost: Prisma.Decimal,
+const toPositiveDelta = (
+  a: Prisma.Decimal,
+  b: Prisma.Decimal,
 ): Prisma.Decimal => {
-  const delta = finalPrice.sub(baseCost);
+  const delta = a.sub(b);
   return delta.isNegative() ? new Prisma.Decimal(0) : delta;
 };
 
-const buildFormulaVariables = ({
-  request,
-  machine,
-  settings,
-  materialCost,
-  energyCost,
-  depreciationCost,
-  maintenanceCost,
-  baseCost,
-}: {
-  request: CalculationRequest;
-  machine: CalculationMachine;
-  settings: ProductionSettings;
+const toAppliedRates = (settings: ProductionSettings): CalculationAppliedRates => ({
+  desiredMarginPercent: settings.desiredMarginPercent,
+  paintingHourRate: settings.paintingHourRate,
+  finishingHourRate: settings.finishingHourRate,
+  errorRate: settings.errorRate,
+  energyCostPerKwh: settings.energyCostPerKwh,
+  cardFeePercent: settings.cardFeePercent,
+  administrativeFeePercent: settings.administrativeFeePercent,
+  customVariables: settings.customVariables,
+});
+
+/** Raw production cost of a single print item — material + energy +
+ * machine depreciation/maintenance for the time/weight given. No error
+ * rate, fees, margin or post-processing: those only exist once the item
+ * is folded into a quote's aggregate (see `calculateAggregate` below). */
+export interface RawItemCost {
   materialCost: Prisma.Decimal;
   energyCost: Prisma.Decimal;
   depreciationCost: Prisma.Decimal;
   maintenanceCost: Prisma.Decimal;
-  baseCost: Prisma.Decimal;
-}): FormulaVariables => {
-  const marginRate = settings.desiredMarginPercent / 100;
-  const cardFeeRate = settings.cardFeePercent / 100;
-  const administrativeFeeRate = settings.administrativeFeePercent / 100;
-  // Percentage convention (0-100, unfilled = 0), same as card/administrative
-  // fees — a rate of 0 is always safe: it's summed into the formula's
-  // "(taxa_cartao + taxa_administrativa + taxa_erro)" factor, never used as
-  // a standalone multiplier, so an unfilled rate never zeroes the price.
-  const errorFeeRate = settings.errorRate / 100;
-  const weightGrams = toSafeNumber(request.weightGrams);
-  const printTimeHours = toSafeNumber(request.printTimeHours);
-  const paintingHours = toSafeNumber(request.paintingHours);
-  const finishingHours = toSafeNumber(request.finishingHours);
-  const quoteItemsCount = toSafeNumber(request.quoteItemsCount ?? 1);
-  const runtimeCustomVariables = customVariablesToRuntimeValues(
-    settings.customVariables,
+  rawCost: Prisma.Decimal;
+}
+
+export const computeRawItemCost = (
+  machine: CalculationMachine,
+  material: CalculationMaterial,
+  weightGrams: Prisma.Decimal,
+  printTimeHours: Prisma.Decimal,
+  energyCostPerKwh: number,
+): RawItemCost => {
+  const materialCost = material.costPerGram.mul(weightGrams);
+  const energyCost = machine.powerConsumptionKw
+    .mul(printTimeHours)
+    .mul(energyCostPerKwh);
+  const depreciationCost = machine.depreciationCostPerHour.mul(printTimeHours);
+  const maintenanceCost = machine.maintenanceCostPerHour.mul(printTimeHours);
+  const rawCost = materialCost.add(energyCost).add(depreciationCost).add(maintenanceCost);
+
+  return { materialCost, energyCost, depreciationCost, maintenanceCost, rawCost };
+};
+
+export interface AggregateCalculationInput {
+  rawCosts: RawItemCost[];
+  settings: ProductionSettings;
+  formula: { id: string | null; name: string; expression: string } | null;
+  paintingHours: number;
+  finishingHours: number;
+  itemsCount: number;
+  totalWeightGrams: Prisma.Decimal;
+  totalPrintTimeHours: Prisma.Decimal;
+  totalPowerConsumptionKw: Prisma.Decimal;
+  customVariables: ProductionSettings["customVariables"];
+}
+
+export interface AggregateCalculationResult {
+  breakdown: {
+    materialCost: number;
+    energyCost: number;
+    depreciationCost: number;
+    maintenanceCost: number;
+    errorCostAmount: number;
+    baseCost: number;
+    postProcessingCost: number;
+    marginAmount: number;
+    subtotalWithMargin: number;
+    cardFeeAmount: number;
+    administrativeFeeAmount: number;
+    feesTotal: number;
+    finalPrice: number;
+  };
+  formula: {
+    id: string | null;
+    name: string;
+    expression: string;
+    source: "DATABASE" | "SYSTEM_FALLBACK";
+  };
+  variables: FormulaVariables;
+}
+
+/**
+ * The core pricing engine: folds N raw item costs into ONE whole-quote
+ * calculation, evaluating the formula (system default or company-custom)
+ * exactly once — never per item. This is the fix for the reported bug
+ * where painting/finishing hours got counted once per mesa instead of
+ * once for the whole order (see Contextos/Decisoes.md, 2026-08-17).
+ *
+ * Pipeline (matches the Yuri's own spec verbatim):
+ *   1. printCost = sum(materialCost) + sum(energyCost) across every item.
+ *   2. errorRate applies ONLY to printCost (not depreciation/maintenance).
+ *   3. custo_base = printCost*(1+errorRate) + sum(depreciationCost) + sum(maintenanceCost).
+ *   4. Post-processing (painting/finishing) is added once, not per item —
+ *      the formula itself adds it as a separate term alongside custo_base.
+ *   5. The formula evaluates once against these aggregate variables.
+ *   6. cardFeeAmount/administrativeFeeAmount/marginAmount below are
+ *      best-effort *display* estimates (subtotal * rate) — the formula is
+ *      free-text, so there's no way to know exactly how an arbitrary
+ *      expression split fees from margin in its result. This applies
+ *      uniformly regardless of formula source (default or custom).
+ */
+export const calculateAggregate = ({
+  rawCosts,
+  settings,
+  formula,
+  paintingHours,
+  finishingHours,
+  itemsCount,
+  totalWeightGrams,
+  totalPrintTimeHours,
+  totalPowerConsumptionKw,
+  customVariables,
+}: AggregateCalculationInput): AggregateCalculationResult => {
+  const materialCost = rawCosts.reduce(
+    (total, item) => total.add(item.materialCost),
+    decimal(0),
+  );
+  const energyCost = rawCosts.reduce(
+    (total, item) => total.add(item.energyCost),
+    decimal(0),
+  );
+  const depreciationCost = rawCosts.reduce(
+    (total, item) => total.add(item.depreciationCost),
+    decimal(0),
+  );
+  const maintenanceCost = rawCosts.reduce(
+    (total, item) => total.add(item.maintenanceCost),
+    decimal(0),
   );
 
-  return {
-    peso: weightGrams,
-    tempo: printTimeHours,
+  const marginRate = settings.desiredMarginPercent / 100;
+  const cardFeeRate = percentToRate(settings.cardFeePercent);
+  const administrativeFeeRate = percentToRate(settings.administrativeFeePercent);
+  const errorRate = percentToRate(settings.errorRate);
+
+  const printCost = materialCost.add(energyCost);
+  const errorCostAmount = printCost.mul(errorRate);
+  const baseCost = printCost.add(errorCostAmount).add(depreciationCost).add(maintenanceCost);
+  const postProcessingCost = decimal(settings.paintingHourRate)
+    .mul(paintingHours)
+    .add(decimal(settings.finishingHourRate).mul(finishingHours));
+  const subtotalBeforeFees = baseCost.add(postProcessingCost);
+
+  const runtimeCustomVariables = customVariablesToRuntimeValues(customVariables);
+  const formulaVariables: FormulaVariables = {
+    peso: Number(totalWeightGrams.toString()),
+    tempo: Number(totalPrintTimeHours.toString()),
     material_cost: Number(materialCost.toString()),
     energia_total: Number(energyCost.toString()),
     depreciacao_maquina: Number(depreciationCost.toString()),
@@ -128,20 +253,79 @@ const buildFormulaVariables = ({
     custo_base: Number(baseCost.toString()),
     margem_lucro: marginRate,
     custo_kwh: settings.energyCostPerKwh,
-    taxa_cartao: cardFeeRate,
-    taxa_administrativa: administrativeFeeRate,
-    taxas_percentuais: cardFeeRate + administrativeFeeRate + errorFeeRate,
-    consumo_kw: Number(machine.powerConsumptionKw.toString()),
+    taxa_cartao: Number(cardFeeRate.toString()),
+    taxa_administrativa: Number(administrativeFeeRate.toString()),
+    taxas_percentuais: Number(cardFeeRate.add(administrativeFeeRate).toString()),
+    // Best-effort sum across items — with multiple different machines in
+    // one quote this isn't any single machine's real consumption, just a
+    // stand-in so the variable stays defined instead of crashing formulas
+    // that reference it.
+    consumo_kw: Number(totalPowerConsumptionKw.toString()),
     horas_pintura: paintingHours,
     valor_hora_pintura: settings.paintingHourRate,
     horas_acabamento: finishingHours,
     valor_hora_acabamento: settings.finishingHourRate,
-    quantidade_mesas: quoteItemsCount,
-    taxa_erro: errorFeeRate,
+    quantidade_mesas: itemsCount,
+    taxa_erro: Number(errorRate.toString()),
     ...runtimeCustomVariables,
+  };
+
+  const selectedFormula = formula ?? SYSTEM_DEFAULT_FORMULA;
+  let formulaSource: "DATABASE" | "SYSTEM_FALLBACK" = formula
+    ? "DATABASE"
+    : "SYSTEM_FALLBACK";
+  let formulaResult: FormulaExecutionResult;
+
+  try {
+    formulaResult = evaluateFormulaExpression(
+      selectedFormula.expression,
+      formulaVariables,
+    );
+  } catch {
+    formulaResult = evaluateFormulaExpression(
+      SYSTEM_DEFAULT_FORMULA.expression,
+      formulaVariables,
+    );
+    formulaSource = "SYSTEM_FALLBACK";
+  }
+
+  const finalPrice = decimal(formulaResult.price);
+  const delta = toPositiveDelta(finalPrice, subtotalBeforeFees);
+  const cardFeeAmount = subtotalBeforeFees.mul(cardFeeRate);
+  const administrativeFeeAmount = subtotalBeforeFees.mul(administrativeFeeRate);
+  const feesTotal = cardFeeAmount.add(administrativeFeeAmount);
+  const marginAmount = toPositiveDelta(delta, feesTotal);
+  const subtotalWithMargin = subtotalBeforeFees.add(marginAmount);
+
+  return {
+    breakdown: {
+      materialCost: toCurrencyNumber(materialCost),
+      energyCost: toCurrencyNumber(energyCost),
+      depreciationCost: toCurrencyNumber(depreciationCost),
+      maintenanceCost: toCurrencyNumber(maintenanceCost),
+      errorCostAmount: toCurrencyNumber(errorCostAmount),
+      baseCost: toCurrencyNumber(baseCost),
+      postProcessingCost: toCurrencyNumber(postProcessingCost),
+      marginAmount: toCurrencyNumber(marginAmount),
+      subtotalWithMargin: toCurrencyNumber(subtotalWithMargin),
+      cardFeeAmount: toCurrencyNumber(cardFeeAmount),
+      administrativeFeeAmount: toCurrencyNumber(administrativeFeeAmount),
+      feesTotal: toCurrencyNumber(feesTotal),
+      finalPrice: toCurrencyNumber(finalPrice),
+    },
+    formula: {
+      id: formulaSource === "DATABASE" ? selectedFormula.id : null,
+      name:
+        formulaSource === "DATABASE" ? selectedFormula.name : SYSTEM_DEFAULT_FORMULA.name,
+      expression: formulaResult.expression,
+      source: formulaSource,
+    },
+    variables: formulaVariables,
   };
 };
 
+/** Single-item calculation — used by the standalone calculator page and
+ * by existing tests. Internally just the N=1 case of `calculateAggregate`. */
 export const calculateQuoteBreakdown = ({
   request,
   machine,
@@ -159,74 +343,27 @@ export const calculateQuoteBreakdown = ({
   };
   const weightGrams = decimal(safeRequest.weightGrams);
   const printTimeHours = decimal(safeRequest.printTimeHours);
-  const desiredMarginRate = percentToRate(settings.desiredMarginPercent);
-  const cardFeeRate = percentToRate(settings.cardFeePercent);
-  const administrativeFeeRate = percentToRate(
-    settings.administrativeFeePercent,
-  );
-  const errorFeeRate = percentToRate(settings.errorRate);
-
-  const materialCost = material.costPerGram.mul(weightGrams);
-  const energyCost = machine.powerConsumptionKw
-    .mul(printTimeHours)
-    .mul(settings.energyCostPerKwh);
-  const depreciationCost =
-    machine.depreciationCostPerHour.mul(printTimeHours);
-  const maintenanceCost =
-    machine.maintenanceCostPerHour.mul(printTimeHours);
-  const baseCost = materialCost
-    .add(energyCost)
-    .add(depreciationCost)
-    .add(maintenanceCost);
-  const formulaVariables = buildFormulaVariables({
-    request: safeRequest,
+  const rawCost = computeRawItemCost(
     machine,
+    material,
+    weightGrams,
+    printTimeHours,
+    settings.energyCostPerKwh,
+  );
+
+  const aggregate = calculateAggregate({
+    rawCosts: [rawCost],
     settings,
-    materialCost,
-    energyCost,
-    depreciationCost,
-    maintenanceCost,
-    baseCost,
+    formula,
+    paintingHours: safeRequest.paintingHours ?? 0,
+    finishingHours: safeRequest.finishingHours ?? 0,
+    itemsCount: safeRequest.quoteItemsCount ?? 1,
+    totalWeightGrams: weightGrams,
+    totalPrintTimeHours: printTimeHours,
+    totalPowerConsumptionKw: machine.powerConsumptionKw,
+    customVariables: settings.customVariables,
   });
-  const selectedFormula = formula ?? SYSTEM_DEFAULT_FORMULA;
-  let formulaSource: CalculationResponse["formula"]["source"] = "DATABASE";
-  let formulaResult: FormulaExecutionResult;
 
-  if (!formula) {
-    formulaSource = "SYSTEM_FALLBACK";
-  }
-
-  try {
-    formulaResult = evaluateFormulaExpression(
-      selectedFormula.expression,
-      formulaVariables,
-    );
-  } catch {
-    formulaResult = evaluateFormulaExpression(
-      SYSTEM_DEFAULT_FORMULA.expression,
-      formulaVariables,
-    );
-    formulaSource = "SYSTEM_FALLBACK";
-  }
-
-  const finalPrice = decimal(formulaResult.price);
-  const marginAmount =
-    formulaSource === "SYSTEM_FALLBACK"
-      ? baseCost.mul(desiredMarginRate)
-      : toPositiveCurrencyDelta(finalPrice, baseCost);
-  const subtotalWithMargin =
-    formulaSource === "SYSTEM_FALLBACK"
-      ? baseCost.add(marginAmount)
-      : finalPrice;
-  const cardFeeAmount =
-    formulaSource === "SYSTEM_FALLBACK" ? subtotalWithMargin.mul(cardFeeRate) : decimal(0);
-  const administrativeFeeAmount =
-    formulaSource === "SYSTEM_FALLBACK"
-      ? subtotalWithMargin.mul(administrativeFeeRate)
-      : decimal(0);
-  const errorFeeAmount =
-    formulaSource === "SYSTEM_FALLBACK" ? subtotalWithMargin.mul(errorFeeRate) : decimal(0);
-  const feesTotal = cardFeeAmount.add(administrativeFeeAmount).add(errorFeeAmount);
   const powerConsumptionWatts = machine.powerConsumptionKw.mul(1000);
 
   return {
@@ -237,12 +374,8 @@ export const calculateQuoteBreakdown = ({
         name: machine.name,
         type: machine.type,
         powerConsumptionWatts: toRoundedNumber(powerConsumptionWatts, 2),
-        depreciationCostPerHour: toCurrencyNumber(
-          machine.depreciationCostPerHour,
-        ),
-        maintenanceCostPerHour: toCurrencyNumber(
-          machine.maintenanceCostPerHour,
-        ),
+        depreciationCostPerHour: toCurrencyNumber(machine.depreciationCostPerHour),
+        maintenanceCostPerHour: toCurrencyNumber(machine.maintenanceCostPerHour),
       },
       material: {
         id: material.id,
@@ -252,40 +385,10 @@ export const calculateQuoteBreakdown = ({
         costPerGram: toRoundedNumber(material.costPerGram, 6),
       },
     },
-    rates: {
-      desiredMarginPercent: settings.desiredMarginPercent,
-      paintingHourRate: settings.paintingHourRate,
-      finishingHourRate: settings.finishingHourRate,
-      errorRate: settings.errorRate,
-      energyCostPerKwh: settings.energyCostPerKwh,
-      cardFeePercent: settings.cardFeePercent,
-      administrativeFeePercent: settings.administrativeFeePercent,
-      customVariables: settings.customVariables,
-    },
-    breakdown: {
-      materialCost: toCurrencyNumber(materialCost),
-      energyCost: toCurrencyNumber(energyCost),
-      depreciationCost: toCurrencyNumber(depreciationCost),
-      maintenanceCost: toCurrencyNumber(maintenanceCost),
-      baseCost: toCurrencyNumber(baseCost),
-      marginAmount: toCurrencyNumber(marginAmount),
-      subtotalWithMargin: toCurrencyNumber(subtotalWithMargin),
-      cardFeeAmount: toCurrencyNumber(cardFeeAmount),
-      administrativeFeeAmount: toCurrencyNumber(administrativeFeeAmount),
-      errorFeeAmount: toCurrencyNumber(errorFeeAmount),
-      feesTotal: toCurrencyNumber(feesTotal),
-      finalPrice: toCurrencyNumber(finalPrice),
-    },
-    formula: {
-      id: formulaSource === "DATABASE" ? selectedFormula.id : null,
-      name:
-        formulaSource === "DATABASE"
-          ? selectedFormula.name
-          : SYSTEM_DEFAULT_FORMULA.name,
-      expression: formulaResult.expression,
-      source: formulaSource,
-    },
-    variables: formulaVariables,
+    rates: toAppliedRates(settings),
+    breakdown: aggregate.breakdown,
+    formula: aggregate.formula,
+    variables: aggregate.variables,
     precision: {
       internal: "Prisma.Decimal",
       currencyDecimalPlaces: 2,
@@ -296,6 +399,29 @@ export const calculateQuoteBreakdown = ({
 type FormulaForCalculation = Awaited<
   ReturnType<typeof formulaService.getFormulaForCalculation>
 >;
+
+export interface QuoteCalculationItemInput {
+  modelName?: string;
+  machineId: string;
+  materialId: string;
+  weightGrams: number;
+  printTimeHours: number;
+}
+
+export interface QuoteCalculationInput {
+  items: QuoteCalculationItemInput[];
+  formulaId?: string;
+  paintingHours?: number;
+  finishingHours?: number;
+}
+
+export interface QuoteCalculationResult {
+  items: QuoteItemCostPreview[];
+  breakdown: AggregateCalculationResult["breakdown"];
+  rates: CalculationAppliedRates;
+  formula: AggregateCalculationResult["formula"];
+  variables: FormulaVariables;
+}
 
 export class CalculationService {
   async calculate(
@@ -312,8 +438,7 @@ export class CalculationService {
 
   /**
    * Same as `calculate`, but for callers that already resolved `settings`
-   * and `formula` once (e.g. a multi-item quote, where every item shares
-   * the same settings/formula) — avoids refetching them per item.
+   * and `formula` once.
    */
   async calculateWithResolvedContext(
     companyId: string,
@@ -324,24 +449,11 @@ export class CalculationService {
     const [machine, material] = await Promise.all([
       prisma.machine.findFirst({
         where: { id: input.machineId, companyId },
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          powerConsumptionKw: true,
-          depreciationCostPerHour: true,
-          maintenanceCostPerHour: true,
-        },
+        select: machineSelect,
       }),
       prisma.material.findFirst({
         where: { id: input.materialId, companyId },
-        select: {
-          id: true,
-          brand: true,
-          type: true,
-          color: true,
-          costPerGram: true,
-        },
+        select: materialSelect,
       }),
     ]);
 
@@ -365,6 +477,103 @@ export class CalculationService {
       settings,
       formula,
     });
+  }
+
+  /**
+   * Whole-quote calculation: resolves every item's machine/material,
+   * computes each one's raw cost, then folds them into ONE aggregate
+   * calculation (formula evaluated once — see `calculateAggregate`).
+   * Used by both the live quote preview endpoint and quote create/update,
+   * so preview and save can never drift apart.
+   */
+  async calculateQuote(
+    companyId: string,
+    input: QuoteCalculationInput,
+  ): Promise<QuoteCalculationResult> {
+    const [settings, formula] = await Promise.all([
+      settingsService.get(companyId),
+      formulaService.getFormulaForCalculation(companyId, input.formulaId),
+    ]);
+
+    const resolvedItems = await Promise.all(
+      input.items.map(async (item) => {
+        const [machine, material] = await Promise.all([
+          prisma.machine.findFirst({
+            where: { id: item.machineId, companyId },
+            select: machineSelect,
+          }),
+          prisma.material.findFirst({
+            where: { id: item.materialId, companyId },
+            select: materialSelect,
+          }),
+        ]);
+
+        if (!machine) {
+          throw new AppError("Access denied.", 403, "MACHINE_FORBIDDEN");
+        }
+
+        if (!material) {
+          throw new AppError("Access denied.", 403, "MATERIAL_FORBIDDEN");
+        }
+
+        const weightGrams = decimal(toSafeNumber(item.weightGrams));
+        const printTimeHours = decimal(toSafeNumber(item.printTimeHours));
+        const rawCost = computeRawItemCost(
+          machine,
+          material,
+          weightGrams,
+          printTimeHours,
+          settings.energyCostPerKwh,
+        );
+
+        return { modelName: item.modelName, machine, weightGrams, printTimeHours, rawCost };
+      }),
+    );
+
+    const paintingHours = toSafeNumber(input.paintingHours);
+    const finishingHours = toSafeNumber(input.finishingHours);
+    const totalWeightGrams = resolvedItems.reduce(
+      (total, item) => total.add(item.weightGrams),
+      decimal(0),
+    );
+    const totalPrintTimeHours = resolvedItems.reduce(
+      (total, item) => total.add(item.printTimeHours),
+      decimal(0),
+    );
+    const totalPowerConsumptionKw = resolvedItems.reduce(
+      (total, item) => total.add(item.machine.powerConsumptionKw),
+      decimal(0),
+    );
+
+    const aggregate = calculateAggregate({
+      rawCosts: resolvedItems.map((item) => item.rawCost),
+      settings,
+      formula,
+      paintingHours,
+      finishingHours,
+      itemsCount: resolvedItems.length,
+      totalWeightGrams,
+      totalPrintTimeHours,
+      totalPowerConsumptionKw,
+      customVariables: settings.customVariables,
+    });
+
+    const items: QuoteItemCostPreview[] = resolvedItems.map((item) => ({
+      modelName: item.modelName,
+      materialCost: toCurrencyNumber(item.rawCost.materialCost),
+      energyCost: toCurrencyNumber(item.rawCost.energyCost),
+      depreciationCost: toCurrencyNumber(item.rawCost.depreciationCost),
+      maintenanceCost: toCurrencyNumber(item.rawCost.maintenanceCost),
+      rawCost: toCurrencyNumber(item.rawCost.rawCost),
+    }));
+
+    return {
+      items,
+      breakdown: aggregate.breakdown,
+      rates: toAppliedRates(settings),
+      formula: aggregate.formula,
+      variables: aggregate.variables,
+    };
   }
 }
 

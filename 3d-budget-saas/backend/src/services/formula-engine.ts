@@ -3,12 +3,17 @@ import { AppError } from "../middlewares/error-handler";
 
 export const SYSTEM_DEFAULT_FORMULA_CODE = "system_default";
 
+// custo_base already has taxa_erro folded in (applied only to material+
+// energy, upstream — see CalculationService.ts's calculateAggregate).
+// taxas_percentuais here is just taxa_cartao+taxa_administrativa.
+// Post-processing (pintura/acabamento) is a separate additive term,
+// applied once per quote — never per mesa.
 export const SYSTEM_DEFAULT_FORMULA = {
   id: null,
   code: SYSTEM_DEFAULT_FORMULA_CODE,
   name: "Formula Padrao do Sistema",
   expression:
-    "(custo_base * (1 + margem_lucro)) + (custo_base * (1 + margem_lucro) * (taxa_cartao + taxa_administrativa + taxa_erro))",
+    "(custo_base + (valor_hora_acabamento * horas_acabamento) + (valor_hora_pintura * horas_pintura)) * (1 + taxas_percentuais + margem_lucro)",
 };
 
 export const INTERNAL_VARIABLES = [

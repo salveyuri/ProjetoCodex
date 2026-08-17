@@ -156,6 +156,12 @@ export default function CalculatorPage() {
               icon: Cpu,
               tone: "text-accent",
             },
+            {
+              label: "Manutencao",
+              value: result.breakdown.maintenanceCost,
+              icon: Cpu,
+              tone: "text-accent",
+            },
           ]
         : [],
     [result],
@@ -384,7 +390,15 @@ export default function CalculatorPage() {
                   <BreakdownText
                     label="Taxa de erro"
                     value={
-                      result ? toMoney(result.breakdown.errorFeeAmount) : "--"
+                      result ? toMoney(result.breakdown.errorCostAmount) : "--"
+                    }
+                  />
+                  <BreakdownText
+                    label="Pintura e acabamento"
+                    value={
+                      result
+                        ? toMoney(result.breakdown.postProcessingCost)
+                        : "--"
                     }
                   />
                   <BreakdownText

@@ -1,7 +1,13 @@
 import type { ProductionSettings } from "@3d-budget/shared";
 import { Prisma } from "@prisma/client";
 import { describe, expect, it } from "vitest";
-import { calculateQuoteBreakdown, type CalculationFormulaInput } from "./CalculationService";
+import {
+  calculateAggregate,
+  calculateQuoteBreakdown,
+  computeRawItemCost,
+  type CalculationFormulaInput,
+  type RawItemCost,
+} from "./CalculationService";
 
 const baseSettings: ProductionSettings = {
   desiredMarginPercent: 30,
@@ -20,8 +26,6 @@ const baseMachine: CalculationFormulaInput["machine"] = {
   type: "FDM",
   powerConsumptionKw: new Prisma.Decimal(0.12),
   depreciationCostPerHour: new Prisma.Decimal(3),
-  // 0 on purpose: keeps the historical regression assertions below (pinned
-  // to finalPrice = 78.23, before maintenanceCost existed) unchanged.
   maintenanceCostPerHour: new Prisma.Decimal(0),
 };
 
@@ -42,10 +46,13 @@ const baseRequest: CalculationFormulaInput["request"] = {
 
 describe("calculateQuoteBreakdown — system fallback formula", () => {
   // Regression fixture: this exact combination was validated manually
-  // during Bloco 5 (ver Contextos/Chat.log) and originally returned
-  // finalPrice = 78.23. Re-pinned to 22.59 in 2026-08-16 after removing
-  // laborCost/technicalHourRate from baseCost (see Contextos/Decisoes.md).
-  it("matches the historical known-good calculation when no formula is set", () => {
+  // during Bloco 5 (ver Contextos/Chat.log), originally 78.23, then 22.59
+  // (2026-08-16, laborCost/technicalHourRate removed). Re-pinned to 22.25
+  // on 2026-08-17: the pricing redesign changed the system default formula
+  // from a compounded "custo_base*(1+margem)*(1+taxas)" to the additive
+  // "custo_base*(1+taxas+margem)" shape the user's own formula uses — see
+  // Contextos/Decisoes.md.
+  it("matches the known-good calculation when no formula is set", () => {
     const result = calculateQuoteBreakdown({
       request: baseRequest,
       machine: baseMachine,
@@ -58,8 +65,11 @@ describe("calculateQuoteBreakdown — system fallback formula", () => {
     expect(result.breakdown.energyCost).toBe(0.24);
     expect(result.breakdown.depreciationCost).toBe(6);
     expect(result.breakdown.maintenanceCost).toBe(0);
+    expect(result.breakdown.errorCostAmount).toBe(0);
     expect(result.breakdown.baseCost).toBe(16.24);
-    expect(result.breakdown.finalPrice).toBe(22.59);
+    expect(result.breakdown.postProcessingCost).toBe(0);
+    // 16.24 * (1 + 0.07 + 0.30) = 22.2488 -> 22.25
+    expect(result.breakdown.finalPrice).toBe(22.25);
     expect(result.formula.source).toBe("SYSTEM_FALLBACK");
   });
 
@@ -111,16 +121,16 @@ describe("calculateQuoteBreakdown — system fallback formula", () => {
       formula: null,
     });
 
-    // baseCost * (1 + margem_lucro), with every rate at 0 contributing
-    // nothing to the "(taxa_cartao + taxa_administrativa + taxa_erro)"
+    // baseCost * (1 + taxas_percentuais + margem_lucro), with every rate at
+    // 0 contributing nothing to the "(taxa_cartao + taxa_administrativa)"
     // factor — never multiplying the whole price by 0.
     expect(result.breakdown.finalPrice).toBe(21.11);
     expect(result.breakdown.cardFeeAmount).toBe(0);
     expect(result.breakdown.administrativeFeeAmount).toBe(0);
-    expect(result.breakdown.errorFeeAmount).toBe(0);
+    expect(result.breakdown.errorCostAmount).toBe(0);
   });
 
-  it("errorRate adds its share of the fee on top of card/administrative, same as they do", () => {
+  it("errorRate applies only to material+energy, upstream of the formula (baked into custo_base)", () => {
     const result = calculateQuoteBreakdown({
       request: baseRequest,
       machine: baseMachine,
@@ -129,9 +139,14 @@ describe("calculateQuoteBreakdown — system fallback formula", () => {
       formula: null,
     });
 
-    // subtotalWithMargin (21.112) * 10% = 2.1112 -> rounds to 2.11.
-    expect(result.breakdown.errorFeeAmount).toBe(2.11);
-    expect(result.breakdown.finalPrice).toBeGreaterThan(22.59);
+    // printCost (materialCost+energyCost) = 10.24; 10.24 * 10% = 1.024 -> 1.02.
+    // Depreciation/maintenance never carry the error multiplier.
+    expect(result.breakdown.errorCostAmount).toBe(1.02);
+    // baseCost = 10.24 + 1.024 + 6 + 0 = 17.264 -> 17.26
+    expect(result.breakdown.baseCost).toBe(17.26);
+    // finalPrice = 17.264 * 1.37 = 23.65168 -> 23.65
+    expect(result.breakdown.finalPrice).toBe(23.65);
+    expect(result.breakdown.finalPrice).toBeGreaterThan(22.25);
   });
 
   it("normalizes a missing weight/print time to 0 instead of throwing", () => {
@@ -172,10 +187,11 @@ describe("calculateQuoteBreakdown — custom (DATABASE) formula", () => {
     expect(result.breakdown.finalPrice).toBe(32.48);
     expect(result.formula.source).toBe("DATABASE");
     expect(result.formula.id).toBe("formula-1");
-    // No card/administrative fee is layered on top of a custom formula's
-    // own result — those only apply to the system fallback formula.
-    expect(result.breakdown.cardFeeAmount).toBe(0);
-    expect(result.breakdown.administrativeFeeAmount).toBe(0);
+    // Card/administrative fee amounts are best-effort display estimates
+    // (subtotal * rate), computed uniformly regardless of which formula
+    // produced finalPrice — see calculateAggregate's doc comment.
+    expect(result.breakdown.cardFeeAmount).toBe(0.81);
+    expect(result.breakdown.administrativeFeeAmount).toBe(0.32);
   });
 
   it("falls back to the system formula when the custom formula fails at runtime", () => {
@@ -193,6 +209,83 @@ describe("calculateQuoteBreakdown — custom (DATABASE) formula", () => {
 
     expect(result.formula.source).toBe("SYSTEM_FALLBACK");
     // Same math as the no-formula case above.
-    expect(result.breakdown.finalPrice).toBe(22.59);
+    expect(result.breakdown.finalPrice).toBe(22.25);
+  });
+});
+
+describe("calculateAggregate — quote-level fix for the reported painting/finishing bug", () => {
+  // Reported bug: increasing painting/finishing hours inflated EVERY mesa's
+  // subtotal by the same delta, because the old code re-ran the whole-quote
+  // formula independently per item using the full quote's hours each time.
+  // The fix: post-processing cost is computed once, from aggregate raw
+  // costs, and the formula runs exactly once per quote — never per item.
+  const settings: ProductionSettings = {
+    ...baseSettings,
+    paintingHourRate: 10,
+    finishingHourRate: 0,
+  };
+
+  const rawCost = computeRawItemCost(
+    baseMachine,
+    baseMaterial,
+    new Prisma.Decimal(100),
+    new Prisma.Decimal(2),
+    settings.energyCostPerKwh,
+  );
+
+  const runAggregate = (rawCosts: RawItemCost[], paintingHours: number) =>
+    calculateAggregate({
+      rawCosts,
+      settings,
+      formula: null,
+      paintingHours,
+      finishingHours: 0,
+      itemsCount: rawCosts.length,
+      totalWeightGrams: new Prisma.Decimal(100 * rawCosts.length),
+      totalPrintTimeHours: new Prisma.Decimal(2 * rawCosts.length),
+      totalPowerConsumptionKw: baseMachine.powerConsumptionKw.mul(rawCosts.length),
+      customVariables: settings.customVariables,
+    });
+
+  it("applies postProcessingCost once, identically, regardless of how many mesas are in the quote", () => {
+    const oneItem = runAggregate([rawCost], 5);
+    const twoItems = runAggregate([rawCost, rawCost], 5);
+
+    // 10/h * 5h = 50 — the SAME whether there's 1 mesa or 2. Under the old
+    // per-item-formula bug this would have been 50 for 1 item but doubled
+    // (counted once per mesa inside each independent calculation) for 2.
+    expect(oneItem.breakdown.postProcessingCost).toBe(50);
+    expect(twoItems.breakdown.postProcessingCost).toBe(50);
+  });
+
+  it("raises finalPrice by the same amount per hour of painting, whether the quote has 1 or 2 mesas", () => {
+    const oneItemBefore = runAggregate([rawCost], 5);
+    const oneItemAfter = runAggregate([rawCost], 8);
+    const twoItemsBefore = runAggregate([rawCost, rawCost], 5);
+    const twoItemsAfter = runAggregate([rawCost, rawCost], 8);
+
+    // Extra painting cost for +3h = 3 * 10 = 30, marked up by the formula's
+    // (1 + taxas_percentuais + margem_lucro) factor = 1.37 -> 41.10, exactly
+    // the same delta for a 1-mesa and a 2-mesa quote.
+    const oneItemDelta = oneItemAfter.breakdown.finalPrice - oneItemBefore.breakdown.finalPrice;
+    const twoItemsDelta =
+      twoItemsAfter.breakdown.finalPrice - twoItemsBefore.breakdown.finalPrice;
+
+    expect(oneItemDelta).toBeCloseTo(41.1, 2);
+    expect(twoItemsDelta).toBeCloseTo(41.1, 2);
+  });
+
+  it("a mesa's own raw cost never changes when painting/finishing hours change", () => {
+    // computeRawItemCost has no paintingHours/finishingHours parameter at
+    // all — a mesa's displayed cost is structurally independent of them.
+    const rawCostAgain = computeRawItemCost(
+      baseMachine,
+      baseMaterial,
+      new Prisma.Decimal(100),
+      new Prisma.Decimal(2),
+      settings.energyCostPerKwh,
+    );
+
+    expect(rawCostAgain.rawCost.toString()).toBe(rawCost.rawCost.toString());
   });
 });

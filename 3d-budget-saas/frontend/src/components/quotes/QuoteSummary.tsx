@@ -60,7 +60,7 @@ export const QuoteSummary = ({
         {toMoney(aggregate.totalAmount)}
       </p>
       <p className="mt-2 text-sm text-muted">
-        {isCalculating ? "Recalculando mesas..." : "Soma dos previews"}
+        {isCalculating ? "Recalculando orcamento..." : "Preview do orcamento"}
       </p>
 
       <div className="mt-5 grid gap-3">

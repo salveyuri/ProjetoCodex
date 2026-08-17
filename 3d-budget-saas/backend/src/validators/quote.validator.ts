@@ -112,6 +112,46 @@ export const quoteListQuerySchema = z
   })
   .strict();
 
+// Live, unsaved preview of a whole quote-in-progress — same item shape as
+// quoteCreateSchema, minus the fields (customerName/status/validUntil)
+// that don't affect price.
+export const quotePreviewSchema = z
+  .object({
+    formulaId: uuid.optional(),
+    paintingHours: nonNegativeNumber.optional(),
+    horas_pintura: nonNegativeNumber.optional(),
+    finishingHours: nonNegativeNumber.optional(),
+    horas_acabamento: nonNegativeNumber.optional(),
+    item: quoteItemSchema.optional(),
+    items: quoteItemsSchema.optional(),
+    printItems: quoteItemsSchema.optional(),
+    tables: quoteItemsSchema.optional(),
+  })
+  .strict()
+  .transform((value, context) => {
+    const items =
+      value.items ??
+      value.printItems ??
+      value.tables ??
+      (value.item ? [value.item] : undefined);
+
+    if (!items || items.length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["items"],
+        message: "At least one print table is required.",
+      });
+    }
+
+    return {
+      formulaId: value.formulaId,
+      paintingHours: value.paintingHours ?? value.horas_pintura ?? 0,
+      finishingHours: value.finishingHours ?? value.horas_acabamento ?? 0,
+      items: items ?? [],
+    };
+  });
+
 export type QuoteCreateInput = z.infer<typeof quoteCreateSchema>;
 export type QuoteUpdateInput = z.infer<typeof quoteUpdateSchema>;
 export type QuoteListQuery = z.infer<typeof quoteListQuerySchema>;
+export type QuotePreviewInput = z.infer<typeof quotePreviewSchema>;

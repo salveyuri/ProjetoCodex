@@ -1,10 +1,11 @@
 import type {
-  CalculationRequest,
-  CalculationResponse,
   FormulaResource,
   MachineResource,
   MaterialResource,
+  QuoteItemCostPreview,
   QuotePayload,
+  QuotePreviewRequest,
+  QuotePreviewResponse,
   QuoteResource,
   QuoteUpdatePayload,
 } from "@3d-budget/shared";
@@ -102,9 +103,15 @@ export const useQuoteForm = (quoteId?: string) => {
   const [machines, setMachines] = useState<MachineResource[]>([]);
   const [materials, setMaterials] = useState<MaterialResource[]>([]);
   const [formulas, setFormulas] = useState<FormulaResource[]>([]);
-  const [tablePreviews, setTablePreviews] = useState<
-    Record<string, CalculationResponse>
-  >({});
+  // Preview is computed once for the whole quote (never per mesa — see
+  // Contextos/Decisoes.md, 2026-08-17). `tableIds` records which localIds
+  // `response.items` correspond to (same order), so the per-mesa raw cost
+  // can be looked back up even if `form.tables` changes before the next
+  // debounced recalculation lands.
+  const [preview, setPreview] = useState<{
+    response: QuotePreviewResponse;
+    tableIds: string[];
+  } | null>(null);
   const [savedQuote, setSavedQuote] = useState<QuoteResource | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -159,11 +166,7 @@ export const useQuoteForm = (quoteId?: string) => {
     );
     const paintingHours = numberFromInput(form.paintingHours) || 0;
     const finishingHours = numberFromInput(form.finishingHours) || 0;
-    const totalAmount = form.tables.reduce(
-      (total, table) =>
-        total + (tablePreviews[table.localId]?.breakdown.finalPrice ?? 0),
-      0,
-    );
+    const totalAmount = preview?.response.breakdown.finalPrice ?? 0;
 
     return {
       totalWeightGrams,
@@ -172,7 +175,25 @@ export const useQuoteForm = (quoteId?: string) => {
       finishingHours,
       totalAmount,
     };
-  }, [form.finishingHours, form.paintingHours, form.tables, tablePreviews]);
+  }, [form.finishingHours, form.paintingHours, form.tables, preview]);
+
+  const itemPreviewByLocalId = useMemo(() => {
+    const map: Record<string, QuoteItemCostPreview> = {};
+
+    if (!preview) {
+      return map;
+    }
+
+    preview.tableIds.forEach((localId, index) => {
+      const item = preview.response.items[index];
+
+      if (item) {
+        map[localId] = item;
+      }
+    });
+
+    return map;
+  }, [preview]);
 
   const loadInitialData = useCallback(async () => {
     if (!token) {
@@ -229,37 +250,34 @@ export const useQuoteForm = (quoteId?: string) => {
 
   const calculatePreview = useCallback(async () => {
     if (!canCalculate) {
-      setTablePreviews({});
+      setPreview(null);
       return;
     }
 
     setIsCalculating(true);
 
     try {
-      const results = await Promise.all(
-        previewableTables.map(async (table) => {
-          const payload: CalculationRequest = {
-            weightGrams: numberFromInput(table.weightGrams),
-            printTimeHours: numberFromInput(table.printTimeHours),
-            machineId: table.machineId,
-            materialId: table.materialId,
-            formulaId: form.formulaId || undefined,
-            paintingHours: numberFromInput(form.paintingHours) || 0,
-            finishingHours: numberFromInput(form.finishingHours) || 0,
-            quoteItemsCount: form.tables.length,
-          };
-          const response = await api.post<CalculationResponse>(
-            "/calculate",
-            payload,
-          );
-
-          return [table.localId, response.data] as const;
-        }),
+      const tableIds = previewableTables.map((table) => table.localId);
+      const payload: QuotePreviewRequest = {
+        items: previewableTables.map((table) => ({
+          modelName: table.modelName,
+          weightGrams: numberFromInput(table.weightGrams),
+          printTimeHours: numberFromInput(table.printTimeHours),
+          machineId: table.machineId,
+          materialId: table.materialId,
+        })),
+        formulaId: form.formulaId || undefined,
+        paintingHours: numberFromInput(form.paintingHours) || 0,
+        finishingHours: numberFromInput(form.finishingHours) || 0,
+      };
+      const response = await api.post<QuotePreviewResponse>(
+        "/quotes/preview",
+        payload,
       );
 
-      setTablePreviews(Object.fromEntries(results));
+      setPreview({ response: response.data, tableIds });
     } catch (error) {
-      setTablePreviews({});
+      setPreview(null);
       setErrorMessage(
         getApiErrorMessage(error, "Nao foi possivel calcular o preview."),
       );
@@ -271,7 +289,6 @@ export const useQuoteForm = (quoteId?: string) => {
     form.finishingHours,
     form.formulaId,
     form.paintingHours,
-    form.tables,
     previewableTables,
   ]);
 
@@ -323,11 +340,6 @@ export const useQuoteForm = (quoteId?: string) => {
           ? current.tables.filter((table) => table.localId !== localId)
           : current.tables,
     }));
-    setTablePreviews((current) => {
-      const next = { ...current };
-      delete next[localId];
-      return next;
-    });
   };
 
   const handleSubmit = async (event: { preventDefault: () => void }) => {
@@ -409,7 +421,7 @@ export const useQuoteForm = (quoteId?: string) => {
     machines,
     materials,
     formulas,
-    tablePreviews,
+    itemPreviewByLocalId,
     savedQuote,
     toasts,
     dismissToast,

@@ -77,8 +77,20 @@ const daysInRange = (from: Date, to: Date): number =>
     Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)),
   );
 
-const getItemProfit = (item: QuoteAnalyticsRow["printItems"][number]): number =>
-  Math.max(toNumber(item.finalPrice) - toNumber(item.baseCost), 0);
+// Since the pricing redesign (Contextos/Decisoes.md, 2026-08-17), a print
+// item's own finalPrice/baseCost are equal (raw production cost only) —
+// margin/fees/post-processing only exist once, on the quote's totalAmount.
+// So revenue/profit must be computed per QUOTE, then allocated back to its
+// items proportionally by base cost share for any per-item figure.
+const getQuoteBaseCostTotal = (quote: QuoteAnalyticsRow): number =>
+  quote.printItems.reduce((total, item) => total + toNumber(item.baseCost), 0);
+
+const allocateShare = (
+  itemBaseCost: number,
+  quoteBaseCostTotal: number,
+  quoteAmount: number,
+): number =>
+  quoteBaseCostTotal > 0 ? quoteAmount * (itemBaseCost / quoteBaseCostTotal) : 0;
 
 const roundMoney = (value: number): number => Math.round(value * 100) / 100;
 const roundMetric = (value: number): number => Math.round(value * 100) / 100;
@@ -147,25 +159,39 @@ export class AnalyticsService {
     query: AnalyticsExportQuery,
   ): Promise<{ filename: string; contentType: string; body: string | unknown[] }> {
     const quotes = await this.getCompanyQuotes(companyId, query);
-    const rows = quotes.flatMap((quote) =>
-      quote.printItems.map((item) => ({
-        quoteId: quote.id,
-        customerName: quote.customerName,
-        status: quote.status,
-        quoteCreatedAt: quote.createdAt.toISOString(),
-        validUntil: quote.validUntil.toISOString(),
-        itemId: item.id,
-        modelName: item.modelName,
-        machineName: item.machine.name,
-        material: `${item.material.brand} - ${item.material.color}`,
-        materialType: item.material.type,
-        weightGrams: toNumber(item.materialWeightGrams),
-        printHours: toNumber(item.estimatedPrintTimeHours),
-        baseCost: toNumber(item.baseCost),
-        finalPrice: toNumber(item.finalPrice),
-        profit: getItemProfit(item),
-      })),
-    );
+    const rows = quotes.flatMap((quote) => {
+      const quoteRevenue = toNumber(quote.totalAmount);
+      const quoteBaseCostTotal = getQuoteBaseCostTotal(quote);
+      const quoteProfit = Math.max(quoteRevenue - quoteBaseCostTotal, 0);
+
+      return quote.printItems.map((item) => {
+        const itemBaseCost = toNumber(item.baseCost);
+
+        return {
+          quoteId: quote.id,
+          customerName: quote.customerName,
+          status: quote.status,
+          quoteCreatedAt: quote.createdAt.toISOString(),
+          validUntil: quote.validUntil.toISOString(),
+          itemId: item.id,
+          modelName: item.modelName,
+          machineName: item.machine.name,
+          material: `${item.material.brand} - ${item.material.color}`,
+          materialType: item.material.type,
+          weightGrams: toNumber(item.materialWeightGrams),
+          printHours: toNumber(item.estimatedPrintTimeHours),
+          baseCost: roundMoney(itemBaseCost),
+          // Quote-level revenue/profit allocated back to this item by its
+          // base-cost share — the item itself no longer has its own price.
+          finalPrice: roundMoney(
+            allocateShare(itemBaseCost, quoteBaseCostTotal, quoteRevenue),
+          ),
+          profit: roundMoney(
+            allocateShare(itemBaseCost, quoteBaseCostTotal, quoteProfit),
+          ),
+        };
+      });
+    });
     const filename = `analytics_${query.from}_${query.to}.${query.format}`;
 
     if (query.format === "json") {
@@ -266,20 +292,31 @@ export class AnalyticsService {
         baseCost: 0,
       };
 
+      // Revenue/profit only exist once per quote (totalAmount already has
+      // margin/fees/post-processing folded in) — computed here once, then
+      // allocated back to items by base-cost share for the material mix.
+      const quoteRevenue = toNumber(quote.totalAmount);
+      const quoteBaseCostTotal = getQuoteBaseCostTotal(quote);
+      const quoteProfit = Math.max(quoteRevenue - quoteBaseCostTotal, 0);
+
+      revenue += quoteRevenue;
+      profit += quoteProfit;
+      monthly.revenue += quoteRevenue;
+      monthly.profit += quoteProfit;
+      monthly.baseCost += quoteBaseCostTotal;
+
       for (const item of quote.printItems) {
-        const itemRevenue = toNumber(item.finalPrice);
         const itemBaseCost = toNumber(item.baseCost);
-        const itemProfit = getItemProfit(item);
+        const itemRevenue = allocateShare(
+          itemBaseCost,
+          quoteBaseCostTotal,
+          quoteRevenue,
+        );
         const itemWeight = toNumber(item.materialWeightGrams);
         const itemHours = toNumber(item.estimatedPrintTimeHours);
 
-        revenue += itemRevenue;
-        profit += itemProfit;
         totalPrintHours += itemHours;
         totalWeightGrams += itemWeight;
-        monthly.revenue += itemRevenue;
-        monthly.profit += itemProfit;
-        monthly.baseCost += itemBaseCost;
 
         const material = materialMap.get(item.material.type) ?? {
           weightGrams: 0,

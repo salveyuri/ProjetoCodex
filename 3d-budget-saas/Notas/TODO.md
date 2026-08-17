@@ -224,6 +224,25 @@ Passo") em 2026-08-12.
       adicionar mais itens admin no futuro (entram automaticamente no
       mesmo grupo via `adminNavigation` em `Sidebar.tsx`).
 
+## Redesenho do motor de precificação (implementado em 2026-08-17)
+
+- [x] Fórmula avaliada uma única vez por orçamento (não mais por mesa) -
+      corrige o bug de pintura/acabamento duplicando por mesa. Novo
+      endpoint `POST /quotes/preview`, `CalculationService.calculateAggregate`.
+      Ver `Contextos/Decisoes.md` (2026-08-17).
+- [ ] Orçamentos criados **antes** desta mudança mantêm o snapshot antigo
+      (`marginAmount`/`feesTotal` por item com valor real, `finalPrice`
+      por item != `baseCost`) - não foram recalculados retroativamente
+      (são snapshots financeiros históricos, recalcular mudaria o valor
+      que o cliente recebeu). Só orçamentos novos/editados depois de
+      2026-08-17 seguem o modelo novo. Se isso confundir relatórios
+      antigos vs novos, avaliar uma migração de dados específica.
+- [ ] `cardFeeAmount`/`administrativeFeeAmount`/`marginAmount` no
+      breakdown são estimativas de exibição (`subtotal * taxa`), não um
+      valor exato extraído da fórmula (que é texto livre) - correto o
+      suficiente pra exibição, mas não usar em cálculos financeiros que
+      exijam precisão absoluta.
+
 ## Próximo passo geral
 
 Pós-MVP: preparar deploy, seeds, testes automatizados, monitoramento externo

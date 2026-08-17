@@ -411,18 +411,40 @@ export interface CalculationRequest {
 }
 
 export interface CalculationMoneyBreakdown {
+  // Aggregate across every print item in the quote (a single-item
+  // calculation, e.g. the standalone calculator, is just the N=1 case).
   materialCost: number;
   energyCost: number;
   depreciationCost: number;
   maintenanceCost: number;
+  // How much errorRate added on top of (materialCost + energyCost) only —
+  // already folded into baseCost below. Depreciation/maintenance never
+  // carry an error multiplier.
+  errorCostAmount: number;
+  // (materialCost + energyCost + errorCostAmount + depreciationCost +
+  // maintenanceCost) — this is what the formula sees as `custo_base`.
   baseCost: number;
+  // valor_hora_pintura*horas_pintura + valor_hora_acabamento*horas_acabamento,
+  // added once for the whole quote — never per item.
+  postProcessingCost: number;
   marginAmount: number;
   subtotalWithMargin: number;
   cardFeeAmount: number;
   administrativeFeeAmount: number;
-  errorFeeAmount: number;
   feesTotal: number;
   finalPrice: number;
+}
+
+export interface QuoteItemCostPreview {
+  modelName?: string;
+  materialCost: number;
+  energyCost: number;
+  depreciationCost: number;
+  maintenanceCost: number;
+  // materialCost + energyCost + depreciationCost + maintenanceCost — this
+  // item's own raw production cost, with no error rate, fees, margin or
+  // post-processing applied (those only exist at the whole-quote level).
+  rawCost: number;
 }
 
 export interface CalculationResourceSummary {
@@ -486,6 +508,31 @@ export interface QuotePayload {
   paintingHours?: number;
   finishingHours?: number;
   items: QuoteItemPayload[];
+}
+
+export interface QuotePreviewRequest {
+  items: QuoteItemPayload[];
+  formulaId?: string;
+  paintingHours?: number;
+  finishingHours?: number;
+}
+
+// Live, unsaved preview of a whole quote-in-progress — the SAME
+// calculation quote creation ends up persisting, just not written to the
+// database. `items` is per-mesa raw cost only (no fees/margin/error/
+// post-processing — see QuoteItemCostPreview); `breakdown`/`finalPrice`
+// are the whole-quote aggregate, computed once.
+export interface QuotePreviewResponse {
+  items: QuoteItemCostPreview[];
+  breakdown: CalculationMoneyBreakdown;
+  rates: CalculationAppliedRates;
+  formula: {
+    id: string | null;
+    name: string;
+    expression: string;
+    source: "DATABASE" | "SYSTEM_FALLBACK";
+  };
+  variables: Record<string, number>;
 }
 
 export interface QuoteUpdatePayload {

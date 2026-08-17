@@ -36,19 +36,19 @@ export const PostProcessingCard = ({
 
     <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-2">
       <NumberField
-        icon={Paintbrush}
-        label="Horas pintura"
-        suffix="h"
-        value={paintingHours}
-        onChange={onChangePaintingHours}
-        disabled={disabled}
-      />
-      <NumberField
         icon={Wrench}
         label="Horas acabamento"
         suffix="h"
         value={finishingHours}
         onChange={onChangeFinishingHours}
+        disabled={disabled}
+      />
+      <NumberField
+        icon={Paintbrush}
+        label="Horas pintura"
+        suffix="h"
+        value={paintingHours}
+        onChange={onChangePaintingHours}
         disabled={disabled}
       />
     </div>

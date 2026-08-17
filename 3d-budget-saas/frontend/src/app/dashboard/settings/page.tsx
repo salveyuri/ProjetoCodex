@@ -12,6 +12,7 @@ import type {
   SupportedLanguage,
   UpdateProfilePayload,
 } from "@3d-budget/shared";
+import { COUNTRIES, countryName } from "@3d-budget/shared";
 import {
   Cpu,
   Edit3,
@@ -28,6 +29,7 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -167,7 +169,7 @@ const toMaterialForm = (material: MaterialResource): MaterialFormState => ({
 
 export default function SettingsPage() {
   const { isLoading: isAuthLoading, token, user, updateUser } = useAuth();
-  const { t, formatMoney } = useLanguage();
+  const { t, language, formatMoney } = useLanguage();
   const [activeTab, setActiveTab] = useState<ActiveTab>("machines");
   const [machines, setMachines] = useState<MachineResource[]>([]);
   const [materials, setMaterials] = useState<MaterialResource[]>([]);
@@ -182,6 +184,7 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileCompanyName, setProfileCompanyName] = useState("");
+  const [profileCountry, setProfileCountry] = useState("BR");
   const [profileLanguage, setProfileLanguage] = useState<SupportedLanguage>("pt-BR");
   const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
     financial: true,
@@ -194,10 +197,19 @@ export default function SettingsPage() {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
+  const countryOptions = useMemo(
+    () =>
+      [...COUNTRIES].sort((a, b) =>
+        countryName(a.code, language).localeCompare(countryName(b.code, language)),
+      ),
+    [language],
+  );
+
   useEffect(() => {
     if (user) {
       setProfileName(user.name ?? "");
       setProfileCompanyName(user.company?.name ?? "");
+      setProfileCountry(user.company?.country ?? "BR");
       setProfileLanguage(user.language);
       setEmailPreferences(user.emailPreferences);
     }
@@ -373,6 +385,7 @@ export default function SettingsPage() {
     const payload: UpdateProfilePayload = {
       name: profileName.trim(),
       companyName: profileCompanyName.trim(),
+      country: profileCountry,
       language: profileLanguage,
       emailPreferences,
     };
@@ -718,6 +731,20 @@ export default function SettingsPage() {
                     maxLength={160}
                     className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
                   />
+                </label>
+                <label className="grid min-w-0 gap-2 text-sm font-medium">
+                  {t("auth.register.country")}
+                  <select
+                    value={profileCountry}
+                    onChange={(event) => setProfileCountry(event.target.value)}
+                    className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                  >
+                    {countryOptions.map((option) => (
+                      <option key={option.code} value={option.code}>
+                        {countryName(option.code, language)}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="grid min-w-0 gap-2 text-sm font-medium">
                   {t("auth.register.language")}

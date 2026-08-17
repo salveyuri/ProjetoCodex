@@ -1770,3 +1770,48 @@ aparecer com `$` em vez de `R$`.
   dolar de ponta a ponta, lista de orcamentos com data no formato dos
   EUA, e o round-trip de trocar o idioma em "Meu perfil" (EN -> PT,
   salva, app inteiro re-renderiza corretamente).
+
+## 2026-08-17 - Pais no cadastro + preco de referencia em dolar nos planos
+
+Pedido do Yuri: conferir se o Asaas permite cobrar em dolar pra clientes
+estrangeiros; se possivel, adicionar campo Pais no cadastro (com lista
+completa de paises) definindo a moeda de cobranca (Brasil = BRL, outros
+paises = USD), e um campo "valor dolar" nos planos de assinatura pra usar
+conforme o pais.
+
+- Pesquisado o Asaas: a API deles nao tem parametro de moeda - todo valor
+  enviado e sempre interpretado como reais, confirmado tanto na central de
+  ajuda do Asaas quanto no proprio `asaas-client.ts` (`value: number`, sem
+  moeda). Cliente estrangeiro/cartao emitido fora do Brasil so pode ser
+  cobrado com autorizacao manual previa de um gerente de conta Asaas
+  (processo comercial, fora do codigo), e mesmo assim a conversao pra
+  dolar acontece do lado da bandeira do cartao, fora do nosso controle -
+  nao existe "cobrar em dolar de verdade" com o gateway atual.
+- Perguntado ao Yuri via `AskUserQuestion` como proceder dado essa
+  limitacao tecnica - escolhida a opcao recomendada: dolar como preco de
+  **referencia/exibicao**, cobranca real sempre em reais via Asaas.
+- `shared/src/countries.ts` (novo): lista completa ISO 3166-1 (249 paises,
+  nome em PT e EN, sem lib nova) + `currencyForCountry` (BR -> BRL, resto
+  -> USD).
+- `companies.country` (novo, migration `20260817150000_add_country_and_
+  plan_usd_price`) - selecionavel no cadastro (default adivinhado do
+  idioma do navegador, mesma logica do idioma) e editavel em "Meu perfil";
+  `defaultCurrency` deixou de ser escolhido direto no formulario (era
+  hardcoded "BRL") e passou a ser sempre derivado do pais, tanto no
+  cadastro quanto ao editar depois.
+- `plans.price_usd` (novo, mesma migration) - campo opcional, editavel em
+  `/admin/plans` ("Preco em dolar (USD, opcional)"), nulo ate o admin
+  preencher.
+- `dashboard/billing/page.tsx`: mostra preco em USD (plano por plano) só
+  quando o pais da empresa != BR E aquele plano tem `priceUsd` configurado
+  - senao cai pro preco em BRL de sempre. Quando mostra USD, aparece um
+  aviso fixo explicando que o valor e referencia e a cobranca real e
+  processada em reais, convertida pela operadora do cartao do cliente.
+- Validado ao vivo: cadastro com pais "Estados Unidos" (dica de moeda troca
+  em tempo real pra "cobranca exibida em dolar"); admin configura
+  `priceUsd=9.90` no plano Pro; tela de Plano da conta americana passa a
+  mostrar "US$ 9,90/mes" no Pro (Free/Enterprise sem `priceUsd` continuam
+  em BRL) com o aviso visivel; trocando o pais de volta pra Brasil em "Meu
+  perfil", tudo volta a BRL e o aviso some - confirma reacao em tempo real,
+  nao so no cadastro. Suite do backend: 95/95 passando. Lint/build limpos
+  em shared/backend/frontend. Migration aplicada.

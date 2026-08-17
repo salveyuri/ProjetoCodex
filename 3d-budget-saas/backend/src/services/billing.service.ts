@@ -19,6 +19,8 @@ type CompanyUpdater = Pick<Prisma.TransactionClient, "company">;
 interface CompanyWithPlan {
   id: string;
   name: string;
+  country: string;
+  defaultCurrency: string;
   subscriptionStatus: SubscriptionStatus;
   asaasCustomerId: string | null;
   currentQuotesCount: number;
@@ -49,6 +51,8 @@ export class BillingService {
     return {
       companyId: company.id,
       companyName: company.name,
+      companyCountry: company.country,
+      companyDefaultCurrency: company.defaultCurrency,
       plan,
       subscriptionStatus: subscriptionStatusLabel(company.subscriptionStatus),
       asaasCustomerId: company.asaasCustomerId,

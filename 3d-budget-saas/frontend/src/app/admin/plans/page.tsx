@@ -32,6 +32,7 @@ interface PlanFormState {
   name: string;
   description: string;
   price: string;
+  priceUsd: string;
   currency: string;
   billingCycle: "MONTHLY" | "YEARLY";
   machinesLimit: string;
@@ -54,6 +55,7 @@ const emptyPlanForm: PlanFormState = {
   name: "",
   description: "",
   price: "0",
+  priceUsd: "",
   currency: "BRL",
   billingCycle: "MONTHLY",
   machinesLimit: "",
@@ -71,6 +73,7 @@ const toPlanForm = (plan: PlanResource): PlanFormState => ({
   name: plan.name,
   description: plan.description ?? "",
   price: String(plan.price),
+  priceUsd: plan.priceUsd === null ? "" : String(plan.priceUsd),
   currency: plan.currency,
   billingCycle: plan.billingCycle,
   machinesLimit: plan.limits.machines === null ? "" : String(plan.limits.machines),
@@ -89,6 +92,7 @@ const toPayload = (form: PlanFormState): PlanPayload => ({
   name: form.name.trim(),
   description: form.description.trim() ? form.description.trim() : null,
   price: Number(form.price),
+  priceUsd: form.priceUsd.trim() === "" ? null : Number(form.priceUsd),
   currency: form.currency.trim() || "BRL",
   billingCycle: form.billingCycle,
   limits: {
@@ -314,12 +318,17 @@ export default function AdminPlansPage() {
                           <p className="text-xs text-muted">{plan.code}</p>
                         </td>
                         <td className="px-5 py-4 text-muted">
-                          {toMoney(plan.price, plan.currency)}
-                          {plan.price > 0 && plan.billingCycle === "YEARLY"
-                            ? "/ano"
-                            : plan.price > 0
-                              ? "/mes"
-                              : ""}
+                          <p>
+                            {toMoney(plan.price, plan.currency)}
+                            {plan.price > 0 && plan.billingCycle === "YEARLY"
+                              ? "/ano"
+                              : plan.price > 0
+                                ? "/mes"
+                                : ""}
+                          </p>
+                          {plan.priceUsd !== null ? (
+                            <p className="text-xs">{toMoney(plan.priceUsd, "USD")}</p>
+                          ) : null}
                         </td>
                         <td className="px-5 py-4 text-muted">
                           <div className="grid gap-1 text-xs">
@@ -411,11 +420,18 @@ export default function AdminPlansPage() {
             </label>
             <div className="grid min-w-0 gap-4 sm:grid-cols-3">
               <TextField
-                label="Preco"
+                label="Preco (BRL)"
                 type="number"
                 step="0.01"
                 value={form.price}
                 onChange={(value) => setForm((current) => ({ ...current, price: value }))}
+              />
+              <TextField
+                label="Preco em dolar (USD, opcional)"
+                type="number"
+                step="0.01"
+                value={form.priceUsd}
+                onChange={(value) => setForm((current) => ({ ...current, priceUsd: value }))}
               />
               <TextField
                 label="Moeda"

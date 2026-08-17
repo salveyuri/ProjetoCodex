@@ -60,6 +60,10 @@ export interface PlanResource {
   name: string;
   description: string | null;
   price: number;
+  // Admin-set reference price shown to non-Brazil companies. Display only —
+  // Asaas has no currency parameter, so the actual charge always uses
+  // `price` in BRL (Contextos/Decisoes.md).
+  priceUsd: number | null;
   currency: string;
   billingCycle: BillingCycle;
   limits: PlanLimits;
@@ -76,6 +80,7 @@ export interface PlanPayload {
   name: string;
   description?: string | null;
   price: number;
+  priceUsd?: number | null;
   currency?: string;
   billingCycle: BillingCycle;
   limits: PlanLimits;
@@ -101,6 +106,7 @@ export interface BillingUsage {
 export interface AuthCompany {
   id: string;
   name: string;
+  country: string;
   defaultCurrency: string;
   planCode: string;
   planName: string;
@@ -131,6 +137,7 @@ export interface AuthUser {
 export interface UpdateProfilePayload {
   name?: string;
   companyName?: string;
+  country?: string;
   language?: SupportedLanguage;
   emailPreferences?: Partial<EmailPreferences>;
 }
@@ -152,7 +159,9 @@ export interface RegisterRequest {
   email: string;
   companyName: string;
   password: string;
-  defaultCurrency?: string;
+  // ISO 3166-1 alpha-2 code — drives the company's billing currency
+  // (BR -> BRL, anything else -> USD display). See shared/src/countries.ts.
+  country: string;
   taxRate?: number;
   language?: SupportedLanguage;
 }
@@ -165,6 +174,8 @@ export interface LoginRequest {
 export interface BillingOverview {
   companyId: string;
   companyName: string;
+  companyCountry: string;
+  companyDefaultCurrency: string;
   plan: PlanResource;
   subscriptionStatus: SubscriptionStatus;
   asaasCustomerId: string | null;
@@ -749,3 +760,5 @@ export interface ResetPasswordPayload {
   token: string;
   password: string;
 }
+
+export * from "./countries";

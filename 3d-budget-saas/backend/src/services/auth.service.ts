@@ -1,4 +1,5 @@
 import type { AuthResponse, AuthUser, SupportedLanguage } from "@3d-budget/shared";
+import { currencyForCountry } from "@3d-budget/shared";
 import { Prisma, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -38,6 +39,7 @@ const PASSWORD_RESET_TOKEN_BYTES = 32;
 const companySelect = {
   id: true,
   name: true,
+  country: true,
   defaultCurrency: true,
   subscriptionStatus: true,
   plan: { select: { code: true, name: true } },
@@ -56,6 +58,7 @@ const toAuthUser = (user: {
   company: {
     id: string;
     name: string;
+    country: string;
     defaultCurrency: string;
     subscriptionStatus: "ACTIVE" | "CANCELED" | "PAST_DUE";
     plan: { code: string; name: string };
@@ -76,6 +79,7 @@ const toAuthUser = (user: {
     ? {
         id: user.company.id,
         name: user.company.name,
+        country: user.company.country,
         defaultCurrency: user.company.defaultCurrency,
         planCode: user.company.plan.code,
         planName: user.company.plan.name,
@@ -177,7 +181,8 @@ export class AuthService {
           company: {
             create: {
               name: input.companyName,
-              defaultCurrency: input.defaultCurrency,
+              country: input.country,
+              defaultCurrency: currencyForCountry(input.country),
               taxRate: input.taxRate,
               planId: freePlan.id,
               pricingSettings: {
@@ -466,10 +471,15 @@ export class AuthService {
    * reflects the fresh value instead of a stale pre-update snapshot. */
   async updateProfile(userId: string, input: UpdateProfileInput): Promise<AuthUser> {
     const user = await prisma.$transaction(async (transaction) => {
-      if (input.companyName !== undefined) {
+      if (input.companyName !== undefined || input.country !== undefined) {
         await transaction.company.update({
           where: { userId },
-          data: { name: input.companyName },
+          data: {
+            ...(input.companyName !== undefined ? { name: input.companyName } : {}),
+            ...(input.country !== undefined
+              ? { country: input.country, defaultCurrency: currencyForCountry(input.country) }
+              : {}),
+          },
         });
       }
 

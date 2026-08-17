@@ -1,6 +1,14 @@
+import { isValidCountryCode } from "@3d-budget/shared";
 import { z } from "zod";
 
 export const supportedLanguageSchema = z.enum(["pt-BR", "en"]);
+
+export const countryCodeSchema = z
+  .string()
+  .trim()
+  .length(2, "Country must be an ISO 3166-1 alpha-2 code.")
+  .toUpperCase()
+  .refine(isValidCountryCode, "Unknown country.");
 
 export const passwordSchema = z
   .string()
@@ -22,12 +30,7 @@ export const registerSchema = z.object({
     .trim()
     .min(2, "Company name must have at least 2 characters.")
     .max(160, "Company name must have at most 160 characters."),
-  defaultCurrency: z
-    .string()
-    .trim()
-    .length(3, "Currency must be an ISO 4217 code.")
-    .toUpperCase()
-    .default("BRL"),
+  country: countryCodeSchema,
   taxRate: z.number().min(0).max(1).default(0),
   language: supportedLanguageSchema.default("pt-BR"),
 }).strict();
@@ -69,6 +72,7 @@ export const updateProfileSchema = z
       .min(2, "Company name must have at least 2 characters.")
       .max(160, "Company name must have at most 160 characters.")
       .optional(),
+    country: countryCodeSchema.optional(),
     language: supportedLanguageSchema.optional(),
     emailPreferences: z
       .object({
@@ -84,6 +88,7 @@ export const updateProfileSchema = z
     (value) =>
       value.name !== undefined ||
       value.companyName !== undefined ||
+      value.country !== undefined ||
       value.language !== undefined ||
       value.emailPreferences !== undefined,
     { message: "At least one field must be provided." },

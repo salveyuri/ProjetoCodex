@@ -18,6 +18,7 @@ const registerPayload = (email: string) => ({
   email,
   password: "Abcdef12",
   companyName: "Reset Test Co",
+  country: "BR",
 });
 
 const registerAsNewClient = (email: string) =>

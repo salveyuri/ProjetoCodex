@@ -26,6 +26,7 @@ export const planCreateSchema = z
     name: z.string().trim().min(1).max(120),
     description: z.string().trim().max(500).nullable().optional(),
     price: z.number().min(0),
+    priceUsd: z.number().min(0).nullable().optional(),
     currency: z.string().trim().length(3).optional(),
     billingCycle: z.enum(["MONTHLY", "YEARLY"]),
     limits: planLimitsSchema,

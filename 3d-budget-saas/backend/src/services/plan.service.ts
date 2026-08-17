@@ -30,6 +30,7 @@ export const toPlanResource = (plan: Plan): PlanResource => ({
   name: plan.name,
   description: plan.description,
   price: plan.price.toNumber(),
+  priceUsd: plan.priceUsd ? plan.priceUsd.toNumber() : null,
   currency: plan.currency,
   billingCycle: plan.billingCycle,
   limits: {
@@ -50,6 +51,7 @@ const toCreateData = (input: PlanCreateInput): Prisma.PlanCreateInput => ({
   name: input.name,
   description: input.description ?? null,
   price: new Prisma.Decimal(input.price),
+  priceUsd: input.priceUsd != null ? new Prisma.Decimal(input.priceUsd) : null,
   currency: input.currency ?? "BRL",
   billingCycle: input.billingCycle,
   maxMachinesAllowed: input.limits.machines,
@@ -66,6 +68,12 @@ const toUpdateData = (input: PlanUpdateInput): Prisma.PlanUpdateInput => ({
   name: input.name,
   description: input.description,
   price: input.price !== undefined ? new Prisma.Decimal(input.price) : undefined,
+  priceUsd:
+    input.priceUsd === undefined
+      ? undefined
+      : input.priceUsd === null
+        ? null
+        : new Prisma.Decimal(input.priceUsd),
   currency: input.currency,
   billingCycle: input.billingCycle,
   maxMachinesAllowed: input.limits?.machines,

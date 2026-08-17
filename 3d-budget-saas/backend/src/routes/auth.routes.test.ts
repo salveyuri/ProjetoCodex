@@ -17,6 +17,7 @@ const registerPayload = (email: string) => ({
   email,
   password: "Abcdef12",
   companyName: "Integration Test Co",
+  country: "BR",
 });
 
 // Every register call gets its own fake client IP (via X-Forwarded-For,

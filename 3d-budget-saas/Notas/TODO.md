@@ -273,6 +273,30 @@ Passo") em 2026-08-12.
       ficou deliberadamente de fora desta rodada (decisao explicita) -
       registrar aqui caso mude de ideia depois.
 
+## Pais no cadastro + preco de referencia em dolar (implementado em 2026-08-17)
+
+- [x] Campo Pais no cadastro (lista completa ISO 3166-1) e em "Meu perfil",
+      definindo `defaultCurrency` automaticamente (Brasil = BRL, outros
+      paises = USD). Campo `Plan.priceUsd` opcional, editavel em
+      `/admin/plans`. Tela de Plano/faturamento mostra o preco em USD (por
+      plano) so quando o pais da empresa != BR e aquele plano tem
+      `priceUsd` configurado, com aviso de que e so referencia. Ver
+      `Contextos/Decisoes.md` (2026-08-17).
+- [ ] **Confirmado que o Asaas nao cobra em dolar de verdade** - a API deles
+      nao tem parametro de moeda, todo valor e sempre em reais. Cliente
+      estrangeiro/cartao emitido fora do Brasil so pode ser cobrado depois
+      de autorizacao manual de um gerente de conta Asaas (contatar o
+      suporte deles, fora do escopo do codigo) - sem isso, o checkout pode
+      falhar pra esses clientes mesmo com o preco em USD configurado aqui.
+- [ ] `Plan.priceUsd` so foi preenchido no plano Pro (valor de teste,
+      US$ 9,90) durante a verificacao desta sessao - Free e Enterprise
+      ficam sem, caindo no fallback BRL. Preencher os valores reais em
+      `/admin/plans` quando o Yuri decidir os precos em dolar.
+- [ ] Pais nao afeta nada alem da moeda de exibicao da assinatura hoje
+      (nao afeta idioma, fuso, formato de PDF, etc) - se algum dia fizer
+      sentido usar o pais pra mais alguma coisa (ex. imposto, compliance),
+      avaliar separadamente.
+
 ## Próximo passo geral
 
 Pós-MVP: preparar deploy, seeds, testes automatizados, monitoramento externo

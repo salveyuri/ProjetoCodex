@@ -446,6 +446,8 @@ export const pt = {
     "Nenhuma fatura ainda - aparecem aqui assim que a primeira cobranca do Asaas for confirmada.",
   "billing.view": "Ver",
   "billing.availablePlans": "Planos disponiveis",
+  "billing.usdDisclaimer":
+    "Precos exibidos em dolar sao referencia. A cobranca e processada em reais e convertida pela operadora do seu cartao na data da cobranca.",
   "billing.unlimited": "ilimitado",
   "billing.currentPlanButton": "Plano atual",
   "billing.subscribe": "Assinar",
@@ -474,6 +476,9 @@ export const pt = {
   "auth.register.fullName": "Nome completo",
   "auth.register.email": "E-mail",
   "auth.register.companyName": "Nome da empresa",
+  "auth.register.country": "Pais",
+  "auth.register.currencyHintBrl": "Cobranca da assinatura em reais (BRL).",
+  "auth.register.currencyHintUsd": "Cobranca da assinatura exibida em dolar (USD).",
   "auth.register.password": "Senha",
   "auth.register.confirmPassword": "Confirmar senha",
   "auth.register.language": "Idioma do sistema",

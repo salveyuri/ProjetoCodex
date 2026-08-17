@@ -115,6 +115,9 @@ model Company {
   userId                String             @unique @map("user_id") @db.Uuid
   name                  String
   logoUrl               String?            @map("logo_url")
+  // ISO 3166-1 alpha-2. Drives defaultCurrency (BR -> BRL, else -> USD) —
+  // set together in auth.service.ts, never edited independently.
+  country               String             @default("BR")
   defaultCurrency       String             @default("BRL") @map("default_currency")
   taxRate               Decimal            @default(0) @map("tax_rate") @db.Decimal(7, 4)
   planId                String             @map("plan_id") @db.Uuid
@@ -148,6 +151,10 @@ model Plan {
   name                String
   description         String?
   price               Decimal      @default(0) @map("price") @db.Decimal(10, 2)
+  // Reference price shown to non-Brazil companies (display only — Asaas
+  // has no currency parameter, the real charge always uses `price`/BRL).
+  // Null until an admin fills it in on /admin/plans.
+  priceUsd            Decimal?     @map("price_usd") @db.Decimal(10, 2)
   currency            String       @default("BRL")
   billingCycle        BillingCycle @default(MONTHLY) @map("billing_cycle")
   maxMachinesAllowed  Int?         @map("max_machines_allowed")

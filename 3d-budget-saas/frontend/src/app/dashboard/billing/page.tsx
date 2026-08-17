@@ -143,6 +143,17 @@ function BillingContent() {
 
   const isSubmitting = submittingPlanId !== null;
 
+  // Only Brazil is billed in BRL — everyone else sees the admin-set USD
+  // reference price when one exists (falls back to BRL otherwise). This
+  // never changes what Asaas actually charges (see formatMoney comment
+  // above and Contextos/Decisoes.md, 2026-08-17).
+  const showUsd = billing?.companyCountry !== "BR";
+
+  const planPriceDisplay = (plan: PlanResource): string =>
+    showUsd && plan.priceUsd !== null
+      ? formatMoney(plan.priceUsd, "USD")
+      : formatMoney(plan.price, plan.currency);
+
   const subscribeToPlan = async (plan: PlanResource) => {
     setSubmittingPlanId(plan.id);
     setErrorMessage(null);
@@ -334,6 +345,11 @@ function BillingContent() {
                   {t("billing.availablePlans")}
                 </h2>
               </div>
+              {showUsd ? (
+                <p className="mb-4 max-w-2xl text-xs text-muted">
+                  {t("billing.usdDisclaimer")}
+                </p>
+              ) : null}
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {plans.map((plan) => {
                   const isCurrentPlan = billing.plan.id === plan.id;
@@ -342,7 +358,7 @@ function BillingContent() {
                     <Card key={plan.id} className="flex flex-col p-5">
                       <h3 className="text-lg font-semibold text-foreground">{plan.name}</h3>
                       <p className="mt-2 text-3xl font-semibold text-foreground">
-                        {formatMoney(plan.price, plan.currency)}
+                        {planPriceDisplay(plan)}
                         <span className="text-sm font-normal text-muted">
                           {plan.price > 0 ? cycleLabel(plan.billingCycle) : ""}
                         </span>

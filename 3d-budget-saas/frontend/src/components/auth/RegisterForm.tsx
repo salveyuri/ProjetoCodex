@@ -1,11 +1,12 @@
 "use client";
 
 import type { SupportedLanguage } from "@3d-budget/shared";
+import { COUNTRIES, countryName, currencyForCountry, isValidCountryCode } from "@3d-budget/shared";
 import { Loader2, UserPlus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card } from "@/components/ui/card";
@@ -18,6 +19,18 @@ const isStrongEnoughPassword = (password: string): boolean =>
   /[A-Z]/.test(password) &&
   /[0-9]/.test(password);
 
+// Same idea as detectBrowserLanguage in LanguageContext.tsx — the browser's
+// own locale region (e.g. "pt-BR" -> "BR", "en-US" -> "US") is the best
+// guess for a new visitor's country, so the field doesn't start empty.
+const detectBrowserCountry = (): string => {
+  if (typeof navigator === "undefined") {
+    return "BR";
+  }
+
+  const region = navigator.language.split("-")[1]?.toUpperCase();
+  return region && isValidCountryCode(region) ? region : "BR";
+};
+
 export const RegisterForm = () => {
   const router = useRouter();
   const { register } = useAuth();
@@ -25,10 +38,19 @@ export const RegisterForm = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [country, setCountry] = useState<string>(detectBrowserCountry);
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const countryOptions = useMemo(
+    () =>
+      [...COUNTRIES].sort((a, b) =>
+        countryName(a.code, language).localeCompare(countryName(b.code, language)),
+      ),
+    [language],
+  );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -57,7 +79,7 @@ export const RegisterForm = () => {
         email,
         companyName,
         password,
-        defaultCurrency: "BRL",
+        country,
         taxRate: 0,
         language,
       });
@@ -118,6 +140,26 @@ export const RegisterForm = () => {
             className="h-11 rounded-lg border border-border bg-surface-muted px-3 text-sm outline-none transition placeholder:text-muted focus:border-primary"
             placeholder="Empresa"
           />
+        </label>
+
+        <label className="grid gap-2 text-sm font-medium text-foreground">
+          {t("auth.register.country")}
+          <select
+            value={country}
+            onChange={(event) => setCountry(event.target.value)}
+            className="h-11 rounded-lg border border-border bg-surface-muted px-3 text-sm outline-none transition focus:border-primary"
+          >
+            {countryOptions.map((option) => (
+              <option key={option.code} value={option.code}>
+                {countryName(option.code, language)}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs font-normal text-muted">
+            {currencyForCountry(country) === "BRL"
+              ? t("auth.register.currencyHintBrl")
+              : t("auth.register.currencyHintUsd")}
+          </span>
         </label>
 
         <label className="grid gap-2 text-sm font-medium text-foreground">

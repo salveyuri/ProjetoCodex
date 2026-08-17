@@ -44,6 +44,7 @@ export const registerTestCompany = async (
       email,
       password: "Abcdef12",
       companyName: `Test Co ${label}`,
+      country: "BR",
     });
 
   if (response.status !== 201) {

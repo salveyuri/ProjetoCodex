@@ -445,6 +445,8 @@ export const en: Record<TranslationKey, string> = {
     "No invoices yet - they'll show up here as soon as the first Asaas charge is confirmed.",
   "billing.view": "View",
   "billing.availablePlans": "Available plans",
+  "billing.usdDisclaimer":
+    "USD prices are a reference only. The charge is processed in Brazilian reais and converted by your card issuer on the charge date.",
   "billing.unlimited": "unlimited",
   "billing.currentPlanButton": "Current plan",
   "billing.subscribe": "Subscribe",
@@ -473,6 +475,9 @@ export const en: Record<TranslationKey, string> = {
   "auth.register.fullName": "Full name",
   "auth.register.email": "Email",
   "auth.register.companyName": "Company name",
+  "auth.register.country": "Country",
+  "auth.register.currencyHintBrl": "Subscription charged in Brazilian reais (BRL).",
+  "auth.register.currencyHintUsd": "Subscription price shown in US dollars (USD).",
   "auth.register.password": "Password",
   "auth.register.confirmPassword": "Confirm password",
   "auth.register.language": "System language",

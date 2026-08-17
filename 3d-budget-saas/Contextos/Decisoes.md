@@ -1086,3 +1086,73 @@ mensagens (`KNOWN_ERROR_MESSAGES["pt-BR" | "en"]`) usar.
   com um `fallback` próprio, que ignora `error.message` de um `Error`
   que não é do axios) - claramente texto de debug/desenvolvimento, não
   copy de produção, deixado como está.
+
+## 2026-08-17 - País no cadastro + preço de referência em dólar nos planos
+
+### Pesquisa prévia: o Asaas não tem parâmetro de moeda
+
+O Yuri pediu pra checar se o Asaas permite enviar valor em real ou dólar.
+Confirmado via [central de ajuda do Asaas](https://central.ajuda.asaas.com/hc/pt-br/articles/31972902909851)
+e via o próprio código já existente (`AsaasCreateCheckoutPayload` em
+`asaas-client.ts` só tem `value: number`, sem campo de moeda nenhum): a API
+do Asaas **não aceita moeda como parâmetro** - todo valor enviado é sempre
+interpretado como reais. Pra cliente estrangeiro/cartão emitido fora do
+Brasil, o Asaas exige autorização manual prévia de um gerente de conta
+(processo comercial, fora do código) e, mesmo autorizado, o valor continua
+sendo enviado em reais - a conversão pra dólar (ou outra moeda) acontece do
+lado da bandeira do cartão (Visa/Master), na cotação do dia deles, fora do
+nosso controle.
+
+**Consequência**: não existe "cobrar em dólar de verdade" com o Asaas hoje.
+Perguntado ao Yuri via `AskUserQuestion` como proceder dado essa limitação -
+escolhida a opção recomendada: dólar como **preço de referência/exibição**
+apenas, a cobrança real continua sempre em reais.
+
+### `Company.country` (ISO 3166-1 alpha-2) define `defaultCurrency` automaticamente
+
+Novo campo no cadastro (e editável em "Meu perfil", junto de nome/nome da
+empresa) com uma lista completa de países
+(`shared/src/countries.ts` - 249 entradas, nome em PT e EN, dado factual do
+ISO 3166-1, sem lib nova). `defaultCurrency` (`BRL`/`USD`) deixou de ser um
+campo que o formulário de cadastro escolhia direto (era sempre hardcoded
+`"BRL"` até agora) e passou a ser **derivado** do país
+(`currencyForCountry`: `BR` -> `BRL`, qualquer outro -> `USD`) tanto no
+registro quanto toda vez que o país é editado depois - nunca os dois saem
+de sincronia. Default do seletor de país no cadastro usa a mesma ideia já
+usada pro idioma (`detectBrowserLanguage`): olha `navigator.language`
+(`"en-US"` -> `"US"`), com `"BR"` como fallback.
+
+### `Plan.priceUsd`: preço USD por plano, opcional, editado pelo admin
+
+Coluna nova `Decimal? price_usd` em `plans` (migration
+`20260817150000_add_country_and_plan_usd_price`, junto com
+`companies.country`). Nula até o admin preencher em `/admin/plans` - por
+enquanto só o plano Pro tem um valor de teste (US$ 9,90) preenchido durante
+a verificação desta sessão; Free e Enterprise ficam sem, então continuam
+caindo no fallback BRL até o Yuri decidir os valores reais.
+
+### Tela de Plano/faturamento: dólar só quando `país != BR` E o plano tem `priceUsd`
+
+`dashboard/billing/page.tsx`: `showUsd = companyCountry !== "BR"`;
+`planPriceDisplay(plan)` usa `priceUsd` (formatado `en-US`/`USD`) só quando
+`showUsd` E `plan.priceUsd !== null` - senão cai pro preço em BRL de
+sempre, plano por plano (não é tudo ou nada por conta - cada plano pode ou
+não ter USD configurado). Quando `showUsd`, aparece um aviso fixo acima da
+lista de planos avisando que o valor em dólar é referência e a cobrança
+real é processada em reais, convertida pela operadora do cartão do
+cliente - importante porque, diferente da troca de moeda dos orçamentos
+(que é só exibição, sem dinheiro real envolvido), aqui existe uma cobrança
+de verdade acontecendo por trás.
+
+### Validado ao vivo (fluxo completo)
+
+Cadastro de conta nova com país "Estados Unidos" -> dica de moeda troca pra
+"cobrança exibida em dólar" em tempo real -> conta criada com
+`country=US`/`defaultCurrency=USD`. Admin define `priceUsd=9.90` no plano
+Pro -> tela de Plano da conta US passa a mostrar "US$ 9,90/mes" no Pro
+(Free e Enterprise continuam em BRL, sem `priceUsd` configurado), com o
+aviso de referência visível. Trocando o país de volta pra Brasil em "Meu
+perfil", a mesma tela volta a mostrar todos os planos em BRL e o aviso
+some - confirma que a lógica reage a mudança de país em tempo real, não só
+no cadastro. Suite completa do backend: 95/95 passando. Lint/build limpos
+em shared/backend/frontend.

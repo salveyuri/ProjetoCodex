@@ -1596,3 +1596,26 @@ quebrar.
   testada criando e excluindo uma formula extra, item "Admin Formulas"
   confirmado no dropdown do menu. Lint/build limpos em
   shared/backend/frontend, 92/92 testes de backend.
+
+## 2026-08-17 - Mostra o calculo de custo_base na tela de montagem de formulas
+
+Pedido do Yuri: na variavel `custo_base` (painel "Variaveis disponiveis"),
+mostrar embaixo dela e ao passar o mouse o calculo usado pra obter esse
+valor, indicando quais variaveis ela usa.
+
+- Novo mapa `variableBreakdowns` (so `custo_base` por enquanto - unica
+  variavel derivada de outras hoje) com o texto
+  `material_cost + energia_total + depreciacao_maquina + manutencao_maquina`
+  - mesma composicao de `baseCost` em `CalculationService.ts`, comentado no
+    codigo pra lembrar de manter sincronizado se a formula de custo base
+    mudar de novo.
+  - `VariableGroup`: quando a variavel tem breakdown, renderiza uma linha
+    extra sempre visivel ("= material_cost + ...", monoespacado, mais
+    discreta) abaixo da descricao, e o `title` (tooltip nativo do
+    navegador, aparece ao passar o mouse) passa a incluir
+    "Como e calculada: custo_base = ...".
+- Validado ao vivo: aberto o editor de nova formula, `custo_base` mostra a
+  linha do calculo sempre visivel e o `title` do botao inclui "Como e
+  calculada: custo_base = material_cost + energia_total +
+  depreciacao_maquina + manutencao_maquina". Lint/build de frontend
+  limpos.

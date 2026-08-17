@@ -81,6 +81,17 @@ const typeDescriptions: Record<CustomVariableType, string> = {
   PERCENTAGE: "Percentual: 15 vira 0.15 no parser.",
 };
 
+// Only custo_base is a derived/composite variable today — shown as an
+// always-visible breakdown line under it (and folded into the hover
+// tooltip) so nobody has to guess what it's made of before building a
+// formula on top of it. Keep in sync with CalculationService.ts's baseCost
+// computation (materialCost + energyCost + depreciationCost +
+// maintenanceCost).
+const variableBreakdowns: Partial<Record<string, string>> = {
+  custo_base:
+    "material_cost + energia_total + depreciacao_maquina + manutencao_maquina",
+};
+
 const typeOptions: Array<{ value: CustomVariableType; label: string }> = [
   { value: "FLOAT", label: "Float" },
   { value: "INTEGER", label: "Integer" },
@@ -1054,31 +1065,46 @@ const VariableGroup = ({
     </div>
     <div className="grid min-w-0 gap-2">
       {variables.length > 0 ? (
-        variables.map((variable) => (
-          <button
-            key={variable.name}
-            type="button"
-            title={variable.description}
-            onClick={() => onInsert(variable.name)}
-            className={cn(
-              "group flex min-h-12 min-w-0 items-center justify-between gap-3 rounded-lg border px-3 text-left transition",
-              variable.source === "CUSTOM"
-                ? "border-violet-400/30 bg-violet-500/10 hover:border-violet-300"
-                : "border-sky-400/25 bg-sky-500/10 hover:border-sky-300",
-            )}
-          >
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-mono text-sm font-semibold text-foreground">
-                {variable.name}
+        variables.map((variable) => {
+          const breakdown = variableBreakdowns[variable.name];
+
+          return (
+            <button
+              key={variable.name}
+              type="button"
+              title={
+                breakdown
+                  ? `${variable.description}\nComo e calculada: ${variable.name} = ${breakdown}`
+                  : variable.description
+              }
+              onClick={() => onInsert(variable.name)}
+              className={cn(
+                "group flex min-h-12 min-w-0 flex-col gap-1 rounded-lg border px-3 py-2 text-left transition",
+                variable.source === "CUSTOM"
+                  ? "border-violet-400/30 bg-violet-500/10 hover:border-violet-300"
+                  : "border-sky-400/25 bg-sky-500/10 hover:border-sky-300",
+              )}
+            >
+              <span className="flex min-w-0 items-center justify-between gap-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-mono text-sm font-semibold text-foreground">
+                    {variable.name}
+                  </span>
+                  <span className="mt-1 flex min-w-0 items-center gap-1 text-xs text-muted">
+                    <Info className="h-3 w-3" />
+                    <span className="truncate">{variable.description}</span>
+                  </span>
+                </span>
+                <TypeBadge type={variable.type} source={variable.source} />
               </span>
-              <span className="mt-1 flex min-w-0 items-center gap-1 text-xs text-muted">
-                <Info className="h-3 w-3" />
-                <span className="truncate">{variable.description}</span>
-              </span>
-            </span>
-            <TypeBadge type={variable.type} source={variable.source} />
-          </button>
-        ))
+              {breakdown ? (
+                <span className="truncate font-mono text-[11px] text-muted/80">
+                  = {breakdown}
+                </span>
+              ) : null}
+            </button>
+          );
+        })
       ) : (
         <div className="grid min-h-16 place-items-center rounded-lg border border-dashed border-border text-sm text-muted">
           Nenhuma variavel.

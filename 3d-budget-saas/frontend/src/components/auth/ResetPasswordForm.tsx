@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 
@@ -17,6 +18,7 @@ const isStrongEnoughPassword = (password: string): boolean =>
 export const ResetPasswordForm = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useLanguage();
   const token = searchParams.get("token") ?? "";
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
@@ -29,17 +31,17 @@ export const ResetPasswordForm = () => {
     setError(null);
 
     if (!token) {
-      setError("Link invalido — faltando o token de redefinicao.");
+      setError(t("auth.reset.errorMissingToken"));
       return;
     }
 
     if (!isStrongEnoughPassword(password)) {
-      setError("A senha precisa ter 8 caracteres, letra maiuscula, minuscula e numero.");
+      setError(t("auth.reset.errorWeakPassword"));
       return;
     }
 
     if (password !== passwordConfirmation) {
-      setError("As senhas nao coincidem.");
+      setError(t("auth.reset.errorPasswordMismatch"));
       return;
     }
 
@@ -50,9 +52,7 @@ export const ResetPasswordForm = () => {
       setIsDone(true);
       window.setTimeout(() => router.replace("/login"), 2500);
     } catch (submitError) {
-      setError(
-        getApiErrorMessage(submitError, "Nao foi possivel redefinir a senha."),
-      );
+      setError(getApiErrorMessage(submitError, t("auth.reset.errorGeneric")));
     } finally {
       setIsSubmitting(false);
     }
@@ -65,11 +65,9 @@ export const ResetPasswordForm = () => {
           <CheckCircle2 className="h-6 w-6" />
         </div>
         <h2 className="mt-5 text-xl font-semibold text-foreground">
-          Senha redefinida
+          {t("auth.reset.doneHeading")}
         </h2>
-        <p className="mt-2 text-sm text-muted">
-          Sua senha foi alterada. Redirecionando para o login...
-        </p>
+        <p className="mt-2 text-sm text-muted">{t("auth.reset.doneBody")}</p>
       </Card>
     );
   }
@@ -82,24 +80,24 @@ export const ResetPasswordForm = () => {
         </div>
         <div>
           <h2 className="text-xl font-semibold text-foreground">
-            Redefinir senha
+            {t("auth.reset.heading")}
           </h2>
-          <p className="text-sm text-muted">Escolha uma nova senha.</p>
+          <p className="text-sm text-muted">{t("auth.reset.subheading")}</p>
         </div>
       </div>
 
       {!token ? (
         <div className="mt-6 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-          Este link esta incompleto ou invalido. Peca um novo em{" "}
+          {t("auth.reset.invalidLink")}{" "}
           <Link href="/forgot-password" className="font-semibold hover:underline">
-            Esqueci minha senha
+            {t("auth.reset.forgotLink")}
           </Link>
           .
         </div>
       ) : (
         <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
           <label className="grid gap-2 text-sm font-medium text-foreground">
-            Nova senha
+            {t("auth.reset.newPassword")}
             <input
               type="password"
               autoComplete="new-password"
@@ -113,7 +111,7 @@ export const ResetPasswordForm = () => {
           </label>
 
           <label className="grid gap-2 text-sm font-medium text-foreground">
-            Confirme a nova senha
+            {t("auth.reset.confirmPassword")}
             <input
               type="password"
               autoComplete="new-password"
@@ -138,14 +136,14 @@ export const ResetPasswordForm = () => {
             className="mt-2 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Redefinir senha
+            {t("auth.reset.submit")}
           </button>
         </form>
       )}
 
       <p className="mt-5 text-center text-sm text-muted">
         <Link className="font-semibold text-primary hover:underline" href="/login">
-          Voltar para o login
+          {t("auth.reset.backToLogin")}
         </Link>
       </p>
     </Card>

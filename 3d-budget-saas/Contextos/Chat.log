@@ -1697,3 +1697,76 @@ somados uma vez; cartao/administrativo/margem por cima de tudo).
   1,30 de margem - exatamente uma vez, nao dobrado). Orcamento salvo
   confirma o mesmo total (R$141,18) que o preview mostrou. Migration
   aplicada, lint/build/test limpos em shared/backend/frontend.
+
+## 2026-08-17 - Resumo do orcamento (Valor acumulado) acompanha o scroll
+
+Pedido do Yuri: no form "Novo Orcamento", o bloco de resumo com o "Valor
+acumulado" deveria ficar fixo/acompanhar o scroll em vez de rolar junto
+com a lista de mesas.
+
+- `QuoteSummary.tsx`/layout do form ajustado pra `sticky` (posicionamento
+  relativo ao container, respeitando o header fixo existente) em vez de
+  fluir no documento. Commit `84b17d5`.
+
+## 2026-08-17 - Inverte ordem dos campos no card Pos-processamento
+
+Pedido do Yuri: "Implemente na tela de criar orcamentos alteracao na
+ordem em Pos-processamento, colocando primeiro horas acabamento e depois
+horas pintura."
+
+- `PostProcessingCard.tsx`: campos reordenados (horas de acabamento antes
+  de horas de pintura). Puramente ordem visual, sem mudanca de logica de
+  calculo. Commit `a2b68e3`.
+
+## 2026-08-17 - Traducao do sistema para ingles (pt-BR/en) + preco em dolar
+
+Pedido do Yuri: usuario poder escolher idioma (portugues/ingles) no
+cadastro e em "Meu perfil", com o idioma do navegador pre-selecionado por
+default; quando o idioma for ingles, valores/precos de orcamento devem
+aparecer com `$` em vez de `R$`.
+
+- Escopo perguntado via `AskUserQuestion` (telas principais vs sistema
+  inteiro), dado o tamanho (18 telas, nenhuma lib de i18n instalada).
+  Resposta do Yuri: traduzir todas as telas de usuario + PDF + criar
+  versoes EN dos 6 templates de e-mail (traduzidos fielmente do
+  original PT); so o painel Admin fica de fora.
+- `User.language` (`"pt-BR"|"en"`, default `pt-BR`) nova coluna;
+  `EmailTemplate` migrado de `key` unico pra `@@unique([key, language])`
+  (12 linhas - 6 chaves x 2 idiomas), com os 6 templates EN escritos
+  nesta sessao a partir do original PT. Migration
+  `20260817140000_add_language_support`, aplicada via
+  `npx prisma migrate deploy`.
+- Frontend ganhou infra de i18n propria (sem lib - app e 100%
+  client-rendered, `next-intl` nao encaixava): `frontend/src/lib/i18n/
+  {pt,en}.ts` (dicionario flat com ~350+ chaves, `en.ts` tipado contra as
+  chaves de `pt.ts` pra nunca divergir) + `LanguageContext.tsx` (`t()`,
+  `formatMoney()`, `formatDate()`, `formatNumber()`, `setLanguage()`).
+  Resolucao do idioma: usuario logado > cache local > idioma do
+  navegador > `pt-BR` default.
+- Todas as telas de usuario reescritas pra usar `useLanguage()`: auth
+  (login/cadastro/esqueci senha/redefinir senha), sidebar/header,
+  dashboard, orcamentos (lista + form + preview), calculadora, analytics,
+  configuracoes (maquinas/materiais/custos fixos/perfil), formulas,
+  billing (chrome traduzido, mas o valor da assinatura em si continua
+  fixo em BRL - ver abaixo). PDF do orcamento (`quote-pdf.service.ts`)
+  ganhou dicionario proprio de strings, escolhido a partir do idioma do
+  dono da conta.
+- Exceções deliberadas (fora do escopo, documentadas em
+  `Contextos/Decisoes.md`): painel Admin fica 100% portugues (decisao
+  explicita do Yuri); cobranca de assinatura (`billing/page.tsx`) sempre
+  mostra BRL porque o Asaas so cobra em reais, mostrar `$` ali seria
+  enganoso; descricoes/nomes de variaveis de formula continuam em
+  portugues (sao dado do backend, nao chrome de UI); `<html lang=
+  "pt-BR">` fica estatico (limitacao conhecida, `RootLayout` e Server
+  Component).
+- `$`/`R$` e so troca de formatacao (`Intl.NumberFormat` com locale/moeda
+  diferente) - nunca conversao de valor, o numero gravado no banco nunca
+  muda.
+- Verificado: `npm run lint`/`build` em shared+backend+frontend, `npx tsc
+  --noEmit` no backend, suite completa do backend (95/95). Testado ao
+  vivo no navegador: cadastro trocando idioma em tempo real, dashboard/
+  sidebar/header em ingles, configuracoes criando maquina/material com
+  `$`, fluxo completo de criar orcamento em ingles com precificacao em
+  dolar de ponta a ponta, lista de orcamentos com data no formato dos
+  EUA, e o round-trip de trocar o idioma em "Meu perfil" (EN -> PT,
+  salva, app inteiro re-renderiza corretamente).

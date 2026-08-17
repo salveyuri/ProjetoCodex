@@ -951,3 +951,138 @@ tanto no `materialMix` (receita por tipo de material) quanto nas colunas
 `finalPrice`/`profit` do export CSV. Sem essa mudança, `profit` teria
 virado sempre `0` (já que `finalPrice == baseCost` por item) e `revenue`
 subestimaria qualquer orçamento com margem/taxas/pós-processamento.
+
+## 2026-08-17 - Tradução do sistema para inglês (pt-BR/en) + preço em dólar
+
+### Escopo confirmado com o Yuri antes de começar
+
+Pergunta feita porque o app tem 18 telas e nenhuma lib de i18n instalada -
+traduzir tudo de uma vez é bem mais trabalho que só as telas principais.
+Resposta do Yuri: traduzir **todas as telas de usuário** (incluindo PDF e
+os 6 e-mails, com versão EN criada a partir do original PT) - só o painel
+**Admin** (5 telas) fica de fora, porque é uso interno só do Yuri.
+
+### Preferência de idioma é do `User`, não da `Company`
+
+`User.language` (`"pt-BR" | "en"`, default `"pt-BR"`) - não `Company`,
+porque autenticação/perfil já são por usuário no resto do sistema (nome,
+preferências de e-mail), e cada usuário de uma mesma empresa pode
+querer ver o sistema no próprio idioma. Coluna `TEXT` livre (não enum do
+Prisma) de propósito - trocar de idioma no futuro (ex. espanhol) vira só
+uma nova entrada de dicionário + seed de e-mail, nunca uma migração
+alterando o tipo da coluna.
+
+### i18n do frontend: dicionário + Context, não next-intl
+
+Este app é inteiramente client-rendered (todo componente já é `"use
+client"`, busca dados via `useEffect`/axios, sem Server Components
+buscando dado) - a maquinaria de `next-intl` (negociação de locale via
+URL/middleware, roteamento internacionalizado) não bate com essa
+arquitetura e adicionaria complexidade sem necessidade real. Implementado
+em vez disso um par `frontend/src/lib/i18n/{pt,en}.ts` (chaves flat tipo
+`"quotes.list.title"`) + `LanguageContext` (mesmo padrão de
+`AuthContext.tsx` já existente) expondo `t()`, `formatMoney()`,
+`formatDate()`, `setLanguage()`. `en.ts` é tipado contra as chaves de
+`pt.ts` (`Record<TranslationKey, string>`) - uma chave faltando ou sobrando
+vira erro de compilação, os dois arquivos nunca podem divergir.
+
+### Fonte da verdade do idioma: usuário logado > cache local > navegador
+
+Ordem de resolução no `LanguageProvider`: (1) se o usuário está
+autenticado, `user.language` sempre vence (sincronizado via `useEffect`
+assistindo `user?.language`); (2) senão, o que ficou salvo em
+`localStorage` de uma escolha anterior (ex. usuário trocou no formulário de
+cadastro mas ainda não confirmou a conta); (3) senão, `navigator.language`
+do navegador (`en*` → inglês, qualquer outra coisa → português - decisão
+deliberada de "quando em dúvida, português", já que a base atual de
+usuários é 100% brasileira). O cadastro já pré-seleciona esse palpite e
+deixa trocar ali mesmo, com o formulário inteiro mudando de idioma em
+tempo real conforme a l Yuri pediu.
+
+### `$` em vez de `R$` é só troca de símbolo/formatação - nunca conversão de valor
+
+O Yuri pediu isso explicitamente ("a cifra de dólar no lugar de BRL") -
+os valores numéricos gravados no banco continuam exatamente os mesmos,
+só o `Intl.NumberFormat` usado pra exibir muda de `pt-BR/BRL` pra
+`en-US/USD` conforme `language`. Nenhuma taxa de câmbio envolvida. Os 6
+lugares que faziam essa formatação com `pt-BR`/`BRL` hardcoded
+(`quote-ui.ts`, `calculator/page.tsx`, `settings/page.tsx`,
+`settings/formulas/page.tsx`, `dashboard/analytics/page.tsx`,
+`billing/page.tsx`) foram centralizados: `quote-ui.ts` perdeu
+`toMoney`/`formatDate` (agora só `useLanguage().formatMoney()`/
+`formatDate()`), e `quoteStatusLabels` virou `quoteStatusLabelKeys`
+(mapeia pra uma chave de tradução, não pro texto fixo).
+
+### Exceção deliberada: cobrança de assinatura (`billing/page.tsx`) fica sempre em BRL
+
+A única tela onde dinheiro **não** segue `language` é Plano/faturamento -
+o Asaas (gateway de pagamento usado pra cobrar a assinatura do próprio
+Pricify3D) só processa BRL, então mostrar `$` ali seria mentira: o valor
+realmente cobrado no cartão continua sendo em reais não importa o que a
+tela mostrasse. `formatMoney` local nesse arquivo foi deixado
+propositalmente fora do `useLanguage()`, com comentário explicando o
+porquê. Mesma lógica pro painel Admin (`admin/analytics/page.tsx` etc) -
+fora do escopo da tradução, então ganhou seu próprio `toMoney` local em
+vez de importar de `quote-ui.ts`.
+
+### E-mails: linha vira `(key, language)` em vez de só `key`
+
+`EmailTemplate` antes tinha `key` único (6 linhas); agora `@@unique([key,
+language])` (12 linhas - 6 chaves × pt-BR/en), com os 6 templates em
+inglês escritos nesta sessão a partir do texto original em português
+(mesmo layout/HTML, só o texto traduzido). `EmailService.send()` passa a
+receber `language` e busca a linha certa via `findUnique({where:
+{key_language: {key, language}}})`; cada método de conveniência
+(`sendAccountCreated` etc.) resolve o idioma a partir de
+`user.language`/`company.user.language` antes de chamar `send()`.
+`taxa_erro`... digo, `triggerLabel` ("aprovado"/"exportado") também virou
+bilíngue via um mapa pequeno. Painel admin de e-mails (fora do escopo de
+tradução) ganhou só uma badge "PT"/"EN" ao lado de cada linha pra
+continuar utilizável com o dobro de linhas - texto da tela em si continua
+em português.
+
+### PDF do orçamento: dicionário de strings embutido no próprio service
+
+`quote-pdf.service.ts` não tem acesso a React/Context (roda no backend,
+gera o PDF com `pdfkit`) - criado um objeto `pdfStrings` local
+(`Record<SupportedLanguage, {...}>`) com todo o texto fixo do PDF (headers
+de coluna, rótulos, termos), escolhido uma vez no início de `generate()`
+a partir de `quote.company.user.language` e passado como parâmetro pelas
+funções de desenho (`drawHeader`, `drawItemsTable` etc.) - mesmo
+formatador de moeda/data trocando `pt-BR/BRL` por `en-US/USD` conforme
+esse idioma.
+
+### `getApiErrorMessage` (não-React) sincronizado via variável de módulo
+
+Mensagens de erro da API (`lib/api-error.ts`) são chamadas de ~30 lugares
+espalhados pelo app, muitos sem acesso limpo a hooks React no ponto exato
+da chamada. Em vez de mudar a assinatura da função em todos esses lugares
+pra receber `language`, o `LanguageContext` mantém uma variável de módulo
+sincronizada (`setErrorMessageLanguage`, mesma ideia do
+`setApiAuthorization` que o `AuthContext.tsx` já usa pra manter o header
+`Authorization` do axios fora do ciclo de render do React) - `
+getApiErrorMessage` lê essa variável pra decidir qual dicionário de
+mensagens (`KNOWN_ERROR_MESSAGES["pt-BR" | "en"]`) usar.
+
+### Fora do escopo desta rodada (documentado, não esquecido)
+
+- **Painel Admin** (5 telas) continua só em português, por decisão
+  explícita do Yuri.
+- **Descrições das variáveis de fórmula** (`formula.service.ts`'s
+  `systemVariableMeta`, mostradas na tela de Fórmulas ao passar o mouse)
+  continuam em português - são dado vindo do backend (catálogo de
+  variáveis), não "chrome" de interface; traduzir exigiria um esforço de
+  i18n backend separado (a rota `/formulas/variables` teria que devolver
+  descrição no idioma certo). Mesma lógica pro **nome das fórmulas** em si
+  (ex. "Formula Padrao do Sistema" aparece assim mesmo com o resto da tela
+  em inglês) - é conteúdo gravado no banco, não uma string estática da UI.
+- `<html lang="pt-BR">` em `app/layout.tsx` ficou fixo - `RootLayout` é
+  Server Component, mudar isso dinamicamente exigiria cookie/middleware
+  de locale, considerado fora de escopo pra uma decisão só de atributo de
+  acessibilidade/SEO.
+- `lib/download-quote-pdf.ts` tem algumas mensagens de erro internas em
+  português (ex. "Reinicie a API na porta 3001") que na prática nunca
+  aparecem pro usuário final (todo call site usa `getApiErrorMessage`
+  com um `fallback` próprio, que ignora `error.message` de um `Error`
+  que não é do axios) - claramente texto de debug/desenvolvimento, não
+  copy de produção, deixado como está.

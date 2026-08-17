@@ -1,11 +1,13 @@
 "use client";
 
+import type { SupportedLanguage } from "@3d-budget/shared";
 import { Loader2, UserPlus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -19,6 +21,7 @@ const isStrongEnoughPassword = (password: string): boolean =>
 export const RegisterForm = () => {
   const router = useRouter();
   const { register } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -32,17 +35,17 @@ export const RegisterForm = () => {
     setError(null);
 
     if (!fullName.trim() || !email.trim() || !companyName.trim() || !password) {
-      setError("Preencha todos os campos obrigatorios.");
+      setError(t("auth.register.errorRequired"));
       return;
     }
 
     if (!isStrongEnoughPassword(password)) {
-      setError("A senha precisa ter 8 caracteres, letra maiuscula, minuscula e numero.");
+      setError(t("auth.register.errorWeakPassword"));
       return;
     }
 
     if (password !== passwordConfirmation) {
-      setError("As senhas nao coincidem.");
+      setError(t("auth.register.errorPasswordMismatch"));
       return;
     }
 
@@ -56,10 +59,11 @@ export const RegisterForm = () => {
         password,
         defaultCurrency: "BRL",
         taxRate: 0,
+        language,
       });
       router.replace("/dashboard");
     } catch (registerError) {
-      setError(getApiErrorMessage(registerError, "Nao foi possivel criar a conta."));
+      setError(getApiErrorMessage(registerError, t("auth.register.errorGeneric")));
     } finally {
       setIsSubmitting(false);
     }
@@ -72,13 +76,13 @@ export const RegisterForm = () => {
       </div>
 
       <div className="mt-6">
-        <StatusBadge tone="success">nova conta</StatusBadge>
-        <h2 className="mt-4 text-2xl font-semibold">Criar cadastro</h2>
+        <StatusBadge tone="success">{t("auth.register.badge")}</StatusBadge>
+        <h2 className="mt-4 text-2xl font-semibold">{t("auth.register.heading")}</h2>
       </div>
 
       <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
         <label className="grid gap-2 text-sm font-medium text-foreground">
-          Nome completo
+          {t("auth.register.fullName")}
           <input
             type="text"
             autoComplete="name"
@@ -91,7 +95,7 @@ export const RegisterForm = () => {
         </label>
 
         <label className="grid gap-2 text-sm font-medium text-foreground">
-          E-mail
+          {t("auth.register.email")}
           <input
             type="email"
             autoComplete="email"
@@ -104,7 +108,7 @@ export const RegisterForm = () => {
         </label>
 
         <label className="grid gap-2 text-sm font-medium text-foreground">
-          Nome da empresa
+          {t("auth.register.companyName")}
           <input
             type="text"
             autoComplete="organization"
@@ -116,9 +120,21 @@ export const RegisterForm = () => {
           />
         </label>
 
+        <label className="grid gap-2 text-sm font-medium text-foreground">
+          {t("auth.register.language")}
+          <select
+            value={language}
+            onChange={(event) => setLanguage(event.target.value as SupportedLanguage)}
+            className="h-11 rounded-lg border border-border bg-surface-muted px-3 text-sm outline-none transition focus:border-primary"
+          >
+            <option value="pt-BR">{t("common.portuguese")}</option>
+            <option value="en">{t("common.english")}</option>
+          </select>
+        </label>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-2 text-sm font-medium text-foreground">
-            Senha
+            {t("auth.register.password")}
             <input
               type="password"
               autoComplete="new-password"
@@ -132,7 +148,7 @@ export const RegisterForm = () => {
           </label>
 
           <label className="grid gap-2 text-sm font-medium text-foreground">
-            Confirmar senha
+            {t("auth.register.confirmPassword")}
             <input
               type="password"
               autoComplete="new-password"
@@ -162,14 +178,14 @@ export const RegisterForm = () => {
           ) : (
             <UserPlus className="h-4 w-4" />
           )}
-          Criar conta
+          {t("auth.register.submit")}
         </button>
       </form>
 
       <p className="mt-5 text-center text-sm text-muted">
-        Ja possui conta?{" "}
+        {t("auth.register.haveAccount")}{" "}
         <Link className="font-semibold text-primary hover:underline" href="/login">
-          Entre aqui
+          {t("auth.register.loginLink")}
         </Link>
       </p>
     </Card>

@@ -4,10 +4,12 @@ import { CheckCircle2, Loader2, Mail } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 
 export const ForgotPasswordForm = () => {
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,9 +26,7 @@ export const ForgotPasswordForm = () => {
       // exists, on purpose — never reveal which accounts are registered.
       setIsSent(true);
     } catch (submitError) {
-      setError(
-        getApiErrorMessage(submitError, "Nao foi possivel enviar o link."),
-      );
+      setError(getApiErrorMessage(submitError, t("auth.forgot.errorGeneric")));
     } finally {
       setIsSubmitting(false);
     }
@@ -39,17 +39,17 @@ export const ForgotPasswordForm = () => {
           <CheckCircle2 className="h-6 w-6" />
         </div>
         <h2 className="mt-5 text-xl font-semibold text-foreground">
-          Verifique seu e-mail
+          {t("auth.forgot.sentHeading")}
         </h2>
         <p className="mt-2 text-sm text-muted">
-          Se existir uma conta com o e-mail <strong>{email}</strong>, voce vai
-          receber um link para redefinir sua senha em instantes.
+          {t("auth.forgot.sentBodyPrefix")} <strong>{email}</strong>
+          {t("auth.forgot.sentBodySuffix")}
         </p>
         <Link
           href="/login"
           className="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
         >
-          Voltar para o login
+          {t("auth.forgot.backToLogin")}
         </Link>
       </Card>
     );
@@ -63,17 +63,15 @@ export const ForgotPasswordForm = () => {
         </div>
         <div>
           <h2 className="text-xl font-semibold text-foreground">
-            Esqueci minha senha
+            {t("auth.forgot.heading")}
           </h2>
-          <p className="text-sm text-muted">
-            Enviamos um link de redefinicao para o seu e-mail.
-          </p>
+          <p className="text-sm text-muted">{t("auth.forgot.subheading")}</p>
         </div>
       </div>
 
       <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
         <label className="grid gap-2 text-sm font-medium text-foreground">
-          Email
+          {t("auth.forgot.email")}
           <input
             type="email"
             autoComplete="email"
@@ -97,14 +95,14 @@ export const ForgotPasswordForm = () => {
           className="mt-2 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Enviar link de redefinicao
+          {t("auth.forgot.submit")}
         </button>
       </form>
 
       <p className="mt-5 text-center text-sm text-muted">
-        Lembrou a senha?{" "}
+        {t("auth.forgot.rememberedPassword")}{" "}
         <Link className="font-semibold text-primary hover:underline" href="/login">
-          Entrar
+          {t("auth.forgot.loginLink")}
         </Link>
       </p>
     </Card>

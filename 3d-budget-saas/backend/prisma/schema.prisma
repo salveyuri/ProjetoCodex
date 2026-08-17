@@ -58,6 +58,10 @@ model User {
   notifyFinancialEmails  Boolean  @default(true) @map("notify_financial_emails")
   notifyQuoteEmails      Boolean  @default(true) @map("notify_quote_emails")
   notifyNewsletter       Boolean  @default(false) @map("notify_newsletter")
+  // "pt-BR" | "en" — see SupportedLanguage in shared/src/index.ts. Free-text
+  // column (not a Prisma enum) so adding a language never needs a migration
+  // touching this column's type, only a new EmailTemplate/dictionary set.
+  language               String   @default("pt-BR")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
@@ -436,9 +440,12 @@ model SystemError {
   @@map("system_errors")
 }
 
+// One row per (key, language) — each of the 6 triggers has both a pt-BR
+// and an en variant, selected at send time by the recipient's User.language.
 model EmailTemplate {
   id          String   @id @default(uuid()) @db.Uuid
-  key         String   @unique
+  key         String
+  language    String   @default("pt-BR")
   name        String
   description String?
   subject     String
@@ -447,6 +454,7 @@ model EmailTemplate {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  @@unique([key, language])
   @@map("email_templates")
 }
 

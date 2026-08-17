@@ -28,9 +28,11 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
+import type { TranslationKey } from "@/lib/i18n";
 
 interface FormulaFormState {
   name: string;
@@ -76,10 +78,10 @@ const typeLabels: Record<CustomVariableType, string> = {
   PERCENTAGE: "%",
 };
 
-const typeDescriptions: Record<CustomVariableType, string> = {
-  INTEGER: "Inteiro sem casas decimais.",
-  FLOAT: "Decimal comum.",
-  PERCENTAGE: "Percentual: 15 vira 0.15 no parser.",
+const typeDescriptionKeys: Record<CustomVariableType, TranslationKey> = {
+  INTEGER: "formulas.typeIntDescription",
+  FLOAT: "formulas.typeFloatDescription",
+  PERCENTAGE: "formulas.typePercentageDescription",
 };
 
 // Only custo_base is a derived/composite variable today — shown as an
@@ -119,15 +121,9 @@ const createLocalId = (): string => {
   return `${Date.now()}-${Math.random()}`;
 };
 
-const toMoney = (value: number): string =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-
-const formatCalcValue = (value: number): string =>
+const formatCalcValue = (value: number, locale: string): string =>
   Number.isFinite(value)
-    ? value.toLocaleString("pt-BR", { maximumFractionDigits: 4 })
+    ? value.toLocaleString(locale, { maximumFractionDigits: 4 })
     : String(value);
 
 const toFormulaForm = (formula: FormulaResource): FormulaFormState => ({
@@ -179,6 +175,7 @@ const getUsedVariableNames = (expression: string): Set<string> => {
 
 export default function FormulasPage() {
   const { isLoading: isAuthLoading, token } = useAuth();
+  const { t, formatMoney } = useLanguage();
   const expressionRef = useRef<HTMLTextAreaElement>(null);
   const [formulas, setFormulas] = useState<FormulaResource[]>([]);
   const [variables, setVariables] = useState<FormulaVariable[]>([]);
@@ -226,12 +223,12 @@ export default function FormulasPage() {
     } catch (error) {
       showToast({
         tone: "danger",
-        message: getApiErrorMessage(error, "Nao foi possivel carregar formulas."),
+        message: getApiErrorMessage(error, t("formulas.errorLoad")),
       });
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, token]);
+  }, [showToast, t, token]);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -302,7 +299,7 @@ export default function FormulasPage() {
       } catch (error) {
         setPreview(null);
         setPreviewError(
-          getApiErrorMessage(error, "Nao foi possivel calcular o preview."),
+          getApiErrorMessage(error, t("formulas.errorPreview")),
         );
       } finally {
         setIsPreviewing(false);
@@ -314,6 +311,7 @@ export default function FormulasPage() {
     formulaForm.expression,
     isEditorOpen,
     previewValues,
+    t,
     token,
     visiblePreviewVariables,
   ]);
@@ -409,11 +407,11 @@ export default function FormulasPage() {
         setFormulaForm(toFormulaForm(data));
       }
 
-      showToast({ tone: "success", message: "Formula validada e salva." });
+      showToast({ tone: "success", message: t("formulas.savedToast") });
       closeEditor();
       void loadData();
     } catch (error) {
-      const message = getApiErrorMessage(error, "Nao foi possivel salvar a formula.");
+      const message = getApiErrorMessage(error, t("formulas.errorSave"));
       setFormulaError(message);
       showToast({ tone: "danger", message });
     } finally {
@@ -422,7 +420,7 @@ export default function FormulasPage() {
   };
 
   const deleteFormula = async (formula: FormulaResource) => {
-    const confirmed = window.confirm(`Excluir ${formula.name}?`);
+    const confirmed = window.confirm(t("formulas.confirmDelete", { name: formula.name }));
 
     if (!confirmed) {
       return;
@@ -434,12 +432,12 @@ export default function FormulasPage() {
         current.filter((item) => item.id !== formula.id),
       );
       closeEditor();
-      showToast({ tone: "success", message: "Formula excluida." });
+      showToast({ tone: "success", message: t("formulas.deletedToast") });
       void loadData();
     } catch (error) {
       showToast({
         tone: "danger",
-        message: getApiErrorMessage(error, "Nao foi possivel excluir a formula."),
+        message: getApiErrorMessage(error, t("formulas.errorDelete")),
       });
     }
   };
@@ -514,20 +512,20 @@ export default function FormulasPage() {
       );
 
       if (duplicatedName) {
-        throw new Error(`Variavel duplicada: ${duplicatedName.name}`);
+        throw new Error(t("formulas.duplicatedVariable", { name: duplicatedName.name }));
       }
 
       for (const entry of entries) {
         if (!variableNamePattern.test(entry.name)) {
-          throw new Error(`Nome invalido: ${entry.name}`);
+          throw new Error(t("formulas.invalidName", { name: entry.name }));
         }
 
         if (!Number.isFinite(entry.value)) {
-          throw new Error(`Valor invalido para ${entry.name}`);
+          throw new Error(t("formulas.invalidValue", { name: entry.name }));
         }
 
         if (entry.type === "INTEGER" && /[,.]/.test(entry.rawValue)) {
-          throw new Error(`Variavel inteira nao aceita decimal: ${entry.name}`);
+          throw new Error(t("formulas.integerNoDecimal", { name: entry.name }));
         }
       }
 
@@ -544,7 +542,7 @@ export default function FormulasPage() {
 
       setSettings(data);
       setCustomRows(customRowsFromSettings(data));
-      showToast({ tone: "success", message: "Variaveis salvas." });
+      showToast({ tone: "success", message: t("formulas.variablesSavedToast") });
       void loadData();
     } catch (error) {
       showToast({
@@ -552,7 +550,7 @@ export default function FormulasPage() {
         message:
           error instanceof Error && !axios.isAxiosError(error)
             ? error.message
-            : getApiErrorMessage(error, "Nao foi possivel salvar as variaveis."),
+            : getApiErrorMessage(error, t("formulas.errorSaveVariables")),
       });
     } finally {
       setIsSavingVariables(false);
@@ -569,13 +567,11 @@ export default function FormulasPage() {
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
         <section className="flex flex-col justify-between gap-4 rounded-lg border border-border bg-surface/80 p-5 lg:flex-row lg:items-end">
           <div>
-            <StatusBadge tone="success">parser seguro</StatusBadge>
+            <StatusBadge tone="success">{t("formulas.badge")}</StatusBadge>
             <h1 className="mt-4 text-3xl font-semibold text-foreground">
-              Formulas de preco
+              {t("formulas.title")}
             </h1>
-            <p className="mt-2 max-w-2xl text-base text-muted">
-              Edite equacoes, teste variaveis e defina a regra comercial aplicada aos orcamentos.
-            </p>
+            <p className="mt-2 max-w-2xl text-base text-muted">{t("formulas.subtitle")}</p>
           </div>
           <button
             type="button"
@@ -583,7 +579,7 @@ export default function FormulasPage() {
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
-            Nova formula
+            {t("formulas.newFormula")}
           </button>
         </section>
 
@@ -595,10 +591,12 @@ export default function FormulasPage() {
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <PanelTitle
                   icon={Code2}
-                  title="Biblioteca"
-                  subtitle="Formulas salvas por empresa."
+                  title={t("formulas.libraryTitle")}
+                  subtitle={t("formulas.librarySubtitle")}
                 />
-                <span className="text-sm text-muted">{formulas.length} formulas</span>
+                <span className="text-sm text-muted">
+                  {formulas.length} {t("formulas.countSuffix")}
+                </span>
               </div>
 
               <div className="mt-5 grid gap-3 lg:grid-cols-2">
@@ -618,13 +616,13 @@ export default function FormulasPage() {
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         {formula.isSystem ? (
-                          <StatusBadge tone="neutral">Sistema</StatusBadge>
+                          <StatusBadge tone="neutral">{t("formulas.system")}</StatusBadge>
                         ) : null}
                         {formula.isDefault ? (
-                          <StatusBadge tone="success">Padrao</StatusBadge>
+                          <StatusBadge tone="success">{t("formulas.default")}</StatusBadge>
                         ) : null}
                         {!formula.isActive ? (
-                          <StatusBadge tone="warning">Inativa</StatusBadge>
+                          <StatusBadge tone="warning">{t("formulas.inactive")}</StatusBadge>
                         ) : null}
                       </div>
                     </div>
@@ -636,7 +634,7 @@ export default function FormulasPage() {
                         className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-primary/40 px-3 text-sm font-semibold text-primary transition hover:bg-primary/10"
                       >
                         <Pencil className="h-4 w-4" />
-                        {formula.isSystem ? "Ver" : "Editar"}
+                        {formula.isSystem ? t("formulas.view") : t("formulas.edit")}
                       </button>
                     </div>
                   </div>
@@ -644,7 +642,7 @@ export default function FormulasPage() {
 
                 {formulas.length === 0 ? (
                   <div className="grid min-h-32 place-items-center rounded-lg border border-dashed border-border text-sm text-muted lg:col-span-2">
-                    Nenhuma formula cadastrada.
+                    {t("formulas.emptyLibrary")}
                   </div>
                 ) : null}
               </div>
@@ -655,19 +653,19 @@ export default function FormulasPage() {
                 <Card className="min-w-0 p-5">
                   <PanelTitle
                     icon={Variable}
-                    title="Variaveis disponiveis"
-                    subtitle="Clique para inserir no cursor."
+                    title={t("formulas.variablesAvailable")}
+                    subtitle={t("formulas.clickToInsert")}
                   />
                   <div className="mt-5 grid max-h-[640px] gap-5 overflow-y-auto pr-1">
                     <VariableGroup
-                      title="Sistema"
+                      title={t("formulas.systemGroup")}
                       variables={variables.filter(
                         (variable) => variable.source === "SYSTEM",
                       )}
                       onInsert={insertVariable}
                     />
                     <VariableGroup
-                      title="Custom"
+                      title={t("formulas.customGroup")}
                       variables={variables.filter(
                         (variable) => variable.source === "CUSTOM",
                       )}
@@ -684,20 +682,20 @@ export default function FormulasPage() {
                           icon={FlaskConical}
                           title={
                             isSelectedSystemFormula
-                              ? "Formula do sistema"
+                              ? t("formulas.systemFormulaTitle")
                               : selectedFormulaId
-                                ? "Editar formula"
-                                : "Nova formula"
+                                ? t("formulas.editFormulaTitle")
+                                : t("formulas.newFormulaTitle")
                           }
                           subtitle={
                             isSelectedSystemFormula
-                              ? "Somente leitura — editavel so por um admin."
-                              : "O backend faz dry run antes de salvar."
+                              ? t("formulas.readOnlySubtitle")
+                              : t("formulas.dryRunSubtitle")
                           }
                         />
                         <div className="flex flex-wrap items-center gap-2">
                           <ToggleLabel
-                            label="Ativa"
+                            label={t("formulas.active")}
                             checked={formulaForm.isActive}
                             disabled={isSelectedSystemFormula}
                             onChange={(checked) =>
@@ -708,7 +706,7 @@ export default function FormulasPage() {
                             }
                           />
                           <ToggleLabel
-                            label="Padrao"
+                            label={t("formulas.defaultToggle")}
                             checked={formulaForm.isDefault}
                             disabled={isSelectedSystemFormula}
                             onChange={(checked) =>
@@ -720,8 +718,8 @@ export default function FormulasPage() {
                           />
                           <button
                             type="button"
-                            title="Fechar editor"
-                            aria-label="Fechar editor"
+                            title={t("formulas.closeEditor")}
+                            aria-label={t("formulas.closeEditor")}
                             onClick={closeEditor}
                             className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
                           >
@@ -732,7 +730,7 @@ export default function FormulasPage() {
 
                       <label className="grid min-w-0 gap-2">
                         <span className="text-sm font-medium text-foreground">
-                          Nome
+                          {t("formulas.name")}
                         </span>
                         <input
                           value={formulaForm.name}
@@ -750,7 +748,7 @@ export default function FormulasPage() {
 
                       <label className="grid min-w-0 gap-2">
                         <span className="text-sm font-medium text-foreground">
-                          Equacao
+                          {t("formulas.equation")}
                         </span>
                         <textarea
                           ref={expressionRef}
@@ -782,7 +780,7 @@ export default function FormulasPage() {
 
                       <div className="min-w-0 rounded-lg border border-border bg-background p-3">
                         <p className="mb-2 text-xs uppercase text-muted">
-                          Leitura da equacao
+                          {t("formulas.expressionReading")}
                         </p>
                         <HighlightedExpression
                           expression={formulaForm.expression}
@@ -791,10 +789,7 @@ export default function FormulasPage() {
                       </div>
 
                       {isSelectedSystemFormula ? (
-                        <Alert tone="warning">
-                          Formula do sistema — visivel pra todas as empresas, mas
-                          so um admin pode editar (Admin &gt; Formulas).
-                        </Alert>
+                        <Alert tone="warning">{t("formulas.systemFormulaWarning")}</Alert>
                       ) : null}
 
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -809,7 +804,7 @@ export default function FormulasPage() {
                             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-danger/40 px-4 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Trash2 className="h-4 w-4" />
-                            Excluir
+                            {t("formulas.delete")}
                           </button>
                         ) : (
                           <span />
@@ -822,7 +817,7 @@ export default function FormulasPage() {
                             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-70"
                           >
                             <Save className="h-4 w-4" />
-                            {isSavingFormula ? "Validando..." : "Salvar formula"}
+                            {isSavingFormula ? t("formulas.validating") : t("formulas.saveFormula")}
                           </button>
                         ) : null}
                       </div>
@@ -832,8 +827,8 @@ export default function FormulasPage() {
                   <Card className="min-w-0 p-5">
                     <PanelTitle
                       icon={FlaskConical}
-                      title="Teste de formula"
-                      subtitle="Valores ficticios sao enviados ao parser em tempo real."
+                      title={t("formulas.testTitle")}
+                      subtitle={t("formulas.testSubtitle")}
                     />
                     <div className="mt-5 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
                       <div className="grid min-w-0 gap-3 sm:grid-cols-2">
@@ -856,20 +851,18 @@ export default function FormulasPage() {
                       </div>
                       <div className="rounded-lg border border-border bg-background p-4">
                         <p className="text-sm text-muted">
-                          {isPreviewing ? "Calculando..." : "Resultado"}
+                          {isPreviewing ? t("formulas.calculating") : t("formulas.result")}
                         </p>
                         <p className="mt-3 text-3xl font-semibold text-foreground">
-                          {preview ? toMoney(preview.result) : "--"}
+                          {preview ? formatMoney(preview.result) : "--"}
                         </p>
-                        <p className="mt-3 text-xs text-muted">
-                          Percentuais sao convertidos para taxa decimal antes da execucao.
-                        </p>
+                        <p className="mt-3 text-xs text-muted">{t("formulas.percentageNote")}</p>
                       </div>
                     </div>
 
                     <div className="mt-4 min-w-0 rounded-lg border border-border bg-background p-3">
                       <p className="mb-2 text-xs uppercase text-muted">
-                        Leitura do calculo
+                        {t("formulas.calcReading")}
                       </p>
                       {preview ? (
                         <SubstitutedExpression
@@ -878,9 +871,7 @@ export default function FormulasPage() {
                           result={preview.result}
                         />
                       ) : (
-                        <p className="text-sm text-muted">
-                          Ajuste os valores de teste para ver a equacao calculada passo a passo.
-                        </p>
+                        <p className="text-sm text-muted">{t("formulas.adjustValuesHint")}</p>
                       )}
                     </div>
                   </Card>
@@ -893,8 +884,8 @@ export default function FormulasPage() {
                 <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                   <PanelTitle
                     icon={Settings2}
-                    title="Variaveis customizadas"
-                    subtitle="Campos salvos em custos fixos e disponiveis nas formulas."
+                    title={t("formulas.customVariablesTitle")}
+                    subtitle={t("formulas.customVariablesSubtitle")}
                   />
                   <button
                     type="button"
@@ -902,15 +893,15 @@ export default function FormulasPage() {
                     className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary transition hover:bg-primary/20"
                   >
                     <Plus className="h-4 w-4" />
-                    Adicionar
+                    {t("formulas.add")}
                   </button>
                 </div>
 
                 <div className="grid gap-2">
                   <div className="hidden grid-cols-[minmax(0,1fr)_150px_170px_44px] gap-2 px-3 text-xs uppercase text-muted lg:grid">
-                    <span>Nome</span>
-                    <span>Tipo</span>
-                    <span>Valor</span>
+                    <span>{t("formulas.colName")}</span>
+                    <span>{t("formulas.colType")}</span>
+                    <span>{t("formulas.colValue")}</span>
                     <span />
                   </div>
                   {customRows.map((row) => (
@@ -925,7 +916,7 @@ export default function FormulasPage() {
                             name: event.target.value,
                           })
                         }
-                        placeholder="taxa_manutencao"
+                        placeholder={t("formulas.namePlaceholder")}
                         className="min-h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 text-sm outline-none transition focus:border-primary"
                       />
                       <select
@@ -960,8 +951,8 @@ export default function FormulasPage() {
                       </div>
                       <button
                         type="button"
-                        title="Remover"
-                        aria-label="Remover"
+                        title={t("formulas.remove")}
+                        aria-label={t("formulas.remove")}
                         onClick={() => removeCustomVariable(row.localId)}
                         className="grid min-h-11 place-items-center rounded-lg border border-border text-muted transition hover:border-danger hover:text-danger"
                       >
@@ -971,7 +962,7 @@ export default function FormulasPage() {
                   ))}
                   {customRows.length === 0 ? (
                     <div className="grid min-h-28 place-items-center rounded-lg border border-dashed border-border text-sm text-muted">
-                      Nenhuma variavel customizada.
+                      {t("formulas.emptyCustomVariables")}
                     </div>
                   ) : null}
                 </div>
@@ -982,7 +973,7 @@ export default function FormulasPage() {
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-secondary px-4 text-sm font-semibold text-background transition hover:bg-secondary/90 disabled:opacity-70"
                 >
                   <Save className="h-4 w-4" />
-                  {isSavingVariables ? "Salvando..." : "Salvar variaveis"}
+                  {isSavingVariables ? t("formulas.saving") : t("formulas.saveVariables")}
                 </button>
               </form>
             </Card>
@@ -1059,7 +1050,10 @@ const VariableGroup = ({
   title: string;
   variables: FormulaVariable[];
   onInsert: (name: string) => void;
-}) => (
+}) => {
+  const { t } = useLanguage();
+
+  return (
   <div className="grid min-w-0 gap-2">
     <div className="flex items-center justify-between">
       <p className="text-xs font-semibold uppercase text-muted">{title}</p>
@@ -1076,7 +1070,7 @@ const VariableGroup = ({
               type="button"
               title={
                 breakdown
-                  ? `${variable.description}\nComo e calculada: ${variable.name} = ${breakdown}`
+                  ? `${variable.description}\n${t("formulas.calcReading")}: ${variable.name} = ${breakdown}`
                   : variable.description
               }
               onClick={() => onInsert(variable.name)}
@@ -1109,12 +1103,13 @@ const VariableGroup = ({
         })
       ) : (
         <div className="grid min-h-16 place-items-center rounded-lg border border-dashed border-border text-sm text-muted">
-          Nenhuma variavel.
+          {t("formulas.noVariables")}
         </div>
       )}
     </div>
   </div>
-);
+  );
+};
 
 const TypeBadge = ({
   type,
@@ -1122,19 +1117,23 @@ const TypeBadge = ({
 }: {
   type: CustomVariableType;
   source: FormulaVariable["source"];
-}) => (
-  <span
-    title={typeDescriptions[type]}
-    className={cn(
-      "inline-flex h-7 shrink-0 items-center rounded-md border px-2 text-xs font-semibold",
-      source === "CUSTOM"
-        ? "border-violet-300/40 bg-violet-400/10 text-violet-200"
-        : "border-sky-300/40 bg-sky-400/10 text-sky-200",
-    )}
-  >
-    {typeLabels[type]}
-  </span>
-);
+}) => {
+  const { t } = useLanguage();
+
+  return (
+    <span
+      title={t(typeDescriptionKeys[type])}
+      className={cn(
+        "inline-flex h-7 shrink-0 items-center rounded-md border px-2 text-xs font-semibold",
+        source === "CUSTOM"
+          ? "border-violet-300/40 bg-violet-400/10 text-violet-200"
+          : "border-sky-300/40 bg-sky-400/10 text-sky-200",
+      )}
+    >
+      {typeLabels[type]}
+    </span>
+  );
+};
 
 const Alert = ({
   children,
@@ -1212,9 +1211,11 @@ const SubstitutedExpression = ({
   variables: Record<string, number>;
   result: number;
 }) => {
+  const { language, formatMoney } = useLanguage();
   const tokens = expression
     .split(/([a-zA-Z_][a-zA-Z0-9_]*|[()+\-*/^])/g)
     .filter(Boolean);
+  const numberLocale = language === "en" ? "en-US" : "pt-BR";
 
   return (
     <pre className="min-h-12 max-w-full whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground">
@@ -1225,7 +1226,7 @@ const SubstitutedExpression = ({
               key={`${token}-${index}`}
               className="rounded bg-secondary/15 px-1 py-0.5 font-semibold text-secondary"
             >
-              {formatCalcValue(variables[token])}
+              {formatCalcValue(variables[token], numberLocale)}
             </span>
           );
         }
@@ -1241,7 +1242,7 @@ const SubstitutedExpression = ({
         return <span key={`${token}-${index}`}>{token}</span>;
       })}
       <span className="text-primary"> = </span>
-      <span className="font-semibold text-foreground">{toMoney(result)}</span>
+      <span className="font-semibold text-foreground">{formatMoney(result)}</span>
     </pre>
   );
 };

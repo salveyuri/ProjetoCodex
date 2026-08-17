@@ -8,7 +8,7 @@ import type {
 import { Clock3, Scale, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { toMoney } from "./quote-ui";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { NumberField, SelectField, TextField } from "./QuoteFormFields";
 import type { PrintTableFormState } from "./quote-form-types";
 
@@ -37,28 +37,31 @@ export const PrintItemCard = ({
   onChange,
   onRemove,
 }: PrintItemCardProps) => {
+  const { t, formatMoney } = useLanguage();
   const fieldsDisabled = isLoadingResources || missingResources;
 
   return (
   <Card className="min-w-0 overflow-hidden p-5 transition hover:border-primary/40">
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
       <div>
-        <p className="text-sm font-medium text-primary">Mesa {index + 1}</p>
+        <p className="text-sm font-medium text-primary">
+          {t("quotes.mesa")} {index + 1}
+        </p>
         <h3 className="mt-1 text-lg font-semibold text-foreground">
-          {table.modelName || "Peca sem nome"}
+          {table.modelName || t("quotes.unnamedPiece")}
         </h3>
       </div>
       <div className="flex items-center gap-2">
         <StatusBadge tone={preview ? "success" : "warning"}>
-          {preview ? toMoney(preview.rawCost) : "aguardando"}
+          {preview ? formatMoney(preview.rawCost) : t("quotes.waiting")}
         </StatusBadge>
         <button
           type="button"
           onClick={onRemove}
           disabled={!canRemove}
           className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
-          title="Remover mesa"
-          aria-label="Remover mesa"
+          title={t("quotes.removeTable")}
+          aria-label={t("quotes.removeTable")}
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -67,22 +70,22 @@ export const PrintItemCard = ({
 
     <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
       <TextField
-        label="Nome da peca"
+        label={t("quotes.pieceName")}
         value={table.modelName}
         onChange={(value) => onChange({ modelName: value })}
         required
         disabled={fieldsDisabled}
       />
       <SelectField
-        label="Maquina"
+        label={t("quotes.machine")}
         value={table.machineId}
         onChange={(value) => onChange({ machineId: value })}
         disabled={fieldsDisabled || machines.length === 0}
       >
         <option value="">
           {machines.length === 0
-            ? "Cadastre uma maquina primeiro"
-            : "Selecione uma maquina..."}
+            ? t("quotes.registerMachineFirst")
+            : t("quotes.selectMachine")}
         </option>
         {machines.map((machine) => (
           <option key={machine.id} value={machine.id}>
@@ -91,15 +94,15 @@ export const PrintItemCard = ({
         ))}
       </SelectField>
       <SelectField
-        label="Material"
+        label={t("quotes.material")}
         value={table.materialId}
         onChange={(value) => onChange({ materialId: value })}
         disabled={fieldsDisabled || materials.length === 0}
       >
         <option value="">
           {materials.length === 0
-            ? "Cadastre um material primeiro"
-            : "Selecione um material..."}
+            ? t("quotes.registerMaterialFirst")
+            : t("quotes.selectMaterial")}
         </option>
         {materials.map((material) => (
           <option key={material.id} value={material.id}>
@@ -109,7 +112,7 @@ export const PrintItemCard = ({
       </SelectField>
       <NumberField
         icon={Scale}
-        label="Peso"
+        label={t("quotes.weight")}
         suffix="g"
         value={table.weightGrams}
         onChange={(value) => onChange({ weightGrams: value })}
@@ -117,16 +120,16 @@ export const PrintItemCard = ({
       />
       <NumberField
         icon={Clock3}
-        label="Tempo"
+        label={t("quotes.time")}
         suffix="h"
         value={table.printTimeHours}
         onChange={(value) => onChange({ printTimeHours: value })}
         disabled={fieldsDisabled}
       />
       <div className="grid min-h-11 min-w-0 content-end gap-1 rounded-lg border border-border bg-background px-3 py-2">
-        <span className="text-xs uppercase text-muted">Custo da mesa</span>
+        <span className="text-xs uppercase text-muted">{t("quotes.tableCost")}</span>
         <span className="text-sm font-semibold text-foreground">
-          {preview ? toMoney(preview.rawCost) : "--"}
+          {preview ? formatMoney(preview.rawCost) : "--"}
         </span>
       </div>
     </div>

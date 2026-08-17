@@ -27,20 +27,20 @@ import {
   type ToastMessage,
 } from "@/components/ui/toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
 import { downloadQuotePdf } from "@/lib/download-quote-pdf";
 import {
-  formatDate,
-  quoteStatusLabels,
+  quoteStatusLabelKeys,
   quoteStatusOptions,
   quoteStatusTones,
-  toMoney,
 } from "@/components/quotes/quote-ui";
 
 export default function QuotesPage() {
   const { isLoading: isAuthLoading, token } = useAuth();
+  const { t, formatMoney, formatDate } = useLanguage();
   const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [status, setStatus] = useState<QuoteStatus | "ALL">("ALL");
   const [searchTerm, setSearchTerm] = useState("");
@@ -94,13 +94,11 @@ export default function QuotesPage() {
       });
       setQuotes(response.data.data);
     } catch (error) {
-      setErrorMessage(
-        getApiErrorMessage(error, "Nao foi possivel carregar os orcamentos."),
-      );
+      setErrorMessage(getApiErrorMessage(error, t("quotes.list.errorLoad")));
     } finally {
       setIsLoading(false);
     }
-  }, [status, token]);
+  }, [status, t, token]);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -123,14 +121,14 @@ export default function QuotesPage() {
     } catch {
       showToast({
         tone: "success",
-        title: "Orcamento salvo",
-        message: "A lista foi atualizada.",
+        title: t("quotes.list.toastSavedTitle"),
+        message: t("quotes.list.toastGenericMsg"),
       });
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   const handleDelete = async (quoteId: string) => {
-    if (!window.confirm("Excluir este orcamento?")) {
+    if (!window.confirm(t("quotes.list.confirmDelete"))) {
       return;
     }
 
@@ -141,13 +139,13 @@ export default function QuotesPage() {
       setQuotes((current) => current.filter((quote) => quote.id !== quoteId));
       showToast({
         tone: "success",
-        title: "Orcamento excluido",
-        message: "A lista foi atualizada.",
+        title: t("quotes.list.toastDeletedTitle"),
+        message: t("quotes.list.toastGenericMsg"),
       });
     } catch (error) {
-      const message = getApiErrorMessage(error, "Nao foi possivel excluir o orcamento.");
+      const message = getApiErrorMessage(error, t("quotes.list.errorDelete"));
       setErrorMessage(message);
-      showToast({ tone: "danger", title: "Erro ao excluir", message });
+      showToast({ tone: "danger", title: t("quotes.list.toastDeleteErrorTitle"), message });
     } finally {
       setIsDeleting(null);
     }
@@ -163,12 +161,12 @@ export default function QuotesPage() {
       });
       showToast({
         tone: "success",
-        title: "PDF gerado",
-        message: "O download do orcamento foi iniciado.",
+        title: t("quotes.list.toastPdfTitle"),
+        message: t("quotes.list.toastPdfMsg"),
       });
     } catch (error) {
-      const message = getApiErrorMessage(error, "Nao foi possivel gerar o PDF.");
-      showToast({ tone: "danger", title: "Erro ao gerar PDF", message });
+      const message = getApiErrorMessage(error, t("quotes.list.errorPdf"));
+      showToast({ tone: "danger", title: t("quotes.list.toastPdfErrorTitle"), message });
     } finally {
       setIsDownloading(null);
     }
@@ -179,20 +177,18 @@ export default function QuotesPage() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <section className="flex flex-col justify-between gap-4 rounded-lg border border-border bg-surface/75 p-5 lg:flex-row lg:items-end">
           <div>
-            <StatusBadge tone="success">Core ativo</StatusBadge>
+            <StatusBadge tone="success">{t("quotes.list.badge")}</StatusBadge>
             <h1 className="mt-4 text-3xl font-semibold text-foreground">
-              Orcamentos
+              {t("quotes.list.title")}
             </h1>
-            <p className="mt-2 max-w-2xl text-base text-muted">
-              Ciclo completo de propostas com snapshots dos custos calculados.
-            </p>
+            <p className="mt-2 max-w-2xl text-base text-muted">{t("quotes.list.subtitle")}</p>
           </div>
           <Link
             href="/dashboard/quotes/new"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
-            Novo orcamento
+            {t("quotes.list.newQuote")}
           </Link>
         </section>
 
@@ -204,19 +200,19 @@ export default function QuotesPage() {
 
         <section className="grid gap-4 md:grid-cols-3">
           <Card className="p-5">
-            <p className="text-sm text-muted">Orcamentos filtrados</p>
+            <p className="text-sm text-muted">{t("quotes.list.filteredCount")}</p>
             <p className="mt-2 text-3xl font-semibold text-foreground">
               {filteredQuotes.length}
             </p>
           </Card>
           <Card className="p-5">
-            <p className="text-sm text-muted">Valor total</p>
+            <p className="text-sm text-muted">{t("quotes.list.totalValue")}</p>
             <p className="mt-2 text-3xl font-semibold text-foreground">
-              {toMoney(totalAmount)}
+              {formatMoney(totalAmount)}
             </p>
           </Card>
           <Card className="p-5">
-            <p className="text-sm text-muted">Aprovados</p>
+            <p className="text-sm text-muted">{t("quotes.list.approved")}</p>
             <p className="mt-2 text-3xl font-semibold text-foreground">
               {filteredQuotes.filter((quote) => quote.status === "APPROVED").length}
             </p>
@@ -230,7 +226,7 @@ export default function QuotesPage() {
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Buscar por cliente"
+                placeholder={t("quotes.list.searchPlaceholder")}
                 className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted"
               />
             </label>
@@ -242,10 +238,10 @@ export default function QuotesPage() {
                 }
                 className="min-h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary"
               >
-                <option value="ALL">Todos os status</option>
+                <option value="ALL">{t("quotes.list.allStatuses")}</option>
                 {quoteStatusOptions.map((option) => (
                   <option key={option} value={option}>
-                    {quoteStatusLabels[option]}
+                    {t(quoteStatusLabelKeys[option])}
                   </option>
                 ))}
               </select>
@@ -253,8 +249,8 @@ export default function QuotesPage() {
                 type="button"
                 onClick={() => void loadQuotes()}
                 className="grid h-11 w-11 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
-                title="Recarregar"
-                aria-label="Recarregar"
+                title={t("quotes.list.reload")}
+                aria-label={t("quotes.list.reload")}
               >
                 <RefreshCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
               </button>
@@ -265,12 +261,14 @@ export default function QuotesPage() {
             <table className="w-full min-w-[820px] border-collapse text-left">
               <thead className="bg-background text-xs uppercase text-muted">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Cliente</th>
-                  <th className="px-4 py-3 font-semibold">Item</th>
-                  <th className="px-4 py-3 font-semibold">Data</th>
-                  <th className="px-4 py-3 font-semibold">Valor</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold">Acoes</th>
+                  <th className="px-4 py-3 font-semibold">{t("quotes.list.colClient")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("quotes.list.colItem")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("quotes.list.colDate")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("quotes.list.colValue")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("quotes.list.colStatus")}</th>
+                  <th className="px-4 py-3 text-right font-semibold">
+                    {t("quotes.list.colActions")}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -310,7 +308,7 @@ export default function QuotesPage() {
                         {quote.customerName}
                       </p>
                       <p className="text-sm text-muted">
-                        Valido ate {formatDate(quote.validUntil)}
+                        {t("quotes.list.validUntilPrefix")} {formatDate(quote.validUntil)}
                       </p>
                     </td>
                     <td className="px-4 py-4 text-sm text-muted">
@@ -322,7 +320,7 @@ export default function QuotesPage() {
                           {quote.firstItem.machineName} /{" "}
                           {quote.firstItem.materialName}
                           <span className="mt-1 block text-xs text-muted">
-                            {quote.itemsCount} mesa(s) /{" "}
+                            {quote.itemsCount} {t("quotes.list.tablesSuffix")} /{" "}
                             {quote.totalWeightGrams.toFixed(2)} g /{" "}
                             {quote.totalPrintHours.toFixed(2)} h
                           </span>
@@ -335,11 +333,11 @@ export default function QuotesPage() {
                       {formatDate(quote.createdAt)}
                     </td>
                     <td className="px-4 py-4 text-sm font-semibold text-foreground">
-                      {toMoney(quote.totalAmount)}
+                      {formatMoney(quote.totalAmount)}
                     </td>
                     <td className="px-4 py-4">
                       <StatusBadge tone={quoteStatusTones[quote.status]}>
-                        {quoteStatusLabels[quote.status]}
+                        {t(quoteStatusLabelKeys[quote.status])}
                       </StatusBadge>
                     </td>
                     <td className="px-4 py-4">
@@ -349,8 +347,8 @@ export default function QuotesPage() {
                           onClick={() => void handleDownload(quote)}
                           disabled={isDownloading === quote.id}
                           className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                          title="Gerar PDF"
-                          aria-label="Gerar PDF"
+                          title={t("quotes.list.generatePdf")}
+                          aria-label={t("quotes.list.generatePdf")}
                         >
                           <Download
                             className={cn(
@@ -362,8 +360,8 @@ export default function QuotesPage() {
                         <Link
                           href={`/dashboard/quotes/${quote.id}`}
                           className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
-                          title="Editar"
-                          aria-label="Editar"
+                          title={t("quotes.list.edit")}
+                          aria-label={t("quotes.list.edit")}
                         >
                           <Edit3 className="h-4 w-4" />
                         </Link>
@@ -372,8 +370,8 @@ export default function QuotesPage() {
                           onClick={() => void handleDelete(quote.id)}
                           disabled={isDeleting === quote.id}
                           className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-50"
-                          title="Excluir"
-                          aria-label="Excluir"
+                          title={t("quotes.list.delete")}
+                          aria-label={t("quotes.list.delete")}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -389,14 +387,14 @@ export default function QuotesPage() {
             <div className="p-6">
               <EmptyState
                 actionHref="/dashboard/quotes/new"
-                actionLabel="Novo orcamento"
+                actionLabel={t("quotes.list.newQuote")}
                 description={
                   searchTerm || status !== "ALL"
-                    ? "Ajuste os filtros ou crie uma nova proposta para este cliente."
-                    : "Crie uma proposta para iniciar o historico comercial."
+                    ? t("quotes.list.emptyDescFiltered")
+                    : t("quotes.list.emptyDescDefault")
                 }
                 icon={FileText}
-                title="Nenhum orcamento encontrado"
+                title={t("quotes.list.emptyTitle")}
               />
             </div>
           ) : null}

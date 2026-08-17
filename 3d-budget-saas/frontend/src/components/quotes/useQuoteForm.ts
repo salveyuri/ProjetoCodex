@@ -16,6 +16,7 @@ import {
   type ToastMessage,
 } from "@/components/ui/toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { downloadQuotePdf } from "@/lib/download-quote-pdf";
@@ -99,6 +100,7 @@ const toFormState = (quote: QuoteResource): QuoteFormState => ({
 export const useQuoteForm = (quoteId?: string) => {
   const router = useRouter();
   const { isLoading: isAuthLoading, token } = useAuth();
+  const { t } = useLanguage();
   const [form, setForm] = useState<QuoteFormState>(() => createEmptyForm());
   const [machines, setMachines] = useState<MachineResource[]>([]);
   const [materials, setMaterials] = useState<MaterialResource[]>([]);
@@ -240,13 +242,13 @@ export const useQuoteForm = (quoteId?: string) => {
         formulaId: current.formulaId || defaultFormulaId,
       }));
     } catch (error) {
-      const message = getApiErrorMessage(error, "Nao foi possivel carregar o orcamento.");
+      const message = getApiErrorMessage(error, t("quotes.form.errorLoad"));
       setErrorMessage(message);
-      showToast({ tone: "danger", title: "Erro ao carregar", message });
+      showToast({ tone: "danger", title: t("quotes.form.toastLoadErrorTitle"), message });
     } finally {
       setIsLoadingResources(false);
     }
-  }, [quoteId, showToast, token]);
+  }, [quoteId, showToast, t, token]);
 
   const calculatePreview = useCallback(async () => {
     if (!canCalculate) {
@@ -279,7 +281,7 @@ export const useQuoteForm = (quoteId?: string) => {
     } catch (error) {
       setPreview(null);
       setErrorMessage(
-        getApiErrorMessage(error, "Nao foi possivel calcular o preview."),
+        getApiErrorMessage(error, t("quotes.form.errorPreview")),
       );
     } finally {
       setIsCalculating(false);
@@ -290,6 +292,7 @@ export const useQuoteForm = (quoteId?: string) => {
     form.formulaId,
     form.paintingHours,
     previewableTables,
+    t,
   ]);
 
   useEffect(() => {
@@ -377,15 +380,15 @@ export const useQuoteForm = (quoteId?: string) => {
         "quoteToast",
         JSON.stringify({
           tone: "success",
-          title: quoteId ? "Orcamento atualizado" : "Orcamento criado",
-          message: "Os snapshots de calculo foram salvos.",
+          title: quoteId ? t("quotes.form.toastUpdatedTitle") : t("quotes.form.toastCreatedTitle"),
+          message: t("quotes.form.toastSavedMsg"),
         }),
       );
       router.push("/dashboard/quotes");
     } catch (error) {
-      const message = getApiErrorMessage(error, "Nao foi possivel salvar o orcamento.");
+      const message = getApiErrorMessage(error, t("quotes.form.errorSave"));
       setErrorMessage(message);
-      showToast({ tone: "danger", title: "Erro ao salvar", message });
+      showToast({ tone: "danger", title: t("quotes.form.toastSaveErrorTitle"), message });
     } finally {
       setIsSaving(false);
     }
@@ -405,12 +408,12 @@ export const useQuoteForm = (quoteId?: string) => {
       });
       showToast({
         tone: "success",
-        title: "PDF gerado",
-        message: "O download do orcamento foi iniciado.",
+        title: t("quotes.form.toastPdfTitle"),
+        message: t("quotes.form.toastPdfMsg"),
       });
     } catch (error) {
-      const message = getApiErrorMessage(error, "Nao foi possivel gerar o PDF.");
-      showToast({ tone: "danger", title: "Erro ao gerar PDF", message });
+      const message = getApiErrorMessage(error, t("quotes.form.errorPdf"));
+      showToast({ tone: "danger", title: t("quotes.form.toastPdfErrorTitle"), message });
     } finally {
       setIsDownloadingPdf(false);
     }

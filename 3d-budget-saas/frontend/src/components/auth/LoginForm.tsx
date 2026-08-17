@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Card } from "@/components/ui/card";
 import { getApiErrorMessage } from "@/lib/api-error";
 
@@ -14,6 +15,7 @@ export const LoginForm = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export const LoginForm = () => {
           : "/dashboard";
       router.replace(targetRoute);
     } catch (loginError) {
-      setError(getApiErrorMessage(loginError, "Nao foi possivel autenticar."));
+      setError(getApiErrorMessage(loginError, t("auth.login.genericError")));
     } finally {
       setIsSubmitting(false);
     }
@@ -54,12 +56,12 @@ export const LoginForm = () => {
       </div>
 
       <div className="mt-6">
-        <h2 className="text-2xl font-semibold">Entrar</h2>
+        <h2 className="text-2xl font-semibold">{t("auth.login.heading")}</h2>
       </div>
 
       <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
         <label className="grid gap-2 text-sm font-medium text-foreground">
-          Email
+          {t("auth.login.email")}
           <input
             type="email"
             autoComplete="email"
@@ -73,12 +75,12 @@ export const LoginForm = () => {
 
         <label className="grid gap-2 text-sm font-medium text-foreground">
           <span className="flex items-center justify-between">
-            Senha
+            {t("auth.login.password")}
             <Link
               href="/forgot-password"
               className="text-xs font-medium text-primary hover:underline"
             >
-              Esqueci minha senha
+              {t("auth.login.forgotPassword")}
             </Link>
           </span>
           <input
@@ -109,14 +111,14 @@ export const LoginForm = () => {
           ) : (
             <LogIn className="h-4 w-4" />
           )}
-          Entrar
+          {t("auth.login.submit")}
         </button>
       </form>
 
       <p className="mt-5 text-center text-sm text-muted">
-        Nao tem conta?{" "}
+        {t("auth.login.noAccount")}{" "}
         <Link className="font-semibold text-primary hover:underline" href="/register">
-          Cadastre-se
+          {t("auth.login.registerLink")}
         </Link>
       </p>
     </Card>

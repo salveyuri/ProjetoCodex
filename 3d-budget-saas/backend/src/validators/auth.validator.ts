@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const supportedLanguageSchema = z.enum(["pt-BR", "en"]);
+
 export const passwordSchema = z
   .string()
   .min(8, "Password must have at least 8 characters.")
@@ -27,6 +29,7 @@ export const registerSchema = z.object({
     .toUpperCase()
     .default("BRL"),
   taxRate: z.number().min(0).max(1).default(0),
+  language: supportedLanguageSchema.default("pt-BR"),
 }).strict();
 
 export const loginSchema = z
@@ -66,6 +69,7 @@ export const updateProfileSchema = z
       .min(2, "Company name must have at least 2 characters.")
       .max(160, "Company name must have at most 160 characters.")
       .optional(),
+    language: supportedLanguageSchema.optional(),
     emailPreferences: z
       .object({
         financial: z.boolean().optional(),
@@ -80,6 +84,7 @@ export const updateProfileSchema = z
     (value) =>
       value.name !== undefined ||
       value.companyName !== undefined ||
+      value.language !== undefined ||
       value.emailPreferences !== undefined,
     { message: "At least one field must be provided." },
   );

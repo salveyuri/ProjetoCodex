@@ -27,12 +27,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { toMoney } from "@/components/quotes/quote-ui";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 
@@ -49,15 +49,6 @@ const defaultRange = () => {
   };
 };
 
-const formatMonth = (month: string): string => {
-  const [year, monthIndex] = month.split("-").map(Number);
-  return new Intl.DateTimeFormat("pt-BR", {
-    month: "short",
-    year: "2-digit",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, monthIndex - 1, 1)));
-};
-
 const downloadBlob = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -69,12 +60,25 @@ const downloadBlob = (blob: Blob, filename: string) => {
 
 export default function AnalyticsPage() {
   const { isLoading: isAuthLoading, token } = useAuth();
+  const { t, language, formatMoney } = useLanguage();
   const initialRange = useMemo(defaultRange, []);
   const [range, setRange] = useState(initialRange);
   const [analytics, setAnalytics] = useState<UserAnalyticsOverview | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState<string | null>(null);
+
+  const formatMonth = useCallback(
+    (month: string): string => {
+      const [year, monthIndex] = month.split("-").map(Number);
+      return new Intl.DateTimeFormat(language === "en" ? "en-US" : "pt-BR", {
+        month: "short",
+        year: "2-digit",
+        timeZone: "UTC",
+      }).format(new Date(Date.UTC(year, monthIndex - 1, 1)));
+    },
+    [language],
+  );
 
   const loadAnalytics = useCallback(async () => {
     if (!token) {
@@ -92,13 +96,11 @@ export default function AnalyticsPage() {
       );
       setAnalytics(data);
     } catch (error) {
-      setErrorMessage(
-        getApiErrorMessage(error, "Nao foi possivel carregar analytics."),
-      );
+      setErrorMessage(getApiErrorMessage(error, t("analytics.errorLoad")));
     } finally {
       setIsLoading(false);
     }
-  }, [range, token]);
+  }, [range, t, token]);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -118,9 +120,7 @@ export default function AnalyticsPage() {
       const filename = `analytics_${range.from}_${range.to}.${format}`;
       downloadBlob(response.data, filename);
     } catch (error) {
-      setErrorMessage(
-        getApiErrorMessage(error, "Nao foi possivel exportar os dados."),
-      );
+      setErrorMessage(getApiErrorMessage(error, t("analytics.errorExport")));
     } finally {
       setIsExporting(null);
     }
@@ -137,14 +137,11 @@ export default function AnalyticsPage() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <section className="flex flex-col justify-between gap-4 rounded-lg border border-border bg-surface/75 p-5 lg:flex-row lg:items-end">
           <div>
-            <StatusBadge tone="success">Analytics</StatusBadge>
+            <StatusBadge tone="success">{t("analytics.badge")}</StatusBadge>
             <h1 className="mt-4 text-3xl font-semibold text-foreground">
-              Inteligencia financeira
+              {t("analytics.title")}
             </h1>
-            <p className="mt-2 max-w-2xl text-base text-muted">
-              Compare faturamento, lucro, materiais e ocupacao de maquinas com
-              base nos snapshots salvos em cada mesa de impressao.
-            </p>
+            <p className="mt-2 max-w-2xl text-base text-muted">{t("analytics.subtitle")}</p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
@@ -170,7 +167,7 @@ export default function AnalyticsPage() {
 
         <Card className="grid gap-4 p-5 lg:grid-cols-[1fr_1fr_auto]">
           <label className="grid gap-2 text-sm font-semibold text-foreground">
-            Inicio
+            {t("analytics.rangeStart")}
             <input
               type="date"
               value={range.from}
@@ -181,7 +178,7 @@ export default function AnalyticsPage() {
             />
           </label>
           <label className="grid gap-2 text-sm font-semibold text-foreground">
-            Fim
+            {t("analytics.rangeEnd")}
             <input
               type="date"
               value={range.to}
@@ -197,7 +194,7 @@ export default function AnalyticsPage() {
             className="inline-flex min-h-11 items-center justify-center gap-2 self-end rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
           >
             <RefreshCcw className="h-4 w-4" />
-            Atualizar
+            {t("analytics.refresh")}
           </button>
         </Card>
 
@@ -214,27 +211,33 @@ export default function AnalyticsPage() {
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <MetricCard
                 icon={BarChart3}
-                label="Orcamentos"
+                label={t("analytics.metricQuotes")}
                 value={String(analytics.summary.quotesCount)}
-                detail={`${analytics.summary.approvedQuotesCount} aprovados`}
+                detail={t("analytics.metricQuotesDetail", {
+                  count: analytics.summary.approvedQuotesCount,
+                })}
               />
               <MetricCard
                 icon={TrendingUp}
-                label="Faturamento"
-                value={toMoney(analytics.summary.revenue)}
-                detail={`Ticket medio ${toMoney(analytics.summary.averageTicket)}`}
+                label={t("analytics.metricRevenue")}
+                value={formatMoney(analytics.summary.revenue)}
+                detail={t("analytics.metricRevenueDetail", {
+                  value: formatMoney(analytics.summary.averageTicket),
+                })}
               />
               <MetricCard
                 icon={HardDriveDownload}
-                label="Lucro"
-                value={toMoney(analytics.summary.profit)}
-                detail="Preco final - custo base"
+                label={t("analytics.metricProfit")}
+                value={formatMoney(analytics.summary.profit)}
+                detail={t("analytics.metricProfitDetail")}
               />
               <MetricCard
                 icon={Printer}
-                label="Horas impressas"
+                label={t("analytics.metricPrintedHours")}
                 value={`${analytics.summary.totalPrintHours.toFixed(1)} h`}
-                detail={`${analytics.summary.totalWeightGrams.toFixed(0)} g no periodo`}
+                detail={t("analytics.metricPrintedHoursDetail", {
+                  weight: analytics.summary.totalWeightGrams.toFixed(0),
+                })}
               />
             </section>
 
@@ -244,10 +247,10 @@ export default function AnalyticsPage() {
                   <BarChart3 className="h-5 w-5 text-primary" />
                   <div>
                     <h2 className="text-xl font-semibold text-foreground">
-                      Faturamento vs lucro
+                      {t("analytics.revenueVsProfitTitle")}
                     </h2>
                     <p className="text-sm text-muted">
-                      Agregado mensal por snapshots de orcamentos.
+                      {t("analytics.revenueVsProfitSubtitle")}
                     </p>
                   </div>
                 </div>
@@ -258,7 +261,7 @@ export default function AnalyticsPage() {
                       <XAxis dataKey="label" stroke="#a1a1aa" />
                       <YAxis stroke="#a1a1aa" />
                       <Tooltip
-                        formatter={(value) => toMoney(Number(value))}
+                        formatter={(value) => formatMoney(Number(value))}
                         contentStyle={{
                           background: "#09090b",
                           border: "1px solid #3f3f46",
@@ -266,8 +269,8 @@ export default function AnalyticsPage() {
                         }}
                       />
                       <Legend />
-                      <Bar dataKey="revenue" name="Faturamento" fill="#818cf8" />
-                      <Bar dataKey="profit" name="Lucro" fill="#22c55e" />
+                      <Bar dataKey="revenue" name={t("analytics.revenueLegend")} fill="#818cf8" />
+                      <Bar dataKey="profit" name={t("analytics.profitLegend")} fill="#22c55e" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -278,11 +281,9 @@ export default function AnalyticsPage() {
                   <PieChartIcon className="h-5 w-5 text-secondary" />
                   <div>
                     <h2 className="text-xl font-semibold text-foreground">
-                      Mix de materiais
+                      {t("analytics.materialMixTitle")}
                     </h2>
-                    <p className="text-sm text-muted">
-                      Peso consumido por tipo de insumo.
-                    </p>
+                    <p className="text-sm text-muted">{t("analytics.materialMixSubtitle")}</p>
                   </div>
                 </div>
                 <div className="mt-5 h-80">
@@ -326,11 +327,12 @@ export default function AnalyticsPage() {
                 <Printer className="h-5 w-5 text-accent" />
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">
-                    Ocupacao de maquinas
+                    {t("analytics.machineOccupancyTitle")}
                   </h2>
                   <p className="text-sm text-muted">
-                    Capacidade estimada em {analytics.machineOccupancy.length} maquina(s),
-                    usando 8h/dia por equipamento.
+                    {t("analytics.machineOccupancySubtitle", {
+                      count: analytics.machineOccupancy.length,
+                    })}
                   </p>
                 </div>
               </div>
@@ -346,8 +348,10 @@ export default function AnalyticsPage() {
                           {machine.machineName}
                         </p>
                         <p className="mt-1 text-sm text-muted">
-                          {machine.printedHours.toFixed(1)} h de{" "}
-                          {machine.capacityHours.toFixed(0)} h disponiveis
+                          {t("analytics.machineHoursDetail", {
+                            printed: machine.printedHours.toFixed(1),
+                            capacity: machine.capacityHours.toFixed(0),
+                          })}
                         </p>
                       </div>
                       <span className="text-sm font-semibold text-primary">
@@ -370,10 +374,10 @@ export default function AnalyticsPage() {
         ) : (
           <EmptyState
             actionHref="/dashboard/quotes/new"
-            actionLabel="Criar orcamento"
-            description="Assim que houver orcamentos no periodo, os graficos serao preenchidos automaticamente."
+            actionLabel={t("analytics.emptyAction")}
+            description={t("analytics.emptyDescription")}
             icon={BarChart3}
-            title="Nenhum dado encontrado"
+            title={t("analytics.emptyTitle")}
           />
         )}
       </div>

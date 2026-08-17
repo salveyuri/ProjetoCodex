@@ -22,17 +22,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SystemStatusCard } from "@/components/dashboard/SystemStatusCard";
 import { MainLayout } from "@/components/layout/MainLayout";
-import {
-  formatDate,
-  quoteStatusLabels,
-  quoteStatusTones,
-  toMoney,
-} from "@/components/quotes/quote-ui";
+import { quoteStatusLabelKeys, quoteStatusTones } from "@/components/quotes/quote-ui";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
@@ -80,6 +76,7 @@ const getMostUsedPrinter = (quotes: QuoteResource[]): string => {
 
 export default function DashboardPage() {
   const { isLoading: isAuthLoading, token, user } = useAuth();
+  const { t, formatMoney, formatDate } = useLanguage();
   const isAdmin = user?.role === "ADMIN";
   const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [quoteDetails, setQuoteDetails] = useState<QuoteResource[]>([]);
@@ -120,11 +117,11 @@ export default function DashboardPage() {
       setMachinesCount(machinesResponse.data.length);
       setMaterialsCount(materialsResponse.data.length);
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel carregar o dashboard."));
+      setErrorMessage(getApiErrorMessage(error, t("dashboard.errorLoad")));
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, [t, token]);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -154,27 +151,27 @@ export default function DashboardPage() {
 
   const metrics: DashboardMetric[] = [
     {
-      label: "Orcamentos do mes",
+      label: t("dashboard.metricQuotesThisMonth"),
       value: String(currentMonthQuotes.length),
-      detail: `${quotes.length} no historico`,
+      detail: t("dashboard.metricQuotesThisMonthDetail", { count: quotes.length }),
       icon: FileText,
     },
     {
-      label: "Taxa de conversao",
+      label: t("dashboard.metricConversionRate"),
       value: `${conversionRate}%`,
-      detail: "Aprovados sobre propostas enviadas",
+      detail: t("dashboard.metricConversionRateDetail"),
       icon: TrendingUp,
     },
     {
-      label: "Lucro estimado",
-      value: toMoney(getEstimatedProfit(quoteDetails)),
-      detail: isAdmin ? "Final - custo base dos snapshots" : "",
+      label: t("dashboard.metricEstimatedProfit"),
+      value: formatMoney(getEstimatedProfit(quoteDetails)),
+      detail: isAdmin ? t("dashboard.metricEstimatedProfitDetail") : "",
       icon: WalletCards,
     },
     {
-      label: "Impressora mais usada",
+      label: t("dashboard.metricMostUsedPrinter"),
       value: getMostUsedPrinter(quoteDetails),
-      detail: "Contagem por mesa no mes",
+      detail: t("dashboard.metricMostUsedPrinterDetail"),
       icon: Printer,
     },
   ];
@@ -186,20 +183,17 @@ export default function DashboardPage() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <section className="flex flex-col justify-between gap-4 rounded-lg border border-border bg-surface/75 p-5 sm:flex-row sm:items-end">
           <div>
-            <StatusBadge tone="success">Visao geral</StatusBadge>
+            <StatusBadge tone="success">{t("dashboard.badge")}</StatusBadge>
             <h1 className="mt-4 text-3xl font-semibold text-foreground">
-              Dashboard de orcamentos 3D
+              {t("dashboard.title")}
             </h1>
-            <p className="mt-2 max-w-2xl text-base text-muted">
-              Acompanhe propostas, conversao, lucro estimado e atividade recente
-              em um unico painel operacional.
-            </p>
+            <p className="mt-2 max-w-2xl text-base text-muted">{t("dashboard.subtitle")}</p>
           </div>
           <Link
             href="/dashboard/quotes/new"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
           >
-            Novo orcamento
+            {t("dashboard.newQuote")}
             <ArrowUpRight className="h-4 w-4" />
           </Link>
         </section>
@@ -219,11 +213,10 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-danger">
-                    Configure a producao antes de fazer seu primeiro orcamento
+                    {t("dashboard.configureProductionTitle")}
                   </p>
                   <p className="mt-1 text-sm text-foreground/80">
-                    Cadastre ao menos uma maquina e um material nas configuracoes
-                    para liberar a criacao de orcamentos.
+                    {t("dashboard.configureProductionBody")}
                   </p>
                 </div>
               </div>
@@ -231,7 +224,7 @@ export default function DashboardPage() {
                 href="/dashboard/settings"
                 className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg bg-danger px-4 text-sm font-semibold text-danger-foreground transition hover:bg-danger/90"
               >
-                Abrir configuracoes
+                {t("dashboard.openSettings")}
               </Link>
             </div>
           </Card>
@@ -259,10 +252,10 @@ export default function DashboardPage() {
                 <Activity className="h-5 w-5 text-primary" />
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">
-                    Atividade recente
+                    {t("dashboard.recentActivityTitle")}
                   </h2>
                   <p className="text-sm text-muted">
-                    Ultimos 5 orcamentos criados.
+                    {t("dashboard.recentActivitySubtitle")}
                   </p>
                 </div>
               </div>
@@ -270,7 +263,7 @@ export default function DashboardPage() {
                 href="/dashboard/quotes"
                 className="text-sm font-semibold text-primary transition hover:text-primary/80"
               >
-                Ver todos
+                {t("dashboard.viewAll")}
               </Link>
             </div>
 
@@ -302,7 +295,8 @@ export default function DashboardPage() {
                         {quote.customerName}
                       </p>
                       <p className="mt-1 text-sm text-muted">
-                        {quote.itemsCount} mesa(s), {quote.totalWeightGrams.toFixed(1)} g
+                        {quote.itemsCount} {t("quotes.list.tablesSuffix")},{" "}
+                        {quote.totalWeightGrams.toFixed(1)} g
                       </p>
                     </div>
                     <div className="text-sm text-muted">
@@ -311,10 +305,10 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center justify-between gap-3 md:justify-end">
                       <span className="text-sm font-semibold text-foreground">
-                        {toMoney(quote.totalAmount)}
+                        {formatMoney(quote.totalAmount)}
                       </span>
                       <StatusBadge tone={quoteStatusTones[quote.status]}>
-                        {quoteStatusLabels[quote.status]}
+                        {t(quoteStatusLabelKeys[quote.status])}
                       </StatusBadge>
                     </div>
                   </Link>
@@ -324,10 +318,10 @@ export default function DashboardPage() {
               <div className="p-5">
                 <EmptyState
                   actionHref="/dashboard/quotes/new"
-                  actionLabel="Criar primeiro orcamento"
-                  description="Configure maquinas e materiais, depois crie uma proposta com mesas de impressao."
+                  actionLabel={t("dashboard.emptyAction")}
+                  description={t("dashboard.emptyDescription")}
                   icon={FileText}
-                  title="Nenhum orcamento ainda"
+                  title={t("dashboard.emptyTitle")}
                 />
               </div>
             )}

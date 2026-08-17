@@ -27,38 +27,32 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
+import type { TranslationKey } from "@/lib/i18n";
 
-const statusLabels = {
-  ACTIVE: "Ativo",
-  CANCELED: "Cancelado",
-  PAST_DUE: "Inadimplente",
-} as const;
+const statusLabelKeys: Record<BillingOverview["subscriptionStatus"], TranslationKey> = {
+  ACTIVE: "billing.statusActive",
+  CANCELED: "billing.statusCanceled",
+  PAST_DUE: "billing.statusPastDue",
+};
 
 type NoticeTone = "success" | "warning";
 
-const checkoutBanners: Record<string, { tone: NoticeTone; text: string }> = {
-  success: {
-    tone: "success",
-    text: "Pagamento em processamento no Asaas. A confirmacao chega em instantes assim que eles notificarem — atualize esta pagina daqui a pouco.",
-  },
-  cancelled: {
-    tone: "warning",
-    text: "Checkout cancelado. Nenhuma cobranca foi feita.",
-  },
-  expired: {
-    tone: "warning",
-    text: "O link de checkout expirou. Tente assinar novamente.",
-  },
+const checkoutBannerKeys: Record<string, { tone: NoticeTone; textKey: TranslationKey }> = {
+  success: { tone: "success", textKey: "billing.checkoutSuccess" },
+  cancelled: { tone: "warning", textKey: "billing.checkoutCancelled" },
+  expired: { tone: "warning", textKey: "billing.checkoutExpired" },
 };
 
+// Subscription charges always run in BRL through Asaas (a Brazilian-only
+// payment processor) regardless of the viewer's language — showing $ here
+// would misrepresent what actually gets charged. Deliberately NOT wired to
+// useLanguage() (Contextos/Decisoes.md, 2026-08-17).
 const formatMoney = (value: number, currency: string): string =>
   value.toLocaleString("pt-BR", { style: "currency", currency });
-
-const cycleLabel = (cycle: PlanResource["billingCycle"]): string =>
-  cycle === "YEARLY" ? "/ano" : "/mes";
 
 export default function BillingPage() {
   return (
@@ -70,6 +64,7 @@ export default function BillingPage() {
 
 function BillingContent() {
   const { isLoading: isAuthLoading, token } = useAuth();
+  const { t, formatDate } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [billing, setBilling] = useState<BillingOverview | null>(null);
@@ -80,8 +75,14 @@ function BillingContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [submittingPlanId, setSubmittingPlanId] = useState<string | null>(null);
   const [checkoutNotice, setCheckoutNotice] = useState<
-    { tone: NoticeTone; text: string } | null
+    { tone: NoticeTone; textKey: TranslationKey } | null
   >(null);
+
+  const cycleLabel = useCallback(
+    (cycle: PlanResource["billingCycle"]): string =>
+      cycle === "YEARLY" ? t("billing.cyclePerYear") : t("billing.cyclePerMonth"),
+    [t],
+  );
 
   const loadBilling = useCallback(async () => {
     if (!token) {
@@ -101,11 +102,11 @@ function BillingContent() {
       setPlans(plansResponse.data);
       setPayments(paymentsResponse.data);
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel atualizar o plano."));
+      setErrorMessage(getApiErrorMessage(error, t("billing.errorRefresh")));
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, [t, token]);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -115,7 +116,7 @@ function BillingContent() {
 
   useEffect(() => {
     const checkoutParam = searchParams.get("checkout");
-    const banner = checkoutParam ? checkoutBanners[checkoutParam] : undefined;
+    const banner = checkoutParam ? checkoutBannerKeys[checkoutParam] : undefined;
 
     if (banner) {
       setCheckoutNotice(banner);
@@ -128,16 +129,16 @@ function BillingContent() {
       billing
         ? [
             {
-              label: "Formulas customizadas",
+              label: t("billing.customFormulas"),
               enabled: billing.entitlements.customFormulas,
             },
             {
-              label: "Exportacao PDF",
+              label: t("billing.pdfExport"),
               enabled: billing.entitlements.pdfExport,
             },
           ]
         : [],
-    [billing],
+    [billing, t],
   );
 
   const isSubmitting = submittingPlanId !== null;
@@ -159,12 +160,10 @@ function BillingContent() {
 
       if (data.billing) {
         setBilling(data.billing);
-        setMessage(`Plano alterado para ${data.billing.plan.name}.`);
+        setMessage(t("billing.planChangedMsg", { planName: data.billing.plan.name }));
       }
     } catch (error) {
-      setErrorMessage(
-        getApiErrorMessage(error, "Nao foi possivel iniciar a assinatura."),
-      );
+      setErrorMessage(getApiErrorMessage(error, t("billing.errorSubscribe")));
     } finally {
       setSubmittingPlanId(null);
     }
@@ -178,9 +177,9 @@ function BillingContent() {
     try {
       const { data } = await api.post<BillingOverview>("/billing/cancel");
       setBilling(data);
-      setMessage("Plano cancelado e limites Free reaplicados.");
+      setMessage(t("billing.planCanceledMsg"));
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel cancelar o plano."));
+      setErrorMessage(getApiErrorMessage(error, t("billing.errorCancel")));
     } finally {
       setSubmittingPlanId(null);
     }
@@ -191,14 +190,11 @@ function BillingContent() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <section className="flex flex-col justify-between gap-4 rounded-lg border border-border bg-surface/75 p-5 lg:flex-row lg:items-end">
           <div>
-            <StatusBadge tone="success">Monetizacao</StatusBadge>
+            <StatusBadge tone="success">{t("billing.badge")}</StatusBadge>
             <h1 className="mt-4 text-3xl font-semibold text-foreground">
-              Plano e faturamento
+              {t("billing.title")}
             </h1>
-            <p className="mt-2 max-w-2xl text-base text-muted">
-              Assine um plano com checkout seguro do Asaas — o cartao de credito
-              e processado inteiramente na pagina deles.
-            </p>
+            <p className="mt-2 max-w-2xl text-base text-muted">{t("billing.subtitle")}</p>
           </div>
           <button
             type="button"
@@ -206,7 +202,7 @@ function BillingContent() {
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-primary transition hover:bg-primary/20"
           >
             <CreditCard className="h-4 w-4" />
-            Atualizar
+            {t("billing.refresh")}
           </button>
         </section>
 
@@ -219,7 +215,7 @@ function BillingContent() {
                 : "border-warning/40 bg-warning/10 text-warning",
             )}
           >
-            {checkoutNotice.text}
+            {t(checkoutNotice.textKey)}
           </div>
         ) : null}
         {errorMessage ? (
@@ -244,12 +240,12 @@ function BillingContent() {
               <Card className="p-5">
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                   <div>
-                    <p className="text-sm text-muted">Plano atual</p>
+                    <p className="text-sm text-muted">{t("billing.currentPlan")}</p>
                     <h2 className="mt-2 text-4xl font-semibold text-foreground">
                       {billing.plan.name}
                     </h2>
                     <p className="mt-2 text-sm text-muted">
-                      {billing.companyName} - {statusLabels[billing.subscriptionStatus]}
+                      {billing.companyName} - {t(statusLabelKeys[billing.subscriptionStatus])}
                     </p>
                   </div>
                   <StatusBadge
@@ -260,11 +256,11 @@ function BillingContent() {
                 </div>
 
                 <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <UsageCard icon={Printer} label="Maquinas" metric={billing.usage.machines} />
-                  <UsageCard icon={Package} label="Materiais" metric={billing.usage.materials} />
+                  <UsageCard icon={Printer} label={t("billing.machines")} metric={billing.usage.machines} />
+                  <UsageCard icon={Package} label={t("billing.materials")} metric={billing.usage.materials} />
                   <UsageCard
                     icon={FileText}
-                    label="Orcamentos/mes"
+                    label={t("billing.monthlyQuotes")}
                     metric={billing.usage.monthlyQuotes}
                   />
                 </div>
@@ -277,7 +273,7 @@ function BillingContent() {
                     >
                       <span className="text-sm text-muted">{feature.label}</span>
                       <StatusBadge tone={feature.enabled ? "success" : "warning"}>
-                        {feature.enabled ? "incluido" : "upgrade"}
+                        {feature.enabled ? t("billing.included") : t("billing.upgrade")}
                       </StatusBadge>
                     </div>
                   ))}
@@ -288,14 +284,11 @@ function BillingContent() {
                 <div className="flex items-center gap-3">
                   <History className="h-5 w-5 text-secondary" />
                   <h2 className="text-xl font-semibold text-foreground">
-                    Historico de faturas
+                    {t("billing.invoiceHistory")}
                   </h2>
                 </div>
                 {payments.length === 0 ? (
-                  <p className="mt-5 text-sm text-muted">
-                    Nenhuma fatura ainda — aparecem aqui assim que a primeira
-                    cobranca do Asaas for confirmada.
-                  </p>
+                  <p className="mt-5 text-sm text-muted">{t("billing.noInvoices")}</p>
                 ) : (
                   <ul className="mt-5 grid gap-3">
                     {payments.map((payment) => (
@@ -309,9 +302,9 @@ function BillingContent() {
                           </p>
                           <p className="text-xs text-muted">
                             {payment.paymentDate
-                              ? new Date(payment.paymentDate).toLocaleDateString("pt-BR")
+                              ? formatDate(payment.paymentDate)
                               : payment.dueDate
-                                ? new Date(payment.dueDate).toLocaleDateString("pt-BR")
+                                ? formatDate(payment.dueDate)
                                 : "—"}
                             {" · "}
                             {payment.status}
@@ -324,7 +317,7 @@ function BillingContent() {
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                           >
-                            Ver <ExternalLink className="h-3 w-3" />
+                            {t("billing.view")} <ExternalLink className="h-3 w-3" />
                           </a>
                         ) : null}
                       </li>
@@ -338,7 +331,7 @@ function BillingContent() {
               <div className="mb-4 flex items-center gap-3">
                 <Sparkles className="h-5 w-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">
-                  Planos disponiveis
+                  {t("billing.availablePlans")}
                 </h2>
               </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -359,22 +352,22 @@ function BillingContent() {
                       ) : null}
                       <ul className="mt-4 grid gap-2 text-sm text-muted">
                         <li>
-                          Maquinas: {plan.limits.machines ?? "ilimitado"}
+                          {t("billing.machines")}: {plan.limits.machines ?? t("billing.unlimited")}
                         </li>
                         <li>
-                          Materiais: {plan.limits.materials ?? "ilimitado"}
+                          {t("billing.materials")}: {plan.limits.materials ?? t("billing.unlimited")}
                         </li>
                         <li>
-                          Orcamentos/mes: {plan.limits.monthlyQuotes ?? "ilimitado"}
+                          {t("billing.monthlyQuotes")}: {plan.limits.monthlyQuotes ?? t("billing.unlimited")}
                         </li>
                         {plan.features.customFormulas ? (
                           <li className="flex items-center gap-2 text-foreground">
-                            <Check className="h-4 w-4 text-secondary" /> Formulas customizadas
+                            <Check className="h-4 w-4 text-secondary" /> {t("billing.customFormulas")}
                           </li>
                         ) : null}
                         {plan.features.pdfExport ? (
                           <li className="flex items-center gap-2 text-foreground">
-                            <Check className="h-4 w-4 text-secondary" /> Exportacao PDF
+                            <Check className="h-4 w-4 text-secondary" /> {t("billing.pdfExport")}
                           </li>
                         ) : null}
                       </ul>
@@ -384,7 +377,7 @@ function BillingContent() {
                         disabled={isSubmitting || isCurrentPlan}
                         className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {isCurrentPlan ? "Plano atual" : "Assinar"}
+                        {isCurrentPlan ? t("billing.currentPlanButton") : t("billing.subscribe")}
                       </button>
                     </Card>
                   );
@@ -397,7 +390,7 @@ function BillingContent() {
                   disabled={isSubmitting}
                   className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-danger/40 px-4 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Cancelar assinatura
+                  {t("billing.cancelSubscription")}
                   <XCircle className="h-4 w-4" />
                 </button>
               ) : null}
@@ -418,6 +411,7 @@ const UsageCard = ({
   label: string;
   metric: UsageMetric;
 }) => {
+  const { t } = useLanguage();
   const percentage =
     metric.limit === null
       ? 100
@@ -432,7 +426,7 @@ const UsageCard = ({
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">{label}</p>
           <p className="text-sm text-muted">
-            {metric.used} de {metric.limit ?? "ilimitado"}
+            {t("billing.usedOf", { used: metric.used, limit: metric.limit ?? t("billing.unlimited") })}
           </p>
         </div>
       </div>
@@ -449,7 +443,7 @@ const UsageCard = ({
       </div>
       <div className="mt-3 flex items-center gap-2 text-xs text-muted">
         <ShieldCheck className="h-4 w-4 text-secondary" />
-        {metric.limit === null ? "Sem limite definido" : `${percentage}% utilizado`}
+        {metric.limit === null ? t("billing.noLimitDefined") : t("billing.usedPercent", { percent: percentage })}
       </div>
     </div>
   );

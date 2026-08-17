@@ -243,6 +243,36 @@ Passo") em 2026-08-12.
       suficiente pra exibição, mas não usar em cálculos financeiros que
       exijam precisão absoluta.
 
+## Traducao do sistema (implementado em 2026-08-17)
+
+- [x] Idioma por usuario (`User.language`, pt-BR/en), selecionavel no
+      cadastro e em "Meu perfil", com deteccao do idioma do navegador como
+      default. Todas as telas de usuario + PDF de orcamento + 6 templates
+      de e-mail traduzidos (EN criado a partir do original PT); precos de
+      orcamento mostram `$`/USD quando o idioma e ingles (troca so de
+      formatacao, nunca conversao de valor real). Painel Admin permanece
+      100% portugues por decisao do Yuri. Ver `Contextos/Decisoes.md`
+      (2026-08-17).
+- [ ] Descricoes/nomes de variaveis de formula (`/formulas/variables`,
+      `systemVariableMeta` em `formula.service.ts`) continuam so em
+      portugues, mesmo com o resto da tela de Formulas traduzido - sao
+      dado do backend, nao string estatica de UI. Precisaria de i18n no
+      backend (a rota devolver descricao no idioma do usuario) pra
+      resolver.
+- [ ] `<html lang="pt-BR">` em `app/layout.tsx` fica fixo independente do
+      idioma escolhido pelo usuario - `RootLayout` e Server Component,
+      mudar isso exigiria cookie/middleware de locale. Limitacao
+      conhecida, sem impacto funcional (so acessibilidade/SEO).
+- [ ] Mensagens de erro internas em portugues em
+      `lib/download-quote-pdf.ts` (ex. "Reinicie a API na porta 3001") -
+      confirmado que nunca aparecem pro usuario final na pratica (fluxo de
+      toast sempre usa o fallback traduzido do call site, nao
+      `error.message`). Cosmetico/dev-only, nao vale expandir escopo pra
+      corrigir agora.
+- [ ] Se o Yuri quiser revisitar o painel Admin traduzido no futuro, ele
+      ficou deliberadamente de fora desta rodada (decisao explicita) -
+      registrar aqui caso mude de ideia depois.
+
 ## Próximo passo geral
 
 Pós-MVP: preparar deploy, seeds, testes automatizados, monitoramento externo

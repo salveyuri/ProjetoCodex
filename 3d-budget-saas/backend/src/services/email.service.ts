@@ -1,4 +1,4 @@
-import type { EmailSendStatus } from "@3d-budget/shared";
+import type { EmailSendStatus, SupportedLanguage } from "@3d-budget/shared";
 import { prisma } from "../config/prisma";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
@@ -12,17 +12,30 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // enforced on redemption).
 export const PASSWORD_RESET_TOKEN_TTL_MINUTES = 30;
 
-const toBRL = (value: number): string =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-    value,
-  );
+// Display-only formatting swap (no real currency conversion) — see
+// Contextos/Decisoes.md, 2026-08-17.
+const toMoney = (value: number, language: SupportedLanguage): string =>
+  language === "en"
+    ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
+    : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
-const toDateLabel = (date: Date): string =>
-  new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+const toDateLabel = (date: Date, language: SupportedLanguage): string =>
+  language === "en"
+    ? new Intl.DateTimeFormat("en-US", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(date)
+    : new Intl.DateTimeFormat("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(date);
+
+const triggerLabels: Record<"EXPORTED" | "APPROVED", Record<SupportedLanguage, string>> = {
+  APPROVED: { "pt-BR": "aprovado", en: "approved" },
+  EXPORTED: { "pt-BR": "exportado", en: "exported" },
+};
 
 const escapeHtml = (value: string): string =>
   value
@@ -108,6 +121,7 @@ export class EmailService {
   // is free to ignore it.
   async send(
     key: EmailTemplateKey,
+    language: SupportedLanguage,
     to: string,
     variables: Record<string, string>,
     options: SendOptions = {},
@@ -128,7 +142,9 @@ export class EmailService {
         }
       }
 
-      const template = await prisma.emailTemplate.findUnique({ where: { key } });
+      const template = await prisma.emailTemplate.findUnique({
+        where: { key_language: { key, language } },
+      });
 
       if (!template || (!template.isActive && !options.force)) {
         await prisma.emailLog.create({
@@ -193,14 +209,18 @@ export class EmailService {
   // preview's own-origin trick in the frontend), but send() already
   // computes the real absolute URL itself and would have it overridden by
   // a broken relative one otherwise.
-  async sendTest(key: EmailTemplateKey, to: string): Promise<EmailSendResult> {
+  async sendTest(
+    key: EmailTemplateKey,
+    language: SupportedLanguage,
+    to: string,
+  ): Promise<EmailSendResult> {
     const sampleVariables = Object.fromEntries(
       EMAIL_TEMPLATE_VARIABLES[key]
         .filter((variable) => variable.name !== "logoUrl")
         .map((variable) => [variable.name, variable.sampleValue]),
     );
 
-    return this.send(key, to, sampleVariables, { force: true });
+    return this.send(key, language, to, sampleVariables, { force: true });
   }
 
   async sendAccountCreated(userId: string): Promise<void> {
@@ -213,7 +233,9 @@ export class EmailService {
       return;
     }
 
-    await this.send("ACCOUNT_CREATED", user.email, {
+    const language = user.language as SupportedLanguage;
+
+    await this.send("ACCOUNT_CREATED", language, user.email, {
       accountName: user.company.name,
       email: user.email,
       planName: user.company.plan.name,
@@ -231,7 +253,9 @@ export class EmailService {
       return;
     }
 
-    await this.send("PASSWORD_RESET", user.email, {
+    const language = user.language as SupportedLanguage;
+
+    await this.send("PASSWORD_RESET", language, user.email, {
       accountName: user.company?.name ?? user.email,
       resetUrl: `${env.appBaseUrl}/reset-password?token=${rawToken}`,
       expiresInMinutes: String(PASSWORD_RESET_TOKEN_TTL_MINUTES),
@@ -246,7 +270,7 @@ export class EmailService {
       prisma.company.findUnique({
         where: { id: companyId },
         include: {
-          user: { select: { email: true, notifyFinancialEmails: true } },
+          user: { select: { email: true, language: true, notifyFinancialEmails: true } },
           plan: { select: { name: true } },
         },
       }),
@@ -262,14 +286,17 @@ export class EmailService {
       return;
     }
 
+    const language = company.user.language as SupportedLanguage;
+
     await this.send(
       "SUBSCRIPTION_CONFIRMED",
+      language,
       company.user.email,
       {
         accountName: company.name,
         planName: company.plan.name,
-        planPrice: toBRL(Number(payment.value)),
-        nextDueDate: payment.dueDate ? toDateLabel(payment.dueDate) : "-",
+        planPrice: toMoney(Number(payment.value), language),
+        nextDueDate: payment.dueDate ? toDateLabel(payment.dueDate, language) : "-",
       },
       { dedupeKey: `SUBSCRIPTION_CONFIRMED:${payment.id}` },
     );
@@ -283,7 +310,7 @@ export class EmailService {
       prisma.company.findUnique({
         where: { id: companyId },
         include: {
-          user: { select: { email: true, notifyFinancialEmails: true } },
+          user: { select: { email: true, language: true, notifyFinancialEmails: true } },
           plan: { select: { name: true } },
         },
       }),
@@ -299,15 +326,18 @@ export class EmailService {
       return;
     }
 
+    const language = company.user.language as SupportedLanguage;
+
     await this.send(
       "SUBSCRIPTION_RENEWED",
+      language,
       company.user.email,
       {
         accountName: company.name,
         planName: company.plan.name,
-        planPrice: toBRL(Number(payment.value)),
-        paymentDate: payment.paymentDate ? toDateLabel(payment.paymentDate) : "-",
-        nextDueDate: payment.dueDate ? toDateLabel(payment.dueDate) : "-",
+        planPrice: toMoney(Number(payment.value), language),
+        paymentDate: payment.paymentDate ? toDateLabel(payment.paymentDate, language) : "-",
+        nextDueDate: payment.dueDate ? toDateLabel(payment.dueDate, language) : "-",
       },
       { dedupeKey: `SUBSCRIPTION_RENEWED:${payment.id}` },
     );
@@ -321,7 +351,7 @@ export class EmailService {
       prisma.company.findUnique({
         where: { id: companyId },
         include: {
-          user: { select: { email: true, notifyFinancialEmails: true } },
+          user: { select: { email: true, language: true, notifyFinancialEmails: true } },
           plan: { select: { name: true } },
         },
       }),
@@ -337,6 +367,7 @@ export class EmailService {
       return;
     }
 
+    const language = company.user.language as SupportedLanguage;
     const daysRemaining = Math.max(
       0,
       Math.ceil((payment.dueDate.getTime() - Date.now()) / MS_PER_DAY),
@@ -344,11 +375,12 @@ export class EmailService {
 
     await this.send(
       "SUBSCRIPTION_EXPIRING",
+      language,
       company.user.email,
       {
         accountName: company.name,
         planName: company.plan.name,
-        dueDate: toDateLabel(payment.dueDate),
+        dueDate: toDateLabel(payment.dueDate, language),
         daysRemaining: String(daysRemaining),
       },
       { dedupeKey: `SUBSCRIPTION_EXPIRING:${payment.id}` },
@@ -363,7 +395,9 @@ export class EmailService {
     const [company, quote] = await Promise.all([
       prisma.company.findUnique({
         where: { id: companyId },
-        include: { user: { select: { email: true, notifyQuoteEmails: true } } },
+        include: {
+          user: { select: { email: true, language: true, notifyQuoteEmails: true } },
+        },
       }),
       prisma.quote.findFirst({
         where: { id: quoteId, companyId },
@@ -380,20 +414,21 @@ export class EmailService {
       return;
     }
 
+    const language = company.user.language as SupportedLanguage;
     const itemsHtml = quote.printItems
       .map(
         (item) =>
-          `<tr><td style="padding:6px 0;border-bottom:1px solid #e4e4e7;">${escapeHtml(item.modelName)}</td><td style="padding:6px 0;border-bottom:1px solid #e4e4e7;text-align:right;">${toBRL(Number(item.finalPrice))}</td></tr>`,
+          `<tr><td style="padding:6px 0;border-bottom:1px solid #e4e4e7;">${escapeHtml(item.modelName)}</td><td style="padding:6px 0;border-bottom:1px solid #e4e4e7;text-align:right;">${toMoney(Number(item.finalPrice), language)}</td></tr>`,
       )
       .join("");
 
-    await this.send("QUOTE_SUMMARY", company.user.email, {
+    await this.send("QUOTE_SUMMARY", language, company.user.email, {
       accountName: company.name,
       customerName: quote.customerName,
-      totalAmount: toBRL(Number(quote.totalAmount)),
-      validUntil: toDateLabel(quote.validUntil),
+      totalAmount: toMoney(Number(quote.totalAmount), language),
+      validUntil: toDateLabel(quote.validUntil, language),
       itemsHtml,
-      triggerLabel: trigger === "APPROVED" ? "aprovado" : "exportado",
+      triggerLabel: triggerLabels[trigger][language],
     });
   }
 }

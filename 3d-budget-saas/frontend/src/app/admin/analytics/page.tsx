@@ -22,7 +22,6 @@ import {
   YAxis,
 } from "recharts";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { toMoney } from "@/components/quotes/quote-ui";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
@@ -30,6 +29,12 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
+
+// Admin screens stay Portuguese/BRL-only regardless of the acting admin's own
+// language preference (Contextos/Decisoes.md, 2026-08-17) — these are
+// system-wide figures, not tied to any single user's currency.
+const toMoney = (value: number): string =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
 const actionLabels: Record<string, string> = {
   ADMIN_USER_UPDATED: "Usuario/plano alterado",

@@ -1,4 +1,8 @@
-import type { EmailTemplateKey, EmailTemplateResource } from "@3d-budget/shared";
+import type {
+  EmailTemplateKey,
+  EmailTemplateResource,
+  SupportedLanguage,
+} from "@3d-budget/shared";
 import type { EmailTemplate } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
@@ -13,6 +17,7 @@ export const toEmailTemplateResource = (
   return {
     id: template.id,
     key,
+    language: template.language as SupportedLanguage,
     name: template.name,
     description: template.description,
     subject: template.subject,
@@ -24,15 +29,14 @@ export const toEmailTemplateResource = (
   };
 };
 
-// The 6 templates are seeded by migration and each key is wired to a
-// specific send-trigger in email.service.ts — there is deliberately no
-// create/delete here, only listing and editing content (name/subject/
-// bodyHtml/isActive). Creating an arbitrary new key wouldn't do anything
-// (nothing would ever call send() with it).
+// 12 rows total (6 keys x pt-BR/en), seeded by migration — each key is
+// wired to a specific send-trigger in email.service.ts, which picks the
+// row matching the recipient's language. Deliberately no create/delete
+// here, only listing and editing content (name/subject/bodyHtml/isActive).
 export class EmailTemplateService {
   async listAll(): Promise<EmailTemplateResource[]> {
     const templates = await prisma.emailTemplate.findMany({
-      orderBy: { key: "asc" },
+      orderBy: [{ key: "asc" }, { language: "asc" }],
     });
 
     return templates.map(toEmailTemplateResource);

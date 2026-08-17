@@ -7,11 +7,12 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ToastViewport } from "@/components/ui/toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { PostProcessingCard } from "./PostProcessingCard";
 import { PrintItemCard } from "./PrintItemCard";
 import { SelectField, TextField } from "./QuoteFormFields";
 import { QuoteSummary } from "./QuoteSummary";
-import { quoteStatusLabels, quoteStatusOptions, quoteStatusTones } from "./quote-ui";
+import { quoteStatusLabelKeys, quoteStatusOptions, quoteStatusTones } from "./quote-ui";
 import { useQuoteForm } from "./useQuoteForm";
 
 interface QuoteFormProps {
@@ -19,6 +20,7 @@ interface QuoteFormProps {
 }
 
 export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
+  const { t } = useLanguage();
   const {
     form,
     machines,
@@ -54,19 +56,15 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
               className="inline-flex min-h-9 items-center gap-2 text-sm font-medium text-muted transition hover:text-primary"
             >
               <ArrowLeft className="h-4 w-4" />
-              Voltar para orcamentos
+              {t("quotes.backToList")}
             </Link>
             <h1 className="mt-4 text-3xl font-semibold text-foreground">
-              {quoteId ? "Editar orcamento" : "Novo orcamento"}
+              {quoteId ? t("quotes.editTitle") : t("quotes.newTitle")}
             </h1>
-            <p className="mt-2 max-w-2xl text-base text-muted">
-              Cada mesa mostra seu custo de producao; pintura, acabamento,
-              taxas e margem sao aplicados uma unica vez sobre o orcamento
-              inteiro.
-            </p>
+            <p className="mt-2 max-w-2xl text-base text-muted">{t("quotes.subtitle")}</p>
           </div>
           <StatusBadge tone={quoteStatusTones[form.status]}>
-            {quoteStatusLabels[form.status]}
+            {t(quoteStatusLabelKeys[form.status])}
           </StatusBadge>
         </section>
 
@@ -85,11 +83,10 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
                 </div>
                 <div>
                   <p className="font-semibold text-danger">
-                    Configure a producao antes de orcar
+                    {t("quotes.configureProductionTitle")}
                   </p>
                   <p className="mt-1 text-sm text-foreground/80">
-                    Cadastre ao menos uma maquina e um material para liberar os
-                    campos deste orcamento.
+                    {t("quotes.configureProductionBody")}
                   </p>
                 </div>
               </div>
@@ -97,7 +94,7 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
                 href="/dashboard/settings"
                 className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg bg-danger px-4 text-sm font-semibold text-danger-foreground transition hover:bg-danger/90"
               >
-                Abrir configuracoes
+                {t("quotes.openSettings")}
               </Link>
             </div>
           </Card>
@@ -111,20 +108,20 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
             <Card className="overflow-hidden p-5">
               <div className="grid min-w-0 gap-4 md:grid-cols-2">
                 <TextField
-                  label="Cliente"
+                  label={t("quotes.client")}
                   value={form.customerName}
                   onChange={(value) => updateField("customerName", value)}
                   required
                 />
                 <TextField
-                  label="Validade"
+                  label={t("quotes.validUntil")}
                   type="date"
                   value={form.validUntil}
                   onChange={(value) => updateField("validUntil", value)}
                   required
                 />
                 <SelectField
-                  label="Status"
+                  label={t("quotes.status")}
                   value={form.status}
                   onChange={(value) =>
                     updateField("status", value as QuoteStatus)
@@ -132,23 +129,23 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
                 >
                   {quoteStatusOptions.map((status) => (
                     <option key={status} value={status}>
-                      {quoteStatusLabels[status]}
+                      {t(quoteStatusLabelKeys[status])}
                     </option>
                   ))}
                 </SelectField>
                 <SelectField
-                  label="Formula"
+                  label={t("quotes.formula")}
                   value={form.formulaId}
                   onChange={(value) => updateField("formulaId", value)}
                   disabled={isLoadingResources || formulas.length === 0}
                 >
                   {formulas.length === 0 ? (
-                    <option value="">Formula padrao do sistema</option>
+                    <option value="">{t("quotes.systemDefaultFormula")}</option>
                   ) : null}
                   {formulas.map((formula) => (
                     <option key={formula.id} value={formula.id}>
                       {formula.name}
-                      {formula.isDefault ? " - padrao" : ""}
+                      {formula.isDefault ? t("quotes.defaultSuffix") : ""}
                     </option>
                   ))}
                 </SelectField>
@@ -159,11 +156,9 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">
-                    Mesas de impressao
+                    {t("quotes.printTablesTitle")}
                   </h2>
-                  <p className="text-sm text-muted">
-                    Adicione pecas com maquinas, materiais e tempos independentes.
-                  </p>
+                  <p className="text-sm text-muted">{t("quotes.printTablesSubtitle")}</p>
                 </div>
                 <button
                   type="button"
@@ -172,7 +167,7 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
                   className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-primary/10"
                 >
                   <Plus className="h-4 w-4" />
-                  Adicionar mesa
+                  {t("quotes.addTable")}
                 </button>
               </div>
 

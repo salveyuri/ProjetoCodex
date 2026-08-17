@@ -26,7 +26,7 @@ describe("EmailService.send", () => {
       .spyOn(resendClient, "send")
       .mockResolvedValue({ id: "resend-id-1", error: null });
 
-    await emailService.send("QUOTE_SUMMARY", "customer@example.com", {
+    await emailService.send("QUOTE_SUMMARY", "pt-BR", "customer@example.com", {
       accountName: '<script>alert("xss")</script>',
       customerName: "Fulano & Cia",
       totalAmount: "R$ 100,00",
@@ -54,7 +54,7 @@ describe("EmailService.send", () => {
       .spyOn(resendClient, "send")
       .mockResolvedValue({ id: "resend-id-2", error: null });
 
-    await emailService.send("ACCOUNT_CREATED", "user@example.com", {
+    await emailService.send("ACCOUNT_CREATED", "pt-BR", "user@example.com", {
       accountName: "Empresa & Filhos\nLinha injetada",
       email: "user@example.com",
       planName: "Free",
@@ -72,7 +72,7 @@ describe("EmailService.send", () => {
   it("never throws even when Resend fails, and reports the failure", async () => {
     vi.spyOn(resendClient, "send").mockRejectedValue(new Error("network down"));
 
-    const result = await emailService.send("ACCOUNT_CREATED", "user@example.com", {
+    const result = await emailService.send("ACCOUNT_CREATED", "pt-BR", "user@example.com", {
       accountName: "Empresa Teste",
       email: "user@example.com",
       planName: "Free",

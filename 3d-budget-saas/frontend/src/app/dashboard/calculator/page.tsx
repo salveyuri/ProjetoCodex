@@ -23,20 +23,16 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
-
-const toMoney = (value: number): string =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
 
 const numberFromInput = (value: string): number => Number(value.replace(",", "."));
 
 export default function CalculatorPage() {
   const { isLoading: isAuthLoading, token } = useAuth();
+  const { t, formatMoney } = useLanguage();
   const [machines, setMachines] = useState<MachineResource[]>([]);
   const [materials, setMaterials] = useState<MaterialResource[]>([]);
   const [machineId, setMachineId] = useState("");
@@ -87,11 +83,11 @@ export default function CalculatorPage() {
       setMachineId((current) => current || machinesResponse.data[0]?.id || "");
       setMaterialId((current) => current || materialsResponse.data[0]?.id || "");
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel calcular o orcamento."));
+      setErrorMessage(getApiErrorMessage(error, t("calculator.errorGeneric")));
     } finally {
       setIsLoadingResources(false);
     }
-  }, [token]);
+  }, [t, token]);
 
   const calculate = useCallback(async () => {
     if (!canCalculate) {
@@ -114,11 +110,11 @@ export default function CalculatorPage() {
       setResult(response.data);
     } catch (error) {
       setResult(null);
-      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel calcular o orcamento."));
+      setErrorMessage(getApiErrorMessage(error, t("calculator.errorGeneric")));
     } finally {
       setIsCalculating(false);
     }
-  }, [canCalculate, machineId, materialId, printTimeHours, weightGrams]);
+  }, [canCalculate, machineId, materialId, printTimeHours, t, weightGrams]);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -139,32 +135,32 @@ export default function CalculatorPage() {
       result
         ? [
             {
-              label: "Material",
+              label: t("calculator.material"),
               value: result.breakdown.materialCost,
               icon: Layers3,
               tone: "text-secondary",
             },
             {
-              label: "Energia",
+              label: t("calculator.energy"),
               value: result.breakdown.energyCost,
               icon: Zap,
               tone: "text-primary",
             },
             {
-              label: "Depreciacao",
+              label: t("calculator.depreciation"),
               value: result.breakdown.depreciationCost,
               icon: Cpu,
               tone: "text-accent",
             },
             {
-              label: "Manutencao",
+              label: t("calculator.maintenance"),
               value: result.breakdown.maintenanceCost,
               icon: Cpu,
               tone: "text-accent",
             },
           ]
         : [],
-    [result],
+    [result, t],
   );
 
   return (
@@ -172,13 +168,11 @@ export default function CalculatorPage() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <section className="flex flex-col justify-between gap-4 rounded-lg border border-border bg-surface/75 p-5 lg:flex-row lg:items-end">
           <div>
-            <StatusBadge tone="success">Engine ativo</StatusBadge>
+            <StatusBadge tone="success">{t("calculator.badge")}</StatusBadge>
             <h1 className="mt-4 text-3xl font-semibold text-foreground">
-              Calculadora de orcamentos
+              {t("calculator.title")}
             </h1>
-            <p className="mt-2 max-w-2xl text-base text-muted">
-              Simulacao em tempo real usando maquina, material e custos fixos da empresa.
-            </p>
+            <p className="mt-2 max-w-2xl text-base text-muted">{t("calculator.subtitle")}</p>
           </div>
           <button
             type="button"
@@ -189,7 +183,7 @@ export default function CalculatorPage() {
             <RefreshCcw
               className={cn("h-4 w-4", isCalculating && "animate-spin")}
             />
-            Recalcular
+            {t("calculator.recalculate")}
           </button>
         </section>
 
@@ -204,13 +198,15 @@ export default function CalculatorPage() {
             <div className="flex items-center gap-3">
               <Calculator className="h-5 w-5 text-primary" />
               <h2 className="text-xl font-semibold text-foreground">
-                Parametros tecnicos
+                {t("calculator.technicalParams")}
               </h2>
             </div>
 
             <div className="mt-6 grid min-w-0 gap-4">
               <label className="grid min-w-0 gap-2">
-                <span className="text-sm font-medium text-foreground">Maquina</span>
+                <span className="text-sm font-medium text-foreground">
+                  {t("calculator.machine")}
+                </span>
                 <select
                   value={machineId}
                   onChange={(event) => setMachineId(event.target.value)}
@@ -218,7 +214,7 @@ export default function CalculatorPage() {
                   className="min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary"
                 >
                   {machines.length === 0 ? (
-                    <option value="">Nenhuma maquina cadastrada</option>
+                    <option value="">{t("calculator.noMachineRegistered")}</option>
                   ) : null}
                   {machines.map((machine) => (
                     <option key={machine.id} value={machine.id}>
@@ -229,7 +225,9 @@ export default function CalculatorPage() {
               </label>
 
               <label className="grid min-w-0 gap-2">
-                <span className="text-sm font-medium text-foreground">Material</span>
+                <span className="text-sm font-medium text-foreground">
+                  {t("calculator.material")}
+                </span>
                 <select
                   value={materialId}
                   onChange={(event) => setMaterialId(event.target.value)}
@@ -237,7 +235,7 @@ export default function CalculatorPage() {
                   className="min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary"
                 >
                   {materials.length === 0 ? (
-                    <option value="">Nenhum material cadastrado</option>
+                    <option value="">{t("calculator.noMaterialRegistered")}</option>
                   ) : null}
                   {materials.map((material) => (
                     <option key={material.id} value={material.id}>
@@ -250,14 +248,14 @@ export default function CalculatorPage() {
               <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                 <NumberField
                   icon={Scale}
-                  label="Peso"
+                  label={t("calculator.weight")}
                   suffix="g"
                   value={weightGrams}
                   onChange={setWeightGrams}
                 />
                 <NumberField
                   icon={Clock3}
-                  label="Tempo"
+                  label={t("calculator.time")}
                   suffix="h"
                   value={printTimeHours}
                   onChange={setPrintTimeHours}
@@ -267,7 +265,7 @@ export default function CalculatorPage() {
 
             <div className="mt-6 grid gap-3">
               <ResourceLine
-                label="Consumo"
+                label={t("calculator.consumption")}
                 value={
                   selectedMachine
                     ? `${selectedMachine.powerConsumptionWatts} W`
@@ -275,18 +273,18 @@ export default function CalculatorPage() {
                 }
               />
               <ResourceLine
-                label="Depreciacao"
+                label={t("calculator.depreciation")}
                 value={
                   selectedMachine
-                    ? `${toMoney(selectedMachine.depreciationCostPerHour)} / h`
+                    ? `${formatMoney(selectedMachine.depreciationCostPerHour)} / h`
                     : "--"
                 }
               />
               <ResourceLine
-                label="Custo do material"
+                label={t("calculator.materialCost")}
                 value={
                   selectedMaterial
-                    ? `${toMoney(selectedMaterial.costPerGram)} / g`
+                    ? `${formatMoney(selectedMaterial.costPerGram)} / g`
                     : "--"
                 }
               />
@@ -297,25 +295,29 @@ export default function CalculatorPage() {
             <section className="min-w-0 rounded-lg border border-border bg-surface/75 p-5">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                 <div>
-                  <p className="text-sm text-muted">Preco sugerido</p>
+                  <p className="text-sm text-muted">{t("calculator.suggestedPrice")}</p>
                   <p className="mt-2 text-4xl font-semibold text-foreground">
-                    {result ? toMoney(result.breakdown.finalPrice) : "--"}
+                    {result ? formatMoney(result.breakdown.finalPrice) : "--"}
                   </p>
                 </div>
                 <StatusBadge tone={result ? "success" : "warning"}>
-                  {isCalculating ? "calculando" : result ? "atualizado" : "aguardando dados"}
+                  {isCalculating
+                    ? t("calculator.calculating")
+                    : result
+                      ? t("calculator.updated")
+                      : t("calculator.waitingData")}
                 </StatusBadge>
               </div>
 
               <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-3">
                 <SummaryMetric
                   icon={WalletCards}
-                  label="Custo base"
-                  value={result ? toMoney(result.breakdown.baseCost) : "--"}
+                  label={t("calculator.baseCost")}
+                  value={result ? formatMoney(result.breakdown.baseCost) : "--"}
                 />
                 <SummaryMetric
                   icon={Percent}
-                  label="Margem"
+                  label={t("calculator.margin")}
                   value={
                     result
                       ? `${result.rates.desiredMarginPercent.toFixed(2)}%`
@@ -326,7 +328,7 @@ export default function CalculatorPage() {
                   icon={Zap}
                   label="kWh"
                   value={
-                    result ? toMoney(result.rates.energyCostPerKwh) : "--"
+                    result ? formatMoney(result.rates.energyCostPerKwh) : "--"
                   }
                 />
               </div>
@@ -335,7 +337,7 @@ export default function CalculatorPage() {
             <section className="grid min-w-0 gap-4 lg:grid-cols-2">
               <Card className="min-w-0 p-5">
                 <h2 className="text-xl font-semibold text-foreground">
-                  Breakdown de producao
+                  {t("calculator.productionBreakdown")}
                 </h2>
                 <div className="mt-5 grid gap-3">
                   {costRows.length > 0 ? (
@@ -344,13 +346,13 @@ export default function CalculatorPage() {
                         key={row.label}
                         icon={row.icon}
                         label={row.label}
-                        value={toMoney(row.value)}
+                        value={formatMoney(row.value)}
                         tone={row.tone}
                       />
                     ))
                   ) : (
                     <p className="text-sm text-muted">
-                      Cadastre maquina, material e custos para calcular.
+                      {t("calculator.registerToCalculate")}
                     </p>
                   )}
                 </div>
@@ -358,52 +360,52 @@ export default function CalculatorPage() {
 
               <Card className="min-w-0 p-5">
                 <h2 className="text-xl font-semibold text-foreground">
-                  Margem e taxas
+                  {t("calculator.marginAndFees")}
                 </h2>
                 <div className="mt-5 grid gap-3">
                   <BreakdownText
-                    label="Subtotal com margem"
+                    label={t("calculator.subtotalWithMargin")}
                     value={
                       result
-                        ? toMoney(result.breakdown.subtotalWithMargin)
+                        ? formatMoney(result.breakdown.subtotalWithMargin)
                         : "--"
                     }
                   />
                   <BreakdownText
-                    label="Valor da margem"
-                    value={result ? toMoney(result.breakdown.marginAmount) : "--"}
+                    label={t("calculator.marginAmount")}
+                    value={result ? formatMoney(result.breakdown.marginAmount) : "--"}
                   />
                   <BreakdownText
-                    label="Taxa de cartao"
+                    label={t("calculator.cardFee")}
                     value={
-                      result ? toMoney(result.breakdown.cardFeeAmount) : "--"
+                      result ? formatMoney(result.breakdown.cardFeeAmount) : "--"
                     }
                   />
                   <BreakdownText
-                    label="Taxa administrativa"
+                    label={t("calculator.administrativeFee")}
                     value={
                       result
-                        ? toMoney(result.breakdown.administrativeFeeAmount)
+                        ? formatMoney(result.breakdown.administrativeFeeAmount)
                         : "--"
                     }
                   />
                   <BreakdownText
-                    label="Taxa de erro"
+                    label={t("calculator.errorFee")}
                     value={
-                      result ? toMoney(result.breakdown.errorCostAmount) : "--"
+                      result ? formatMoney(result.breakdown.errorCostAmount) : "--"
                     }
                   />
                   <BreakdownText
-                    label="Pintura e acabamento"
+                    label={t("calculator.postProcessing")}
                     value={
                       result
-                        ? toMoney(result.breakdown.postProcessingCost)
+                        ? formatMoney(result.breakdown.postProcessingCost)
                         : "--"
                     }
                   />
                   <BreakdownText
-                    label="Taxas totais"
-                    value={result ? toMoney(result.breakdown.feesTotal) : "--"}
+                    label={t("calculator.totalFees")}
+                    value={result ? formatMoney(result.breakdown.feesTotal) : "--"}
                     strong
                   />
                 </div>

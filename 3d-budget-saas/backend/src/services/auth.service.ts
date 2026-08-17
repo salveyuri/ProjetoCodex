@@ -1,4 +1,4 @@
-import type { AuthResponse, AuthUser } from "@3d-budget/shared";
+import type { AuthResponse, AuthUser, SupportedLanguage } from "@3d-budget/shared";
 import { Prisma, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -49,6 +49,7 @@ const toAuthUser = (user: {
   name: string | null;
   role: UserRole;
   isActive: boolean;
+  language: string;
   notifyFinancialEmails: boolean;
   notifyQuoteEmails: boolean;
   notifyNewsletter: boolean;
@@ -65,6 +66,7 @@ const toAuthUser = (user: {
   name: user.name,
   role: user.role,
   isActive: user.isActive,
+  language: user.language as SupportedLanguage,
   emailPreferences: {
     financial: user.notifyFinancialEmails,
     quotes: user.notifyQuoteEmails,
@@ -171,6 +173,7 @@ export class AuthService {
           passwordHash,
           name: input.fullName,
           role: UserRole.USER,
+          language: input.language,
           company: {
             create: {
               name: input.companyName,
@@ -474,6 +477,7 @@ export class AuthService {
         where: { id: userId },
         data: {
           ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.language !== undefined ? { language: input.language } : {}),
           ...(input.emailPreferences?.financial !== undefined
             ? { notifyFinancialEmails: input.emailPreferences.financial }
             : {}),

@@ -1,10 +1,13 @@
 import type { QuoteStatus } from "@3d-budget/shared";
+import type { TranslationKey } from "@/lib/i18n";
 
-export const quoteStatusLabels: Record<QuoteStatus, string> = {
-  DRAFT: "Rascunho",
-  SENT: "Enviado",
-  APPROVED: "Aprovado",
-  REJECTED: "Rejeitado",
+// Values, never labels — the actual PT/EN text lives in the dictionaries,
+// looked up via t(quoteStatusLabelKeys[status]) so it follows useLanguage().
+export const quoteStatusLabelKeys: Record<QuoteStatus, TranslationKey> = {
+  DRAFT: "quote.status.draft",
+  SENT: "quote.status.sent",
+  APPROVED: "quote.status.approved",
+  REJECTED: "quote.status.rejected",
 };
 
 export const quoteStatusTones: Record<
@@ -24,20 +27,9 @@ export const quoteStatusOptions: QuoteStatus[] = [
   "REJECTED",
 ];
 
-export const toMoney = (value: number): string =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-
+// Locale-independent on purpose — feeds an <input type="date"> value, never
+// shown to the user directly, so it always stays ISO (yyyy-mm-dd).
 export const toDateInputValue = (value: string | Date): string => {
   const date = typeof value === "string" ? new Date(value) : value;
   return date.toISOString().slice(0, 10);
 };
-
-export const formatDate = (value: string): string =>
-  new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(value));

@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import type { TranslationKey } from "@/lib/i18n";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -37,22 +39,30 @@ interface SidebarProps {
 
 interface NavigationItem {
   href: Route;
-  label: string;
+  labelKey: TranslationKey;
   icon: LucideIcon;
 }
 
 const navigation: NavigationItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/quotes", label: "Orcamentos", icon: FileText },
-  { href: "/dashboard/quotes/new", label: "Novo orcamento", icon: PlusCircle },
-  { href: "/dashboard/calculator", label: "Calculadora", icon: Calculator },
-  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/dashboard/settings/formulas", label: "Formulas", icon: Code2 },
-  { href: "/dashboard/billing", label: "Plano", icon: CreditCard },
-  { href: "/dashboard/settings", label: "Configuracoes", icon: Settings },
+  { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/quotes", labelKey: "nav.quotes", icon: FileText },
+  { href: "/dashboard/quotes/new", labelKey: "nav.newQuote", icon: PlusCircle },
+  { href: "/dashboard/calculator", labelKey: "nav.calculator", icon: Calculator },
+  { href: "/dashboard/analytics", labelKey: "nav.analytics", icon: BarChart3 },
+  { href: "/dashboard/settings/formulas", labelKey: "nav.formulas", icon: Code2 },
+  { href: "/dashboard/billing", labelKey: "nav.plan", icon: CreditCard },
+  { href: "/dashboard/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
-const adminNavigation: NavigationItem[] = [
+// Admin screens stay Portuguese-only for now (Contextos/Decisoes.md,
+// 2026-08-17) — these labels are deliberately not run through t().
+interface AdminNavigationItem {
+  href: Route;
+  label: string;
+  icon: LucideIcon;
+}
+
+const adminNavigation: AdminNavigationItem[] = [
   { href: "/admin/analytics" as Route, label: "Admin BI", icon: ShieldCheck },
   { href: "/admin/users" as Route, label: "Admin Users", icon: UsersRound },
   { href: "/admin/plans" as Route, label: "Admin Planos", icon: Package },
@@ -68,6 +78,7 @@ export const Sidebar = ({
 }: SidebarProps) => {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const isAdmin = user?.role === "ADMIN";
   const isAdminSectionActive = pathname.startsWith("/admin");
   const [adminOpen, setAdminOpen] = useState(isAdminSectionActive);
@@ -76,8 +87,8 @@ export const Sidebar = ({
     <>
     <button
       type="button"
-      aria-label="Fechar menu"
-      title="Fechar menu"
+      aria-label={t("nav.closeMenu")}
+      title={t("nav.closeMenu")}
       onClick={onClose}
       className={cn(
         "fixed inset-0 z-40 bg-black/60 transition lg:hidden",
@@ -105,8 +116,8 @@ export const Sidebar = ({
         </div>
         <button
           type="button"
-          title={collapsed ? "Expandir menu" : "Recolher menu"}
-          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+          title={collapsed ? t("nav.expandMenu") : t("nav.collapseMenu")}
+          aria-label={collapsed ? t("nav.expandMenu") : t("nav.collapseMenu")}
           onClick={onToggleCollapsed}
           className="ml-auto hidden h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary lg:grid"
         >
@@ -118,8 +129,8 @@ export const Sidebar = ({
         </button>
         <button
           type="button"
-          title="Fechar menu"
-          aria-label="Fechar menu"
+          title={t("nav.closeMenu")}
+          aria-label={t("nav.closeMenu")}
           onClick={onClose}
           className={cn(
             "ml-auto grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary lg:hidden",
@@ -150,7 +161,7 @@ export const Sidebar = ({
             <Link
               key={item.href}
               href={item.href}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? t(item.labelKey) : undefined}
               className={cn(
                 "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted transition hover:bg-surface hover:text-foreground",
                 collapsed && "lg:justify-center lg:px-0",
@@ -159,7 +170,7 @@ export const Sidebar = ({
               )}
             >
               <Icon className="h-5 w-5" />
-              <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
+              <span className={cn(collapsed && "lg:hidden")}>{t(item.labelKey)}</span>
             </Link>
           );
         })}
@@ -169,7 +180,7 @@ export const Sidebar = ({
             <button
               type="button"
               onClick={() => setAdminOpen((current) => !current)}
-              title={collapsed ? "Admin" : undefined}
+              title={collapsed ? t("nav.admin") : undefined}
               aria-expanded={adminOpen}
               className={cn(
                 "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted transition hover:bg-surface hover:text-foreground",
@@ -180,7 +191,7 @@ export const Sidebar = ({
             >
               <ShieldCheck className="h-5 w-5" />
               <span className={cn("flex-1 text-left", collapsed && "lg:hidden")}>
-                Admin
+                {t("nav.admin")}
               </span>
               <ChevronDown
                 className={cn(

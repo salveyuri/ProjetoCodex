@@ -4,6 +4,7 @@ import type {
   EmailTemplateResource,
   EmailTemplateTestResult,
   PlanResource,
+  SupportedLanguage,
   SystemFormulaResource,
 } from "@3d-budget/shared";
 import type { Prisma } from "@prisma/client";
@@ -211,6 +212,7 @@ export class AdminController {
       const template = await emailTemplateService.getById(id);
       const result = await emailService.sendTest(
         template.key as EmailTemplateKey,
+        template.language as SupportedLanguage,
         to,
       );
       await auditLogService.record({

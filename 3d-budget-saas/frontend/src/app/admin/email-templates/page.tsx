@@ -350,7 +350,12 @@ export default function AdminEmailTemplatesPage() {
                     {templates.map((template) => (
                       <tr key={template.id} className="bg-surface/40">
                         <td className="px-5 py-4">
-                          <p className="font-medium text-foreground">{template.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-foreground">{template.name}</p>
+                            <span className="rounded-md border border-border bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted">
+                              {template.language === "en" ? "EN" : "PT"}
+                            </span>
+                          </div>
                           <p className="text-xs text-muted">{template.key}</p>
                         </td>
                         <td className="max-w-xs truncate px-5 py-4 text-muted">

@@ -113,12 +113,17 @@ export interface EmailPreferences {
   newsletter: boolean;
 }
 
+// Admin screens are excluded from translation for now (Contextos/Decisoes.md,
+// 2026-08-17) — this drives the app UI, quote PDF, and transactional emails.
+export type SupportedLanguage = "pt-BR" | "en";
+
 export interface AuthUser {
   id: string;
   email: string;
   name: string | null;
   role: UserRole;
   isActive: boolean;
+  language: SupportedLanguage;
   emailPreferences: EmailPreferences;
   company: AuthCompany | null;
 }
@@ -126,6 +131,7 @@ export interface AuthUser {
 export interface UpdateProfilePayload {
   name?: string;
   companyName?: string;
+  language?: SupportedLanguage;
   emailPreferences?: Partial<EmailPreferences>;
 }
 
@@ -148,6 +154,7 @@ export interface RegisterRequest {
   password: string;
   defaultCurrency?: string;
   taxRate?: number;
+  language?: SupportedLanguage;
 }
 
 export interface LoginRequest {
@@ -701,6 +708,7 @@ export interface EmailTemplateVariable {
 export interface EmailTemplateResource {
   id: string;
   key: EmailTemplateKey;
+  language: SupportedLanguage;
   name: string;
   description: string | null;
   subject: string;

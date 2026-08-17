@@ -48,7 +48,7 @@ export const QuoteSummary = ({
   isDownloadingPdf,
   onDownloadPdf,
 }: QuoteSummaryProps) => (
-  <aside className="grid content-start gap-4 xl:sticky xl:top-24">
+  <aside className="sticky top-24 grid max-h-[calc(100vh-7rem)] content-start gap-4 self-start overflow-y-auto">
     <Card className="p-5">
       <p className="text-sm text-muted">Valor acumulado</p>
       <p

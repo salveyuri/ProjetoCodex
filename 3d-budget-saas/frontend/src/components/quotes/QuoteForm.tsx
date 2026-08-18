@@ -11,6 +11,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { PostProcessingCard } from "./PostProcessingCard";
 import { PrintItemCard } from "./PrintItemCard";
 import { SelectField, TextField } from "./QuoteFormFields";
+import { QuotePdfPreviewModal } from "./QuotePdfPreviewModal";
 import { QuoteSummary } from "./QuoteSummary";
 import { quoteStatusLabelKeys, quoteStatusOptions, quoteStatusTones } from "./quote-ui";
 import { useQuoteForm } from "./useQuoteForm";
@@ -34,7 +35,7 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
     isLoadingResources,
     isCalculating,
     isSaving,
-    isDownloadingPdf,
+    isPdfPreviewOpen,
     canSave,
     missingResources,
     aggregate,
@@ -43,7 +44,8 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
     addTable,
     removeTable,
     handleSubmit,
-    handleDownloadPdf,
+    openPdfPreview,
+    closePdfPreview,
   } = useQuoteForm(quoteId);
 
   return (
@@ -205,12 +207,18 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
             savedQuote={savedQuote}
             isSaving={isSaving}
             canSave={canSave}
-            isDownloadingPdf={isDownloadingPdf}
-            onDownloadPdf={() => void handleDownloadPdf()}
+            onPreviewPdf={openPdfPreview}
           />
         </form>
       </div>
       <ToastViewport toasts={toasts} onDismiss={dismissToast} />
+      {isPdfPreviewOpen && savedQuote ? (
+        <QuotePdfPreviewModal
+          quoteId={savedQuote.id}
+          customerName={savedQuote.customerName}
+          onClose={closePdfPreview}
+        />
+      ) : null}
     </MainLayout>
   );
 };

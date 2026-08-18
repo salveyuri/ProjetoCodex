@@ -96,9 +96,17 @@ const toDownloadError = async (error: unknown): Promise<Error> => {
   return new Error("Nao foi possivel gerar o PDF no backend.");
 };
 
-export const downloadQuotePdf = async (
+export interface QuotePdfFile {
+  blob: Blob;
+  filename: string;
+}
+
+// Just the network call + blob/filename resolution, no side effects — used
+// both by downloadQuotePdf (below) and by the in-app preview modal, which
+// needs the same file without triggering a save-to-disk prompt.
+export const fetchQuotePdf = async (
   params: DownloadQuotePdfParams,
-): Promise<void> => {
+): Promise<QuotePdfFile> => {
   let response: AxiosResponse<Blob>;
 
   try {
@@ -119,13 +127,25 @@ export const downloadQuotePdf = async (
     response.data instanceof Blob
       ? response.data
       : new Blob([response.data], { type: "application/pdf" });
-  const url = window.URL.createObjectURL(blob);
+
+  return { blob, filename };
+};
+
+export const triggerBlobDownload = (file: QuotePdfFile): void => {
+  const url = window.URL.createObjectURL(file.blob);
   const anchor = document.createElement("a");
 
   anchor.href = url;
-  anchor.download = filename;
+  anchor.download = file.filename;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   window.URL.revokeObjectURL(url);
+};
+
+export const downloadQuotePdf = async (
+  params: DownloadQuotePdfParams,
+): Promise<void> => {
+  const file = await fetchQuotePdf(params);
+  triggerBlobDownload(file);
 };

@@ -120,6 +120,16 @@ model Company {
   country               String             @default("BR")
   defaultCurrency       String             @default("BRL") @map("default_currency")
   taxRate               Decimal            @default(0) @map("tax_rate") @db.Decimal(7, 4)
+  // Free-text business info shown on the quote PDF header — CNPJ/CPF,
+  // phone, address. All optional, editable in Settings > Perfil.
+  taxId                 String?            @map("tax_id")
+  phone                 String?
+  address               String?
+  // Overrides the PDF's default localized terms/warranty text when set
+  // (raw multi-line text, one term per line — see quote-pdf.service.ts).
+  // Null keeps the built-in pt-BR/en defaults for everyone who never
+  // touches this.
+  customTerms           String?            @map("custom_terms") @db.Text
   planId                String             @map("plan_id") @db.Uuid
   subscriptionStatus    SubscriptionStatus @default(ACTIVE) @map("subscription_status")
   asaasCustomerId       String?            @map("asaas_customer_id")

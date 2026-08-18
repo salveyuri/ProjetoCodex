@@ -89,6 +89,13 @@ export const en: Record<TranslationKey, string> = {
   "quotes.createQuote": "Create quote",
   "quotes.generatingPdf": "Generating PDF...",
   "quotes.generatePdf": "Generate PDF",
+  "quotes.pdfPreview.title": "PDF preview",
+  "quotes.pdfPreview.subtitle": "Review it before downloading - nothing is sent to the customer.",
+  "quotes.pdfPreview.download": "Download",
+  "quotes.pdfPreview.close": "Close",
+  "quotes.pdfPreview.loading": "Generating the PDF...",
+  "quotes.pdfPreview.error": "Could not generate the PDF.",
+  "quotes.pdfPreview.retry": "Try again",
 
   "quotes.list.badge": "Core active",
   "quotes.list.title": "Quotes",
@@ -323,6 +330,15 @@ export const en: Record<TranslationKey, string> = {
   "settings.costs.savedToast": "Fixed costs saved.",
 
   "settings.profile.name": "Name",
+  "settings.profile.pdfInfoTitle": "Info for the quote PDF",
+  "settings.profile.pdfInfoNote":
+    "Shown on the PDF header sent to your customers. Leave blank to omit.",
+  "settings.profile.taxId": "Tax ID",
+  "settings.profile.phone": "Phone",
+  "settings.profile.address": "Address",
+  "settings.profile.customTerms": "Custom terms and conditions",
+  "settings.profile.customTermsNote":
+    "One term per line. Replaces the PDF's default terms. Leave blank to use the system defaults.",
   "settings.profile.companyName": "Company name",
   "settings.profile.emailPrefsTitle": "Email preferences",
   "settings.profile.emailPrefsNote":

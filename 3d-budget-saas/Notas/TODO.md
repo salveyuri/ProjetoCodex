@@ -39,11 +39,26 @@ Passo") em 2026-08-12.
       fora de escopo (deploy manual via `docker compose`, comandos
       informados a cada entrega).
 
-## PDF de orçamento
+## PDF de orçamento (implementado em 2026-08-18)
 
-- [ ] Adicionar CNPJ/CPF, telefone e endereço no schema de `Company`.
-- [ ] Permitir termos comerciais customizados por empresa.
-- [ ] Criar preview in-app antes do download.
+- [x] CNPJ/CPF, telefone e endereço no schema de `Company` (todos
+      opcionais), editáveis na aba Perfil, mostrados no cabeçalho do PDF
+      só quando preenchidos (cabeçalho com altura dinâmica).
+- [x] Termos comerciais customizados por empresa (`Company.customTerms`,
+      texto livre multi-linha) — substituem os termos padrão localizados
+      quando preenchidos; nota de validade continua sempre no final.
+- [x] Preview in-app antes do download (`QuotePdfPreviewModal.tsx`, iframe
+      com `blob:` URL) nos dois lugares que geram PDF — tela de criar/
+      editar orçamento e a listagem. Ver `Contextos/Decisoes.md`
+      (2026-08-18).
+- [ ] Conteúdo visual exato do PDF (posicionamento de CNPJ/telefone/
+      endereço/termos customizados) validado só por revisão de código +
+      tipos batendo depois da migration — não por inspeção pixel a pixel
+      do PDF renderizado. Se algo parecer deslocado/cortado na prática,
+      avisar pra ajustar o layout em `quote-pdf.service.ts`.
+- [ ] Termos customizados não são bilíngues — o texto aparece exatamente
+      como foi digitado, independente do idioma do PDF (decisão
+      deliberada, ver `Contextos/Decisoes.md`).
 
 ## Analytics
 

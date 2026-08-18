@@ -1219,3 +1219,78 @@ Antes de criar, o script busca (`listWebhooks`) se já existe um webhook
 com a mesma `url` - se sim, atualiza (`updateWebhook`) em vez de criar
 outro (o Asaas permite até 10 webhooks por conta; rodar o script várias
 vezes por engano nunca duplica).
+
+## 2026-08-18 - 3 melhorias no PDF de orçamento (dados da empresa, termos customizados, preview)
+
+### Dados da empresa: 4 campos novos, todos opcionais e independentes
+
+`Company` ganhou `taxId`/`phone`/`address`/`customTerms` (todos
+`String?` nullable). Editáveis na aba Perfil de `/dashboard/settings`,
+junto dos campos que já existiam ali (nome, país, idioma) - mesmo padrão
+de payload tri-estado já usado pro `country`: campo omitido não mexe no
+valor salvo, string vazia ou `null` limpa, qualquer outra string grava.
+Sem exigir nenhum deles (diferente de `country`, que é obrigatório desde
+o cadastro) - empresa que nunca preencher continua vendo exatamente o
+PDF de antes (placeholder "CNPJ/CPF: não informado", sem telefone/
+endereço, termos padrão do sistema).
+
+### Cabeçalho do PDF: altura dinâmica em vez de posição fixa
+
+`drawHeader` em `quote-pdf.service.ts` antes desenhava sempre 2 linhas
+fixas (contato + CNPJ) numa posição fixa (divisória em y=128). Reescrito
+pra montar uma lista de linhas (`infoLines`) - contato sempre presente,
+CNPJ/CPF sempre presente (com o placeholder quando vazio), telefone e
+endereço só entram na lista se preenchidos - e calcular a posição da
+divisória (`dividerY`) a partir da quantidade real de linhas, nunca menor
+que 128 (mantém o layout idêntico ao anterior pra quem não preenche nada
+novo). `drawHeader` passou a **retornar** essa posição, e
+`drawCustomerBlock` (o card cinza com cliente/emitido/validade) usa esse
+retorno em vez do `150` hardcoded de antes - o resto da página flui
+corretamente não importa quantas linhas o cabeçalho acabou usando.
+
+### Termos customizados: substituem, não complementam, os termos padrão
+
+`Company.customTerms` é texto livre multi-linha (um termo por linha,
+mesmo padrão de digitação que uma lista de bullets). Quando preenchido,
+`resolveTerms()` faz `split("\n")` e usa isso no lugar dos 3 termos
+padrão localizados (garantia/prazo/alterações) - a nota de validade
+(`"Orçamento válido até ..."`) continua sendo sempre adicionada depois,
+já que é uma informação calculada, não um termo editável. Não é
+bilíngue - o texto digitado aparece do jeito que foi digitado,
+independente do idioma do PDF (o dono da conta escreve no idioma dele
+mesmo; traduzir automaticamente um texto livre do usuário não fazia
+sentido).
+
+### Preview antes do download: iframe com blob URL, sem lib nova
+
+`download-quote-pdf.ts` foi dividido em `fetchQuotePdf` (só a chamada de
+rede + resolução de blob/filename, sem efeito colateral) e
+`triggerBlobDownload` (o `<a download>` sintético que já existia) -
+`downloadQuotePdf` (usado em qualquer lugar que ainda queira baixar
+direto) virou um wrapper fino dos dois. Novo componente
+`QuotePdfPreviewModal.tsx`: busca o PDF ao abrir, mostra num
+`<iframe src={blobURL}>` (navegadores renderizam PDF nativamente assim -
+mesmo princípio já usado pro preview de e-mail em
+`admin/email-templates`, que usa `srcDoc` com HTML; aqui é `src` com
+blob porque o conteúdo é binário, não poderia ir inline via `srcDoc`),
+com botão "Baixar" (usa o blob já buscado, sem nova chamada de rede) e
+"Fechar". Usado nos dois lugares que geravam PDF antes -
+`QuoteSummary`/`QuoteForm` (tela de criar/editar) e a listagem de
+orçamentos - ambos perderam o download direto em favor de abrir esse
+modal primeiro. `URL.revokeObjectURL` no cleanup do efeito evita
+vazamento de memória do blob ao fechar o modal.
+
+### Validado ao vivo
+
+Preenchidos os 4 campos novos na aba Perfil, salvos, confirmados
+persistindo após reload da página. Criado um orçamento de teste
+(material/máquina cadastrados na hora) e gerado o preview em ambos os
+pontos de entrada - botão da tela de criar/editar orçamento e da
+listagem - confirmando em cada um que o `<iframe>` recebe uma `blob:`
+URL de verdade (a chamada de rede pro endpoint de PDF retornou 200 nos
+dois casos). Conteúdo textual do PDF em si (se CNPJ/telefone/endereço/
+termos aparecem exatamente onde esperado no layout) não foi verificado
+visualmente pixel a pixel - validado por revisão de código + tipos
+batendo depois da migration, não por inspeção visual do PDF renderizado.
+Suite completa do backend: 95/95 passando. Lint/build limpos em
+shared/backend/frontend.

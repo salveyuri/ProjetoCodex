@@ -31,7 +31,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
-import { downloadQuotePdf } from "@/lib/download-quote-pdf";
+import { QuotePdfPreviewModal } from "@/components/quotes/QuotePdfPreviewModal";
 import {
   quoteStatusLabelKeys,
   quoteStatusOptions,
@@ -48,7 +48,10 @@ export default function QuotesPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
-  const [isDownloading, setIsDownloading] = useState<string | null>(null);
+  const [pdfPreviewQuote, setPdfPreviewQuote] = useState<{
+    id: string;
+    customerName: string;
+  } | null>(null);
 
   const showToast = useCallback((toast: Omit<ToastMessage, "id">) => {
     const id = createToastId();
@@ -148,27 +151,6 @@ export default function QuotesPage() {
       showToast({ tone: "danger", title: t("quotes.list.toastDeleteErrorTitle"), message });
     } finally {
       setIsDeleting(null);
-    }
-  };
-
-  const handleDownload = async (quote: QuoteListItem) => {
-    setIsDownloading(quote.id);
-
-    try {
-      await downloadQuotePdf({
-        quoteId: quote.id,
-        customerName: quote.customerName,
-      });
-      showToast({
-        tone: "success",
-        title: t("quotes.list.toastPdfTitle"),
-        message: t("quotes.list.toastPdfMsg"),
-      });
-    } catch (error) {
-      const message = getApiErrorMessage(error, t("quotes.list.errorPdf"));
-      showToast({ tone: "danger", title: t("quotes.list.toastPdfErrorTitle"), message });
-    } finally {
-      setIsDownloading(null);
     }
   };
 
@@ -344,18 +326,14 @@ export default function QuotesPage() {
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
-                          onClick={() => void handleDownload(quote)}
-                          disabled={isDownloading === quote.id}
-                          className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                          onClick={() =>
+                            setPdfPreviewQuote({ id: quote.id, customerName: quote.customerName })
+                          }
+                          className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
                           title={t("quotes.list.generatePdf")}
                           aria-label={t("quotes.list.generatePdf")}
                         >
-                          <Download
-                            className={cn(
-                              "h-4 w-4",
-                              isDownloading === quote.id && "animate-pulse",
-                            )}
-                          />
+                          <Download className="h-4 w-4" />
                         </button>
                         <Link
                           href={`/dashboard/quotes/${quote.id}`}
@@ -406,6 +384,13 @@ export default function QuotesPage() {
           setToasts((current) => current.filter((toast) => toast.id !== id))
         }
       />
+      {pdfPreviewQuote ? (
+        <QuotePdfPreviewModal
+          quoteId={pdfPreviewQuote.id}
+          customerName={pdfPreviewQuote.customerName}
+          onClose={() => setPdfPreviewQuote(null)}
+        />
+      ) : null}
     </MainLayout>
   );
 }

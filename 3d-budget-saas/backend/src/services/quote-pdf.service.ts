@@ -44,7 +44,9 @@ const pdfStrings = {
     docTitlePrefix: "Orcamento",
     docSubjectPrefix: "Orcamento para",
     contactLabel: "Contato:",
+    taxIdLabel: "CNPJ/CPF:",
     taxIdUnknown: "CNPJ/CPF: nao informado",
+    phoneLabel: "Telefone:",
     quoteHeading: "ORCAMENTO",
     statusLabel: "Status:",
     clientLabel: "Cliente",
@@ -84,7 +86,9 @@ const pdfStrings = {
     docTitlePrefix: "Quote",
     docSubjectPrefix: "Quote for",
     contactLabel: "Contact:",
+    taxIdLabel: "Tax ID:",
     taxIdUnknown: "Tax ID: not provided",
+    phoneLabel: "Phone:",
     quoteHeading: "QUOTE",
     statusLabel: "Status:",
     clientLabel: "Customer",
@@ -250,11 +254,14 @@ const drawKeyValue = (
     .text(value, x, y + 12, { width });
 };
 
+// Returns the y coordinate where the header's divider line landed, so the
+// caller can flow the rest of the page below it — the left column's height
+// varies with how many of taxId/phone/address the company has filled in.
 const drawHeader = (
   doc: PDFKit.PDFDocument,
   quote: QuotePdfRecord,
   strings: PdfStrings,
-): void => {
+): number => {
   const margin = 48;
   const rightX = 365;
 
@@ -265,16 +272,26 @@ const drawHeader = (
     .font("Helvetica-Bold")
     .fontSize(18)
     .text(quote.company.name, margin + 74, margin + 2, { width: 260 });
-  doc
-    .fillColor(colors.muted)
-    .font("Helvetica")
-    .fontSize(9)
-    .text(`${strings.contactLabel} ${quote.company.user.email}`, margin + 74, margin + 28, {
-      width: 260,
-    })
-    .text(strings.taxIdUnknown, margin + 74, margin + 42, {
-      width: 260,
-    });
+
+  const infoLines = [
+    `${strings.contactLabel} ${quote.company.user.email}`,
+    quote.company.taxId ? `${strings.taxIdLabel} ${quote.company.taxId}` : strings.taxIdUnknown,
+  ];
+
+  if (quote.company.phone) {
+    infoLines.push(`${strings.phoneLabel} ${quote.company.phone}`);
+  }
+
+  if (quote.company.address) {
+    infoLines.push(quote.company.address);
+  }
+
+  const lineHeight = 13;
+
+  doc.fillColor(colors.muted).font("Helvetica").fontSize(9);
+  infoLines.forEach((line, index) => {
+    doc.text(line, margin + 74, margin + 28 + index * lineHeight, { width: 260 });
+  });
 
   doc
     .font("Helvetica-Bold")
@@ -294,12 +311,17 @@ const drawHeader = (
       align: "right",
     });
 
+  const leftBottom = margin + 28 + infoLines.length * lineHeight + 8;
+  const dividerY = Math.max(128, leftBottom);
+
   doc
-    .moveTo(margin, 128)
-    .lineTo(doc.page.width - margin, 128)
+    .moveTo(margin, dividerY)
+    .lineTo(doc.page.width - margin, dividerY)
     .lineWidth(2)
     .strokeColor(colors.primary)
     .stroke();
+
+  return dividerY;
 };
 
 const drawCustomerBlock = (
@@ -511,6 +533,22 @@ const drawFinancialSummary = (
   return currentY + 148;
 };
 
+// Company.customTerms (raw multi-line free text, one term per line)
+// overrides the built-in localized terms when the company has filled it
+// in via Settings > Perfil — null/blank keeps the pt-BR/en defaults.
+const resolveTerms = (quote: QuotePdfRecord, strings: PdfStrings): string[] => {
+  const custom = quote.company.customTerms?.trim();
+
+  if (!custom) {
+    return [...strings.terms];
+  }
+
+  return custom
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+};
+
 const drawTerms = (
   doc: PDFKit.PDFDocument,
   quote: QuotePdfRecord,
@@ -530,7 +568,7 @@ const drawTerms = (
     .font("Helvetica")
     .fontSize(8.5)
     .text(
-      [...strings.terms, strings.validUntilNote(formatDate(quote.validUntil, strings))].join(
+      [...resolveTerms(quote, strings), strings.validUntilNote(formatDate(quote.validUntil, strings))].join(
         "\n",
       ),
       margin,
@@ -558,8 +596,8 @@ const renderQuotePdf = (
   quote: QuotePdfRecord,
   strings: PdfStrings,
 ): void => {
-  drawHeader(doc, quote, strings);
-  let y = drawCustomerBlock(doc, quote, 150, strings);
+  const headerBottom = drawHeader(doc, quote, strings);
+  let y = drawCustomerBlock(doc, quote, headerBottom + 22, strings);
 
   doc
     .fillColor(colors.ink)

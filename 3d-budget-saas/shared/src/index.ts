@@ -111,6 +111,14 @@ export interface AuthCompany {
   planCode: string;
   planName: string;
   subscriptionStatus: SubscriptionStatus;
+  // Business info shown on the quote PDF header — all optional.
+  taxId: string | null;
+  phone: string | null;
+  address: string | null;
+  // Overrides the PDF's default localized terms/warranty text when set —
+  // raw multi-line text, one term per line. Null keeps the built-in
+  // pt-BR/en defaults.
+  customTerms: string | null;
 }
 
 export interface EmailPreferences {
@@ -138,6 +146,10 @@ export interface UpdateProfilePayload {
   name?: string;
   companyName?: string;
   country?: string;
+  taxId?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  customTerms?: string | null;
   language?: SupportedLanguage;
   emailPreferences?: Partial<EmailPreferences>;
 }

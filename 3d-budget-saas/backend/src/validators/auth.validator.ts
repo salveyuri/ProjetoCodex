@@ -10,6 +10,20 @@ export const countryCodeSchema = z
   .toUpperCase()
   .refine(isValidCountryCode, "Unknown country.");
 
+// Business info fields (taxId/phone/address/customTerms) are all optional
+// and independently clearable — undefined leaves the stored value alone,
+// null (or an empty string, normalized to null here) clears it, any other
+// string sets it. Distinct from country/companyName, which must always
+// have SOME value once a company exists.
+const clearableText = (maxLength: number) =>
+  z
+    .string()
+    .trim()
+    .max(maxLength)
+    .nullable()
+    .optional()
+    .transform((value) => (value === "" ? null : value));
+
 export const passwordSchema = z
   .string()
   .min(8, "Password must have at least 8 characters.")
@@ -73,6 +87,10 @@ export const updateProfileSchema = z
       .max(160, "Company name must have at most 160 characters.")
       .optional(),
     country: countryCodeSchema.optional(),
+    taxId: clearableText(32),
+    phone: clearableText(32),
+    address: clearableText(240),
+    customTerms: clearableText(2000),
     language: supportedLanguageSchema.optional(),
     emailPreferences: z
       .object({
@@ -89,6 +107,10 @@ export const updateProfileSchema = z
       value.name !== undefined ||
       value.companyName !== undefined ||
       value.country !== undefined ||
+      value.taxId !== undefined ||
+      value.phone !== undefined ||
+      value.address !== undefined ||
+      value.customTerms !== undefined ||
       value.language !== undefined ||
       value.emailPreferences !== undefined,
     { message: "At least one field must be provided." },

@@ -42,6 +42,10 @@ const companySelect = {
   country: true,
   defaultCurrency: true,
   subscriptionStatus: true,
+  taxId: true,
+  phone: true,
+  address: true,
+  customTerms: true,
   plan: { select: { code: true, name: true } },
 } as const;
 
@@ -61,6 +65,10 @@ const toAuthUser = (user: {
     country: string;
     defaultCurrency: string;
     subscriptionStatus: "ACTIVE" | "CANCELED" | "PAST_DUE";
+    taxId: string | null;
+    phone: string | null;
+    address: string | null;
+    customTerms: string | null;
     plan: { code: string; name: string };
   } | null;
 }): AuthUser => ({
@@ -84,6 +92,10 @@ const toAuthUser = (user: {
         planCode: user.company.plan.code,
         planName: user.company.plan.name,
         subscriptionStatus: user.company.subscriptionStatus,
+        taxId: user.company.taxId,
+        phone: user.company.phone,
+        address: user.company.address,
+        customTerms: user.company.customTerms,
       }
     : null,
 });
@@ -471,7 +483,15 @@ export class AuthService {
    * reflects the fresh value instead of a stale pre-update snapshot. */
   async updateProfile(userId: string, input: UpdateProfileInput): Promise<AuthUser> {
     const user = await prisma.$transaction(async (transaction) => {
-      if (input.companyName !== undefined || input.country !== undefined) {
+      const hasCompanyChanges =
+        input.companyName !== undefined ||
+        input.country !== undefined ||
+        input.taxId !== undefined ||
+        input.phone !== undefined ||
+        input.address !== undefined ||
+        input.customTerms !== undefined;
+
+      if (hasCompanyChanges) {
         await transaction.company.update({
           where: { userId },
           data: {
@@ -479,6 +499,10 @@ export class AuthService {
             ...(input.country !== undefined
               ? { country: input.country, defaultCurrency: currencyForCountry(input.country) }
               : {}),
+            ...(input.taxId !== undefined ? { taxId: input.taxId } : {}),
+            ...(input.phone !== undefined ? { phone: input.phone } : {}),
+            ...(input.address !== undefined ? { address: input.address } : {}),
+            ...(input.customTerms !== undefined ? { customTerms: input.customTerms } : {}),
           },
         });
       }

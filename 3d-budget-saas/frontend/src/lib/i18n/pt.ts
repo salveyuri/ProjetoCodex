@@ -87,6 +87,13 @@ export const pt = {
   "quotes.createQuote": "Criar orcamento",
   "quotes.generatingPdf": "Gerando PDF...",
   "quotes.generatePdf": "Gerar PDF",
+  "quotes.pdfPreview.title": "Preview do PDF",
+  "quotes.pdfPreview.subtitle": "Confira antes de baixar - nada e enviado ao cliente.",
+  "quotes.pdfPreview.download": "Baixar",
+  "quotes.pdfPreview.close": "Fechar",
+  "quotes.pdfPreview.loading": "Gerando o PDF...",
+  "quotes.pdfPreview.error": "Nao foi possivel gerar o PDF.",
+  "quotes.pdfPreview.retry": "Tentar novamente",
 
   "quotes.list.badge": "Core ativo",
   "quotes.list.title": "Orcamentos",
@@ -325,6 +332,15 @@ export const pt = {
 
   "settings.profile.name": "Nome",
   "settings.profile.companyName": "Nome da empresa",
+  "settings.profile.pdfInfoTitle": "Dados para o PDF de orcamento",
+  "settings.profile.pdfInfoNote":
+    "Aparecem no cabecalho do PDF enviado aos seus clientes. Deixe em branco pra omitir.",
+  "settings.profile.taxId": "CNPJ/CPF",
+  "settings.profile.phone": "Telefone",
+  "settings.profile.address": "Endereco",
+  "settings.profile.customTerms": "Termos e condicoes customizados",
+  "settings.profile.customTermsNote":
+    "Um termo por linha. Substitui os termos padrao do PDF. Deixe em branco pra usar os termos padrao do sistema.",
   "settings.profile.emailPrefsTitle": "Preferencias de e-mail",
   "settings.profile.emailPrefsNote":
     "E-mails de criacao de conta e redefinicao de senha sao sempre enviados, independente destas preferencias.",

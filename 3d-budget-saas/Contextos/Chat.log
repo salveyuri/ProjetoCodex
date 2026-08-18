@@ -1859,3 +1859,49 @@ Pedido do Yuri: implementar o cadastro do webhook do Asaas em producao
 - **Falta ainda**: o Yuri rodar o script de verdade em producao
   (`docker compose exec backend npm run asaas:register-webhook`) - ver
   `Notas/TODO.md` pros passos exatos.
+
+## 2026-08-18 - Bug de producao: Dockerfile nao copiava scripts/ nem src/
+
+Ao tentar rodar o script acima em producao, o Yuri recebeu
+`ERR_MODULE_NOT_FOUND: /app/backend/scripts/register-asaas-webhook.ts`.
+
+- Causa: o `backend/Dockerfile` (estagio de runtime) so copiava
+  `backend/dist` (compilado) - `backend/scripts` (rodado via `tsx`, nunca
+  compilado) nunca existiu na imagem, e mesmo existindo nao teria como
+  resolver seus imports relativos pra `backend/src`, tambem nao copiado.
+  Adicionadas duas linhas `COPY` novas (`scripts/` e `src/`) + `tsconfig.json`
+  (fixado c30f1fa). Confirmado que a unica importacao de `@3d-budget/shared`
+  na cadeia de dependencia do script (`email.service.ts`) e `import type`,
+  entao nao precisa que `shared/src` tambem seja copiado (`shared/dist` ja
+  bastava). Yuri ainda precisa rodar `git pull`/`docker compose build`/
+  `up -d` e repetir o comando do script.
+
+## 2026-08-18 - 3 melhorias no PDF de orcamento
+
+Pedido do Yuri: implementar as 3 sugestoes pendentes do PDF de orcamento -
+CNPJ/CPF+telefone+endereco da empresa, termos comerciais customizaveis, e
+preview in-app antes do download.
+
+- `Company` ganhou `taxId`/`phone`/`address`/`customTerms` (todos opcionais,
+  editaveis na aba Perfil de `/dashboard/settings`, mesmo padrao
+  tri-estado do `country`: omitido nao mexe, vazio/null limpa). Migration
+  `20260818100000_add_company_pdf_fields`.
+- `quote-pdf.service.ts`: cabecalho do PDF (`drawHeader`) reescrito pra
+  altura dinamica - so mostra telefone/endereco se preenchidos, e a
+  divisoria/resto da pagina flui a partir da altura real (quem nunca
+  preenche nada ve o PDF identico a antes). Termos customizados
+  (`resolveTerms`, texto livre multi-linha) substituem os 3 termos padrao
+  localizados quando preenchidos, mantendo a nota de validade sempre no
+  final.
+- Preview antes do download: `download-quote-pdf.ts` dividido em
+  `fetchQuotePdf` (rede) + `triggerBlobDownload` (o `<a download>` que ja
+  existia). Novo `QuotePdfPreviewModal.tsx` (iframe com `blob:` URL,
+  botoes Baixar/Fechar) usado nos dois lugares que geravam PDF direto
+  antes - tela de criar/editar orcamento e a listagem.
+- Validado ao vivo: 4 campos novos preenchidos e persistindo apos reload;
+  orcamento de teste criado (material/maquina cadastrados na hora);
+  preview testado nos dois pontos de entrada, `<iframe>` recebendo `blob:`
+  URL de verdade em ambos (chamada de PDF retornando 200). Conteudo visual
+  exato do PDF (posicionamento de CNPJ/telefone/termos) nao foi inspecionado
+  pixel a pixel - validado por revisao de codigo + tipos batendo. Suite do
+  backend: 95/95 passando. Lint/build limpos em shared/backend/frontend.

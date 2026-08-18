@@ -185,6 +185,10 @@ export default function SettingsPage() {
   const [profileName, setProfileName] = useState("");
   const [profileCompanyName, setProfileCompanyName] = useState("");
   const [profileCountry, setProfileCountry] = useState("BR");
+  const [profileTaxId, setProfileTaxId] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileAddress, setProfileAddress] = useState("");
+  const [profileCustomTerms, setProfileCustomTerms] = useState("");
   const [profileLanguage, setProfileLanguage] = useState<SupportedLanguage>("pt-BR");
   const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
     financial: true,
@@ -210,6 +214,10 @@ export default function SettingsPage() {
       setProfileName(user.name ?? "");
       setProfileCompanyName(user.company?.name ?? "");
       setProfileCountry(user.company?.country ?? "BR");
+      setProfileTaxId(user.company?.taxId ?? "");
+      setProfilePhone(user.company?.phone ?? "");
+      setProfileAddress(user.company?.address ?? "");
+      setProfileCustomTerms(user.company?.customTerms ?? "");
       setProfileLanguage(user.language);
       setEmailPreferences(user.emailPreferences);
     }
@@ -386,6 +394,10 @@ export default function SettingsPage() {
       name: profileName.trim(),
       companyName: profileCompanyName.trim(),
       country: profileCountry,
+      taxId: profileTaxId.trim() || null,
+      phone: profilePhone.trim() || null,
+      address: profileAddress.trim() || null,
+      customTerms: profileCustomTerms.trim() || null,
       language: profileLanguage,
       emailPreferences,
     };
@@ -758,6 +770,62 @@ export default function SettingsPage() {
                     <option value="pt-BR">{t("common.portuguese")}</option>
                     <option value="en">{t("common.english")}</option>
                   </select>
+                </label>
+              </div>
+
+              <div className="grid gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {t("settings.profile.pdfInfoTitle")}
+                  </h3>
+                  <p className="text-xs text-muted">{t("settings.profile.pdfInfoNote")}</p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <label className="grid min-w-0 gap-2 text-sm font-medium">
+                    {t("settings.profile.taxId")}
+                    <input
+                      type="text"
+                      value={profileTaxId}
+                      onChange={(event) => setProfileTaxId(event.target.value)}
+                      maxLength={32}
+                      className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                    />
+                  </label>
+                  <label className="grid min-w-0 gap-2 text-sm font-medium">
+                    {t("settings.profile.phone")}
+                    <input
+                      type="text"
+                      value={profilePhone}
+                      onChange={(event) => setProfilePhone(event.target.value)}
+                      maxLength={32}
+                      className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                    />
+                  </label>
+                  <label className="grid min-w-0 gap-2 text-sm font-medium">
+                    {t("settings.profile.address")}
+                    <input
+                      type="text"
+                      value={profileAddress}
+                      onChange={(event) => setProfileAddress(event.target.value)}
+                      maxLength={240}
+                      className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+                    />
+                  </label>
+                </div>
+
+                <label className="grid min-w-0 gap-2 text-sm font-medium">
+                  {t("settings.profile.customTerms")}
+                  <textarea
+                    value={profileCustomTerms}
+                    onChange={(event) => setProfileCustomTerms(event.target.value)}
+                    maxLength={2000}
+                    rows={4}
+                    className="w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 py-2 outline-none focus:border-primary"
+                  />
+                  <span className="text-xs font-normal text-muted">
+                    {t("settings.profile.customTermsNote")}
+                  </span>
                 </label>
               </div>
 

@@ -19,7 +19,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-error";
-import { downloadQuotePdf } from "@/lib/download-quote-pdf";
 import { toDateInputValue } from "./quote-ui";
 import type { PrintTableFormState, QuoteFormState } from "./quote-form-types";
 
@@ -120,7 +119,7 @@ export const useQuoteForm = (quoteId?: string) => {
   const [isLoadingResources, setIsLoadingResources] = useState(true);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
 
   const previewableTables = useMemo(
     () => form.tables.filter(isPrintTableReadyForPreview),
@@ -394,30 +393,15 @@ export const useQuoteForm = (quoteId?: string) => {
     }
   };
 
-  const handleDownloadPdf = async () => {
+  const openPdfPreview = () => {
     if (!quoteId || !savedQuote) {
       return;
     }
 
-    setIsDownloadingPdf(true);
-
-    try {
-      await downloadQuotePdf({
-        quoteId,
-        customerName: savedQuote.customerName,
-      });
-      showToast({
-        tone: "success",
-        title: t("quotes.form.toastPdfTitle"),
-        message: t("quotes.form.toastPdfMsg"),
-      });
-    } catch (error) {
-      const message = getApiErrorMessage(error, t("quotes.form.errorPdf"));
-      showToast({ tone: "danger", title: t("quotes.form.toastPdfErrorTitle"), message });
-    } finally {
-      setIsDownloadingPdf(false);
-    }
+    setIsPdfPreviewOpen(true);
   };
+
+  const closePdfPreview = () => setIsPdfPreviewOpen(false);
 
   return {
     form,
@@ -432,7 +416,7 @@ export const useQuoteForm = (quoteId?: string) => {
     isLoadingResources,
     isCalculating,
     isSaving,
-    isDownloadingPdf,
+    isPdfPreviewOpen,
     canSave,
     missingResources,
     aggregate,
@@ -441,7 +425,8 @@ export const useQuoteForm = (quoteId?: string) => {
     addTable,
     removeTable,
     handleSubmit,
-    handleDownloadPdf,
+    openPdfPreview,
+    closePdfPreview,
   };
 };
 

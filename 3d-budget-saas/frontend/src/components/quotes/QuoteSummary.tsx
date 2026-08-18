@@ -33,8 +33,7 @@ interface QuoteSummaryProps {
   savedQuote: QuoteResource | null;
   isSaving: boolean;
   canSave: boolean;
-  isDownloadingPdf: boolean;
-  onDownloadPdf: () => void;
+  onPreviewPdf: () => void;
 }
 
 export const QuoteSummary = ({
@@ -45,8 +44,7 @@ export const QuoteSummary = ({
   savedQuote,
   isSaving,
   canSave,
-  isDownloadingPdf,
-  onDownloadPdf,
+  onPreviewPdf,
 }: QuoteSummaryProps) => {
   const { t, formatMoney } = useLanguage();
 
@@ -108,12 +106,11 @@ export const QuoteSummary = ({
     {savedQuote ? (
       <button
         type="button"
-        onClick={onDownloadPdf}
-        disabled={isDownloadingPdf}
-        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+        onClick={onPreviewPdf}
+        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-primary transition hover:bg-primary/20"
       >
-        <Download className={cn("h-4 w-4", isDownloadingPdf && "animate-pulse")} />
-        {isDownloadingPdf ? t("quotes.generatingPdf") : t("quotes.generatePdf")}
+        <Download className="h-4 w-4" />
+        {t("quotes.generatePdf")}
       </button>
     ) : null}
   </aside>

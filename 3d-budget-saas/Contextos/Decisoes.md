@@ -1156,3 +1156,66 @@ perfil", a mesma tela volta a mostrar todos os planos em BRL e o aviso
 some - confirma que a lógica reage a mudança de país em tempo real, não só
 no cadastro. Suite completa do backend: 95/95 passando. Lint/build limpos
 em shared/backend/frontend.
+
+## 2026-08-18 - Cadastro do webhook do Asaas via script, não via app
+
+### Por que um script, não uma rota/tela
+
+Cadastrar um webhook no Asaas é uma ação administrativa de infraestrutura,
+feita uma vez (ou raramente, se a URL/eventos mudarem) - não faz sentido
+virar uma tela ou rodar automaticamente no boot do backend (criaria um
+webhook novo a cada deploy se não fosse cuidadosamente idempotente, e
+precisaria de tratamento de erro/retry que não vale o esforço pra algo tão
+raro). Seguido o mesmo padrão já usado pra `backend/prisma/seed.ts`: um
+script standalone (`backend/scripts/register-asaas-webhook.ts`, rodado via
+`tsx`, fora do `tsconfig.json` "include" do backend - mesma pasta/situação
+do seed) que o Yuri roda manualmente quando precisar.
+
+### `asaas-client.ts` ganhou `listWebhooks`/`createWebhook`/`updateWebhook`
+
+Métodos novos no client HTTP já existente (mesmo padrão de
+`createCheckout`/`cancelSubscription`), confirmados contra a API real do
+Asaas (`POST/PUT /v3/webhooks`, `GET /v3/webhooks`) - `name`, `url`,
+`email`, `enabled`, `interrupted`, `apiVersion: 3`, `authToken`,
+`sendType: "SEQUENTIALLY"`, `events`. Validado rodando de verdade contra o
+sandbox (chave já configurada em dev): `listWebhooks` retornou lista vazia
+(confirma o achado de 2026-08-15, nenhum webhook cadastrado ainda);
+`createWebhook` com dado de teste deliberadamente inválido (URL
+`localhost`, token `"aaaa..."`) foi corretamente rejeitado pela API do
+Asaas com erros claros (`"A url informada é inválida"`,
+`"O token não pode conter mais de 4 caracteres iguais consecutivos"`) -
+confirma que a chamada chega certa na API deles, só não foi testado o
+caminho de sucesso de verdade pra não sujar o sandbox com um webhook de
+teste.
+
+### Eventos inscritos: só os 3 que o controller realmente trata
+
+`webhook.controller.ts` ganhou `export const HANDLED_ASAAS_EVENTS` (união
+de `CONFIRMED_EVENTS`/`OVERDUE_EVENTS` já existentes:
+`PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED`/`PAYMENT_OVERDUE`) - fonte única
+reusada pelo script, pra nunca inscrever um evento que o controller não
+sabe processar (ou esquecer de inscrever um que ele trata). O
+`asaasWebhookSchema` continua aceitando qualquer `event` (payload externo,
+não validamos contra uma lista fechada), mas o Asaas só manda o que a
+gente pediu pra receber.
+
+### Duas travas de segurança no script (achadas testando)
+
+- **Recusa rodar se `ASAAS_ENV != "production"`** - erro claro em vez de
+  cadastrar sem querer um webhook de teste apontando pra
+  `localhost`/sandbox junto com o de produção.
+- **Recusa `APP_BASE_URL` que não comece com `https://`** - confirmado
+  testando que o Asaas rejeita URL não-pública/não-HTTPS
+  (`"A url informada é inválida"`), então falhar cedo com mensagem clara é
+  melhor que deixar a API deles devolver um erro genérico.
+- **Valida `ASAAS_WEBHOOK_TOKEN`** antes de chamar a API: 32-255
+  caracteres (regra documentada do Asaas) e sem mais de 4 caracteres
+  iguais consecutivos (regra descoberta testando, não documentada
+  explicitamente na doc pública).
+
+### Idempotente por design
+
+Antes de criar, o script busca (`listWebhooks`) se já existe um webhook
+com a mesma `url` - se sim, atualiza (`updateWebhook`) em vez de criar
+outro (o Asaas permite até 10 webhooks por conta; rodar o script várias
+vezes por engano nunca duplica).

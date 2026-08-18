@@ -125,11 +125,27 @@ Passo") em 2026-08-12.
       real criado + link renderizando a página deles + webhook simulado
       ativando o plano, idempotente, token errado rejeitado). Ver
       `Contextos/Chat.log` e `Contextos/Decisoes.md` (2026-08-13).
-- [ ] **Cadastrar o webhook de verdade no painel/API do Asaas** apontando
-      pra `https://<dominio-real>/api/webhooks/asaas`, com o mesmo valor de
-      `ASAAS_WEBHOOK_TOKEN` configurado no backend — sem isso, nenhum
-      pagamento real confirma automaticamente. Só faz sentido depois de
-      `DEVOPS-001` (domínio real com HTTPS).
+- [x] **Script de cadastro do webhook implementado em 2026-08-18**
+      (`backend/scripts/register-asaas-webhook.ts`, `npm run
+      asaas:register-webhook` dentro de `backend/`) — chama a API do Asaas
+      (`POST`/`PUT /v3/webhooks`) apontando pra
+      `${APP_BASE_URL}/api/webhooks/asaas`, com o mesmo `ASAAS_WEBHOOK_TOKEN`
+      do backend, inscrito só nos 3 eventos que `webhook.controller.ts`
+      realmente trata (`PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`,
+      `PAYMENT_OVERDUE`). Idempotente (atualiza em vez de duplicar se já
+      existir um webhook pra essa URL) e recusa rodar se `ASAAS_ENV` não for
+      `production` ou se `APP_BASE_URL` não for `https://`. Validado
+      rodando de verdade contra o sandbox (client Asaas confirmado
+      funcionando; a chamada real de registro não foi testada com dado
+      válido pra não sujar o sandbox com um webhook de teste). Ver
+      `Contextos/Decisoes.md` (2026-08-18).
+- [ ] **Ainda falta rodar o script em produção** —
+      `docker compose exec backend npm run asaas:register-webhook` (ou
+      `npx tsx scripts/register-asaas-webhook.ts` dentro do container) na
+      VPS. Depois de rodar, conferir no retorno do script que o webhook foi
+      criado/atualizado com sucesso, e via
+      `GET https://api.asaas.com/v3/webhooks` (com a API key real) que ele
+      aparece listado e `enabled: true`.
 - [x] **Preços reais de Pro/Enterprise definidos** — confirmado em
       2026-08-18, editado pelo Yuri via `/admin/plans` (os R$49,90/R$199,90
       da seed eram só placeholder).

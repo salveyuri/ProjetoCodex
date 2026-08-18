@@ -13,7 +13,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:init": "prisma migrate dev --name init_data_model",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "asaas:register-webhook": "tsx scripts/register-asaas-webhook.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

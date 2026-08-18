@@ -1832,3 +1832,30 @@ ja no ar - atualizar TODO.md/Auditoria.md pra refletir isso.
   e-mail no cadastro (a outra metade do achado original de SEC-005)
   continua nao implementada. Tabela-resumo do plano de melhorias tambem
   atualizada nessas duas linhas.
+
+## 2026-08-18 - Script de cadastro do webhook do Asaas
+
+Pedido do Yuri: implementar o cadastro do webhook do Asaas em producao
+(pendencia registrada desde 2026-08-13/15).
+
+- `asaas-client.ts` ganhou `listWebhooks`/`createWebhook`/`updateWebhook`
+  (mesmo padrao dos metodos ja existentes). Novo script standalone
+  `backend/scripts/register-asaas-webhook.ts` (`npm run
+  asaas:register-webhook`), idempotente (atualiza em vez de duplicar),
+  inscrito só nos 3 eventos que `webhook.controller.ts` realmente trata
+  (`PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED`/`PAYMENT_OVERDUE`, agora
+  exportados de la como `HANDLED_ASAAS_EVENTS` pra nunca dessincronizar).
+  Recusa rodar se `ASAAS_ENV` nao for `production` ou se `APP_BASE_URL`
+  nao for HTTPS, e valida o formato do `ASAAS_WEBHOOK_TOKEN` antes de
+  chamar a API (32-255 caracteres, sem mais de 4 iguais consecutivos -
+  essa ultima regra descoberta testando contra o sandbox de verdade).
+  Ver `Contextos/Decisoes.md` (2026-08-18).
+- Validado contra o sandbox real: `listWebhooks` (lista vazia, bate com o
+  achado de 2026-08-15), `createWebhook`/`updateWebhook` com dado
+  deliberadamente invalido rejeitados pela API do Asaas com erros claros -
+  confirma que a chamada esta certa; caminho de sucesso nao testado de
+  proposito pra nao sujar o sandbox. Suite completa do backend: 95/95
+  passando. Lint/typecheck limpos.
+- **Falta ainda**: o Yuri rodar o script de verdade em producao
+  (`docker compose exec backend npm run asaas:register-webhook`) - ver
+  `Notas/TODO.md` pros passos exatos.

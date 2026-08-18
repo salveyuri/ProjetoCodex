@@ -16,6 +16,16 @@ const CONFIRMED_EVENTS = new Set(["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"]);
 // plan/usage middlewares already gate on (see billing.service.ts).
 const OVERDUE_EVENTS = new Set(["PAYMENT_OVERDUE"]);
 
+// Single source of truth for which Asaas events this endpoint actually
+// acts on — reused by backend/scripts/register-asaas-webhook.ts so the
+// webhook registered with Asaas can never drift from what this controller
+// handles (asaasWebhookSchema accepts any event string, but anything
+// outside this list is just acked and ignored below).
+export const HANDLED_ASAAS_EVENTS: readonly string[] = [
+  ...CONFIRMED_EVENTS,
+  ...OVERDUE_EVENTS,
+];
+
 export class WebhookController {
   // Asaas confirms payment asynchronously, never on the checkout redirect —
   // this is the only place a paid plan actually becomes ACTIVE. Always acks

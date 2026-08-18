@@ -52,6 +52,42 @@ interface AsaasPaymentListResponse {
   data: AsaasPaymentSummary[];
 }
 
+export interface AsaasWebhookConfig {
+  id: string;
+  name: string;
+  url: string;
+  email: string;
+  enabled: boolean;
+  interrupted: boolean;
+  apiVersion: number;
+  sendType: "SEQUENTIALLY" | "NON_SEQUENTIALLY";
+  events: string[];
+}
+
+export interface AsaasWebhookUpsertPayload {
+  name: string;
+  url: string;
+  email: string;
+  authToken: string;
+  events: string[];
+}
+
+interface AsaasWebhookListResponse {
+  data: AsaasWebhookConfig[];
+}
+
+const toWebhookBody = (payload: AsaasWebhookUpsertPayload) => ({
+  name: payload.name,
+  url: payload.url,
+  email: payload.email,
+  enabled: true,
+  interrupted: false,
+  apiVersion: 3,
+  authToken: payload.authToken,
+  sendType: "SEQUENTIALLY" as const,
+  events: payload.events,
+});
+
 // Thin wrapper around the Asaas REST API (https://docs.asaas.com/) using the
 // built-in fetch (Node 20+) — no need for an HTTP client dependency for two
 // endpoints. Every failure (network or non-2xx) becomes an AppError so
@@ -129,4 +165,31 @@ export const asaasClient = {
 
     return response.data;
   },
+
+  // Used only by the one-off backend/scripts/register-asaas-webhook.ts —
+  // the app itself never creates/lists webhooks at runtime.
+  listWebhooks: async (): Promise<AsaasWebhookConfig[]> => {
+    const response = await request<AsaasWebhookListResponse>("/webhooks", {
+      method: "GET",
+    });
+
+    return response.data;
+  },
+
+  createWebhook: (
+    payload: AsaasWebhookUpsertPayload,
+  ): Promise<AsaasWebhookConfig> =>
+    request<AsaasWebhookConfig>("/webhooks", {
+      method: "POST",
+      body: JSON.stringify(toWebhookBody(payload)),
+    }),
+
+  updateWebhook: (
+    id: string,
+    payload: AsaasWebhookUpsertPayload,
+  ): Promise<AsaasWebhookConfig> =>
+    request<AsaasWebhookConfig>(`/webhooks/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(toWebhookBody(payload)),
+    }),
 };

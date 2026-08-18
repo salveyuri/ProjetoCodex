@@ -7,6 +7,7 @@ const AUTH_COOKIE = "refresh_token";
 
 export function proxy(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE)?.value;
+  const isHomeRoute = request.nextUrl.pathname === "/";
   const isLoginRoute = request.nextUrl.pathname === "/login";
   const isRegisterRoute = request.nextUrl.pathname === "/register";
   const isDashboardRoute = request.nextUrl.pathname.startsWith("/dashboard");
@@ -18,7 +19,10 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if ((isLoginRoute || isRegisterRoute) && token) {
+  // "/" is the public marketing landing page — skip straight past it to the
+  // dashboard for anyone already signed in, same as the old unconditional
+  // redirect("/dashboard") that used to live at app/page.tsx.
+  if ((isHomeRoute || isLoginRoute || isRegisterRoute) && token) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
@@ -26,5 +30,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*", "/login", "/register"],
+  matcher: ["/", "/dashboard/:path*", "/admin/:path*", "/login", "/register"],
 };

@@ -333,6 +333,19 @@ Passo") em 2026-08-12.
       sentido usar o pais pra mais alguma coisa (ex. imposto, compliance),
       avaliar separadamente.
 
+## Landing page pública (implementado em 2026-08-18)
+
+- [x] Página de atração na raiz do domínio (`https://pricify3d.com/`),
+      substituindo o antigo redirect vazio pra `/dashboard`/`/login`.
+      Vira o conteúdo real de `frontend/src/app/page.tsx` (Server
+      Component + CSS Modules), não um HTML estático à parte. Ver
+      `Contextos/Decisoes.md` (2026-08-18).
+- [ ] Preço do plano Pro (`R$ 39,90/mês`) está hardcoded como texto na
+      landing — não vem da tabela `Plan` administrável (`/admin/plans`).
+      Se o preço mudar, editar manualmente `frontend/src/app/page.tsx`
+      (seção `id="planos"`) também, ou considerar buscar via API pública
+      no futuro se isso incomodar.
+
 ## Próximo passo geral
 
 Pós-MVP: preparar deploy, seeds, testes automatizados, monitoramento externo

@@ -1428,3 +1428,102 @@ etc. continuam sem E2E) - o pedido original era fechar a fase 3 de
 TEST-001, que o próprio achado da auditoria já descrevia como "testes de
 frontend/E2E são uma fase posterior", sem especificar profundidade.
 Ver `Notas/TODO.md` se quiser expandir depois.
+
+## 2026-08-18 - Landing page pública vira a rota `/` do próprio Next.js app
+
+O Yuri montou uma landing page estática (`pricify3d-landing.html` +
+`logo_full.webp`/`logo_icon.webp`) pra servir de página de atração e
+pediu pra colocar no lugar certo da estrutura do projeto.
+
+### Onde ela mora: viu que `/` hoje é um redirect vazio, virou a home real
+
+Antes desta mudança, `pricify3d.com/` (raiz do domínio, já configurada no
+Nginx de produção apontando pro Next.js na porta 3000 - ver
+`Contextos/Ambientes.md`) só rodava `frontend/src/app/page.tsx` com
+`redirect("/dashboard")`, que por sua vez cai em `/login` se ninguém
+estiver autenticado - ou seja, hoje um visitante novo bate na raiz do
+domínio e nunca vê nada além da tela de login. Não fazia sentido hospedar
+a landing como HTML estático separado (exigiria subdomínio novo ou rota
+estática fora do Next, mais infra sem necessidade) quando o "lugar certo"
+já existe e está sendo desperdiçado: virou o conteúdo real de
+`frontend/src/app/page.tsx`, a landing renderizada por Next (Server
+Component + `metadata` export pro title/description). URL final: só
+`https://pricify3d.com/` - nenhuma mudança de DNS/Nginx necessária.
+
+Pra não regredir o comportamento anterior (usuário já logado que bate na
+raiz), `frontend/src/proxy.ts` ganhou uma checagem a mais: `/` agora
+também redireciona pra `/dashboard` quando existe cookie de sessão válido
+- só visitante sem sessão vê a landing.
+
+### CSS scoped via CSS Modules em vez de reescrever em Tailwind
+
+A landing original é CSS puro (custom properties, sem Tailwind), e o
+resto do app usa Tailwind. Reescrever ~360 linhas de CSS pra utility
+classes seria trabalho grande e arriscado (fácil perder fidelidade
+visual numa peça que é justamente sobre design/primeira impressão).
+Em vez disso: porta quase 1:1 pra `frontend/src/app/landing.module.css`,
+deixando o CSS Modules (já suportado nativamente pelo Next, zero
+dependência nova) hashear toda classe automaticamente - sem risco de
+colisão com nomes genéricos já usados em outras telas (`.btn`, `.icon`,
+`.title`, etc., muito comuns). As únicas 4 coisas que CSS Modules NÃO
+escopa sozinho (seletores de tag pura - `a`, `img`, `ul`, `h1-h4` - e as
+variáveis `:root`) foram movidas pra depender de `.landingRoot` (a div
+que envolve a página inteira), pra garantir que nada delas vaze pro
+restante do app (`/dashboard`, `/admin`, etc.) - ex.: sem isso, um
+`img{max-width:100%}` genérico afetaria toda imagem do sistema.
+`header`/`nav`/`section`/`footer`, que também eram seletores de tag no
+original, ganharam classes próprias (`.siteHeader`, `.siteNav`,
+`.section`, `.siteFooter`) em vez de reaproveitar o mesmo truque -
+mais idiomático pra JSX (`<header className={styles.siteHeader}>`) do
+que ficar dependendo de escopo implícito.
+
+### Animação de scroll-reveal: `data-*` attributes, não nomes de classe
+
+O JS original usa `document.querySelectorAll('.reveal')` e
+`el.classList.add('in')` - ambos strings literais que não existem mais
+depois que CSS Modules hasheia os nomes (`styles.reveal` vira algo tipo
+`landing_reveal__a1b2c`, não `"reveal"`). Solução: um client component
+(`frontend/src/components/landing/RevealOnScroll.tsx`) que seleciona via
+`data-reveal`/`data-calc-anim` (atributos estáveis, não afetados por
+hashing) e, ao invés de togglar uma classe, seta `opacity`/`transform`
+inline diretamente - reproduz o efeito visual do `.reveal.in{}` original
+sem precisar referenciar o nome hasheado.
+
+### CTAs conectados ao fluxo real (não eram placeholders vazios)
+
+No HTML original os botões "Começar grátis"/"Assinar Pro" apontavam pra
+`href="#"` ou `#planos` (placeholders) e "Entrar" também ia pra
+`#planos`. Como decisão de implementação (a landing só cumpre a função
+de atração se os CTAs realmente levarem a algum lugar): "Entrar" →
+`/login`; todo "Começar grátis"/"Assinar Pro" → `/register` (inclusive o
+card Pro - o app não tem checkout público sem conta, plano é escolhido
+depois de logado em `/dashboard/billing`). Âncoras internas
+(`#funcionalidades`, `#como-funciona`, etc.) continuam apontando pra
+seções da própria página, sem mudança.
+
+### Achado, não corrigido: preços do plano Pro estão hardcoded na landing
+
+`R$ 39,90/mês` na seção de planos é texto estático copiado do HTML
+original, não vem da tabela `Plan` (que já é editável via
+`/admin/plans` - o próprio Yuri mudou os preços reais nesta sessão, ver
+`Notas/TODO.md`). Se o preço do plano Pro mudar de novo, essa landing
+não atualiza sozinha. Não corrigido agora (buscar o preço via API
+pública em cada carregamento da landing seria uma mudança de escopo -
+hoje `GET /billing/plans` não é uma rota pública sem autenticação, teria
+que virar uma, e adicionaria uma chamada de rede numa página que hoje é
+100% estática/prerenderizada) - registrado em `Notas/TODO.md` pra
+manter em mente na próxima vez que o preço mudar.
+
+### Verificação
+
+`npx tsc --noEmit`, `npm run lint` (limpo, só 1 warning esperado do
+`@next/next/no-page-custom-font` - a landing carrega Google Fonts
+próprios via `<link>`, intencionalmente só nesta página, não no layout
+raiz) e `npm run build` (rota `/` aparece como estática/prerenderizada
+no output). Testado ao vivo via `npm run dev` + inspeção de estilos
+computados: cor de fundo/texto/fonte batendo exatamente com os tokens
+do design (`rgb(10,12,17)`/`rgb(244,246,251)`/`Space Grotesk` no h1),
+hrefs dos CTAs corretos (`/login`, `/register`), chunk CSS do módulo
+carregando com 200, JS de scroll-reveal rodando sem erro (confirmado
+indiretamente via `animationPlayState` do card de cálculo), `/login`
+continua acessível normalmente depois da mudança no `proxy.ts`.

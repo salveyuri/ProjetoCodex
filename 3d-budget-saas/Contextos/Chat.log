@@ -1968,3 +1968,40 @@ ultima fase de TEST-001).
   60 testes automatizados (57 backend + 3 E2E).
 - TEST-001 agora fechado por completo em `Contextos/Auditoria.md`.
   `Notas/TODO.md` atualizado.
+
+## 2026-08-18 - Landing page pública na raiz do domínio
+
+Pedido do Yuri: montou uma landing page estática (HTML + CSS + logos) pra
+servir de "página de atração" do sistema e pediu pra colocar no lugar
+certo da estrutura, perguntando qual seria a URL ideal.
+
+- Descoberta: `pricify3d.com/` (raiz do domínio, já configurada no Nginx
+  de produção) hoje só faz `redirect("/dashboard")` → `/login` se
+  deslogado - ou seja, um visitante novo nunca via nada além da tela de
+  login. Virou o "lugar certo" natural pra essa landing.
+- A landing virou o conteúdo real de `frontend/src/app/page.tsx` (Server
+  Component + Next `metadata` API pro title/description), não um HTML
+  estático à parte - URL final é só `https://pricify3d.com/`, sem
+  mudança de DNS/Nginx/infra. Usuário já logado que bate na raiz continua
+  indo direto pro dashboard (ajuste em `frontend/src/proxy.ts`).
+- CSS original (puro, sem Tailwind) portado quase 1:1 pra
+  `frontend/src/app/landing.module.css`, deixando o CSS Modules do
+  próprio Next hashear as classes automaticamente (evita colisão com
+  nomes genéricos tipo `.btn`/`.icon` usados em outras telas). Seletores
+  de tag pura do original (`a`, `img`, `ul`, `h1-h4`, `header`, `nav`,
+  `section`, `footer`) foram escopados pra não vazar estilo pro resto do
+  app.
+- Animação de scroll-reveal reescrita como client component
+  (`RevealOnScroll.tsx`) usando `data-*` attributes em vez dos nomes de
+  classe do JS original (que não existem mais depois do hash do CSS
+  Modules).
+- CTAs conectados de verdade: "Entrar" → `/login`, todo "Começar
+  grátis"/"Assinar Pro" → `/register` (o original tinha só placeholders
+  `href="#"`).
+- Achado não corrigido: o preço do plano Pro (`R$ 39,90/mês`) está
+  hardcoded como texto na landing, não vem da tabela `Plan` (que é
+  editável via `/admin/plans`) - registrado em `Notas/TODO.md`.
+- Verificado: `tsc`/`lint`/`build` limpos, testado ao vivo via `npm run
+  dev` (cores/fonte/tamanho batendo com o design, CTAs com href correto,
+  CSS module carregando, JS de reveal rodando sem erro, `/login`
+  continua funcionando).

@@ -68,7 +68,14 @@ COPY --from=build /app/shared/dist ./shared/dist
 COPY --from=build /app/shared/package.json ./shared/package.json
 COPY --from=build /app/backend/dist ./backend/dist
 COPY --from=build /app/backend/package.json ./backend/package.json
+COPY --from=build /app/backend/tsconfig.json ./backend/tsconfig.json
 COPY --from=build /app/backend/prisma ./backend/prisma
+# Raw TS, run directly via `tsx` (a devDependency, present in the full
+# node_modules copied above) — one-off admin scripts, never compiled into
+# dist/, so they need their imports available as source too. See
+# backend/scripts/register-asaas-webhook.ts.
+COPY --from=build /app/backend/scripts ./backend/scripts
+COPY --from=build /app/backend/src ./backend/src
 
 WORKDIR /app/backend
 

@@ -156,7 +156,16 @@ inteiro (nenhum `*.test.ts`/`*.spec.ts` fora de `node_modules`).
   e expiração curta, envio por e-mail (Resend/SendGrid/SES — decisão em
   aberto), e tela de redefinição no frontend. **Bloqueado** até escolher o
   provedor de e-mail.
-- **Status:** Pendente de decisão.
+- **Status:** **Implementado (2026-08-15)** — provedor escolhido: Resend.
+  Fluxo completo de `forgot-password`/`reset-password` com token opaco de
+  uso único (mesmo padrão de segurança do refresh token — só o hash SHA-256
+  é gravado, expiração de 30min), telas no frontend
+  (`/forgot-password`/`/reset-password`). `RESEND_API_KEY` real e domínio
+  `pricify3d.com` verificado no Resend confirmados em produção em
+  2026-08-18. Ver `Contextos/Decisoes.md` (2026-08-15) e
+  `Notas/TODO.md`. Verificação de e-mail no cadastro (a outra metade
+  original do achado) **continua não implementada** — não fazia parte do
+  pedido que motivou a implementação de 2026-08-15.
 
 **SEC-006 — `trust proxy` não configurado no Express**
 - **Severidade:** Baixa hoje / Média quando for a produção. **Prioridade:**
@@ -539,7 +548,11 @@ inteiro (nenhum `*.test.ts`/`*.spec.ts` fora de `node_modules`).
   variáveis de ambiente, seeds/migrações). Repetido aqui só como referência
   cruzada, porque **SEC-006** e **ARCH-001** ficam bloqueados por essa
   decisão. Não duplicar detalhes — ver `Notas/TODO.md` para a lista viva.
-- **Status:** Pendente de decisão (já era pendência conhecida).
+- **Status:** **Implementado (2026-08-18)** — VPS contratada, domínio
+  `pricify3d.com` no ar, deploy via Docker Compose funcionando em
+  produção (inclusive já com um incidente real diagnosticado e corrigido
+  em 2026-08-17, ver `Contextos/Conhecimento.md`). CI/CD continua fora de
+  escopo (deploy manual).
 
 ---
 
@@ -551,7 +564,7 @@ inteiro (nenhum `*.test.ts`/`*.spec.ts` fora de `node_modules`).
 | SEC-002 | 🔴 Segurança | Token em localStorage + cookie não-HttpOnly | P2 | Médio | ✅ Implementado (2026-08-12) — cookie HttpOnly + access token em memória |
 | SEC-003 | 🔴 Segurança | Registro sem rate limit + enumeração de e-mail | P2 | Pequeno | ✅ rate limit implementado (2026-08-12); enumeração via 409 não alterada |
 | SEC-004 | 🔴 Segurança | `/api/health` vaza erro de banco e path do FS | P2 | Pequeno | ✅ Implementado (2026-08-12) |
-| SEC-005 | 🚀 Funcionalidade | Sem recuperação de senha / verificação de e-mail | P1 | Médio | auth.routes.ts, auth.service.ts, frontend |
+| SEC-005 | 🚀 Funcionalidade | Sem recuperação de senha / verificação de e-mail | P1 | Médio | ✅ Recuperação de senha implementada (2026-08-15), Resend em produção confirmado (2026-08-18); verificação de e-mail no cadastro continua pendente |
 | SEC-006 | 🔧 DevOps | `trust proxy` não configurado | P2 | Pequeno | ✅ Implementado (2026-08-13) |
 | SEC-007 | 🔴 Segurança | CORS aberto se `CORS_ORIGIN=*` | P3 | Pequeno | ✅ Implementado (2026-08-12) |
 | SEC-008 | 🔴 Segurança | Campos de texto sem `.max()` | P3 | Pequeno | ✅ Implementado (2026-08-12) |
@@ -564,7 +577,7 @@ inteiro (nenhum `*.test.ts`/`*.spec.ts` fora de `node_modules`).
 | QUAL-003 | 🐛 Bug/problema | Conflito de código de fórmula sem tratamento | P3 | Pequeno | ✅ Implementado (2026-08-12) |
 | TEST-001 | 🧪 Testes | Zero testes automatizados | P1 | Grande | 🟡 Parcial (2026-08-13) — unit (formula-engine/Calculation) + integração (auth/multi-tenancy/planos), 57 testes; falta E2E de frontend |
 | DEP-001 | 📦 Dependências | Dependências desatualizadas/pouco mantidas | P3 | Pequeno/Médio | 🟡 Parcial (2026-08-13) — updates seguros aplicados (9→1 vulnerabilidade); majors registrados, não aplicados por decisão do Yuri |
-| DEVOPS-001 | 🔧 DevOps | Sem estratégia de deploy de produção | P1 | Grande | projeto inteiro (referência ao TODO.md) |
+| DEVOPS-001 | 🔧 DevOps | Sem estratégia de deploy de produção | P1 | Grande | ✅ Implementado (2026-08-18) — VPS + `pricify3d.com` no ar |
 
 ## Dependências entre melhorias
 

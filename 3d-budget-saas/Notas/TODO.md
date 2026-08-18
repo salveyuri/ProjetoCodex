@@ -33,10 +33,11 @@ Passo") em 2026-08-12.
       completo de deploy (VPS, Nginx, HTTPS, Asaas em produção) em
       `Contextos/Ambientes.md` ("Guia completo: VPS + Supabase + Nginx +
       HTTPS + Asaas").
-- [ ] **Ainda pendente do lado do Yuri**: contratar a VPS de verdade,
-      comprar o domínio, criar o projeto no Supabase, e executar o guia.
-      CI/CD segue fora de escopo por enquanto (deploy manual via
-      `docker compose` documentado no guia).
+- [x] **VPS no ar, em produção** (`pricify3d.com`) — confirmado em
+      2026-08-17 (inclusive diagnosticado e corrigido um incidente real de
+      produção nesse dia, ver `Contextos/Conhecimento.md`). CI/CD continua
+      fora de escopo (deploy manual via `docker compose`, comandos
+      informados a cada entrega).
 
 ## PDF de orçamento
 
@@ -129,10 +130,9 @@ Passo") em 2026-08-12.
       `ASAAS_WEBHOOK_TOKEN` configurado no backend — sem isso, nenhum
       pagamento real confirma automaticamente. Só faz sentido depois de
       `DEVOPS-001` (domínio real com HTTPS).
-- [ ] **Preços reais de Pro/Enterprise** — os valores atuais (R$49,90 /
-      R$199,90) são placeholders inseridos pela migração seed, nunca
-      existiu preço real no sistema mock anterior. Editar via `/admin/plans`
-      quando o Yuri decidir os valores reais.
+- [x] **Preços reais de Pro/Enterprise definidos** — confirmado em
+      2026-08-18, editado pelo Yuri via `/admin/plans` (os R$49,90/R$199,90
+      da seed eram só placeholder).
 - [ ] Pix recorrente **não é suportado** pelo Checkout Asaas para
       `chargeTypes: RECURRENT` (só `CREDIT_CARD`; descoberto testando
       contra o sandbox real, contradiz a documentação). Se o Yuri quiser
@@ -178,16 +178,10 @@ Passo") em 2026-08-12.
       resumo de orçamento), reset de senha com token de uso único (mesmo
       padrão de segurança do refresh token), cron diário in-process pro
       alerta de vencimento. Ver `Contextos/Decisoes.md` (2026-08-15).
-- [ ] **`RESEND_API_KEY` real ainda não configurada em lugar nenhum** — o
-      Yuri precisa gerar a chave no painel do Resend e setar em produção
-      (`docker-compose.yml`/`.env` já pedem a variável,
-      `EMAIL_FROM_ADDRESS` já tem o default certo). Sem isso nenhum
-      e-mail é entregue de verdade (fica só registrado como `FAILED` em
-      `EmailLog`, comportamento correto/esperado em dev).
-- [ ] **Domínio `pricify3d.com` precisa estar verificado no Resend**
-      (registros SPF/DKIM) — o e-mail está hospedado no Zoho Mail, então
-      isso é configuração cruzada entre os dois painéis, feita pelo Yuri
-      (fora do escopo do código).
+- [x] **`RESEND_API_KEY` real configurada em produção** — confirmado em
+      2026-08-18.
+- [x] **Domínio `pricify3d.com` verificado no Resend** (SPF/DKIM) —
+      confirmado em 2026-08-18.
 - [x] **Checado em 2026-08-15**: nenhum webhook está cadastrado no Asaas
       ainda (`GET /v3/webhooks` no sandbox devolveu `totalCount: 0`) — ou
       seja, hoje nem o alerta de vencimento nem os e-mails de assinatura

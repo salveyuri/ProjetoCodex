@@ -1815,3 +1815,20 @@ conforme o pais.
   perfil", tudo volta a BRL e o aviso some - confirma reacao em tempo real,
   nao so no cadastro. Suite do backend: 95/95 passando. Lint/build limpos
   em shared/backend/frontend. Migration aplicada.
+
+## 2026-08-18 - Atualizacao de documentacao (itens do Yuri ja resolvidos)
+
+Pedido do Yuri: RESEND_API_KEY ja configurada em producao, dominio
+pricify3d.com ja verificado no Resend, preco dos planos ja alterado, VPS
+ja no ar - atualizar TODO.md/Auditoria.md pra refletir isso.
+
+- `Notas/TODO.md`: marcados como feitos - VPS/dominio no ar (secao
+  Deploy), precos reais de Pro/Enterprise definidos, RESEND_API_KEY real
+  em producao, dominio verificado no Resend.
+- `Contextos/Auditoria.md`: SEC-005 (recuperacao de senha) e DEVOPS-001
+  (infra de producao) estavam com status desatualizado ("Pendente de
+  decisao") de antes da implementacao de e-mails (2026-08-15) e do deploy
+  de verdade - corrigido pra "Implementado", com nota que verificacao de
+  e-mail no cadastro (a outra metade do achado original de SEC-005)
+  continua nao implementada. Tabela-resumo do plano de melhorias tambem
+  atualizada nessas duas linhas.

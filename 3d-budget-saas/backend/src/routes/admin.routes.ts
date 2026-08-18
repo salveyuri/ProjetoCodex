@@ -62,3 +62,23 @@ adminRoutes.patch("/system-formulas/:id", (request, response, next) =>
 adminRoutes.delete("/system-formulas/:id", (request, response, next) =>
   adminController.deleteSystemFormula(request, response, next),
 );
+
+adminRoutes.get("/machine-catalog", (request, response, next) =>
+  adminController.machineCatalog(request, response, next),
+);
+
+adminRoutes.post("/machine-catalog", (request, response, next) =>
+  adminController.createMachineCatalogItem(request, response, next),
+);
+
+adminRoutes.post("/machine-catalog/import", (request, response, next) =>
+  adminController.importMachineCatalog(request, response, next),
+);
+
+adminRoutes.patch("/machine-catalog/:id", (request, response, next) =>
+  adminController.updateMachineCatalogItem(request, response, next),
+);
+
+adminRoutes.delete("/machine-catalog/:id", (request, response, next) =>
+  adminController.deleteMachineCatalogItem(request, response, next),
+);

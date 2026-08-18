@@ -18,6 +18,7 @@ import {
   Mail,
   Package,
   PlusCircle,
+  Printer,
   Settings,
   ShieldCheck,
   Sigma,
@@ -68,6 +69,7 @@ const adminNavigation: AdminNavigationItem[] = [
   { href: "/admin/plans" as Route, label: "Admin Planos", icon: Package },
   { href: "/admin/email-templates" as Route, label: "Admin E-mails", icon: Mail },
   { href: "/admin/system-formulas" as Route, label: "Admin Formulas", icon: Sigma },
+  { href: "/admin/machine-catalog" as Route, label: "Admin Catalogo", icon: Printer },
 ];
 
 export const Sidebar = ({

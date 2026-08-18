@@ -373,8 +373,9 @@ export interface MachinePayload {
   powerConsumptionWatts: number;
 }
 
-// Catalogo de referencia usado só pelo autocomplete do cadastro de
-// máquina — nunca é criado/editado pelo usuário.
+// Catalogo de referencia usado pelo autocomplete do cadastro de máquina
+// (nunca criado/editado pela empresa) e gerenciado pelo admin em
+// /admin/machine-catalog.
 export interface MachineCatalogResource {
   id: string;
   brand: string;
@@ -387,6 +388,32 @@ export interface MachineCatalogResource {
   printVolumeZmm: number;
   depreciationCostPerHour: number;
   maintenanceCostPerHour: number;
+}
+
+export interface MachineCatalogPayload {
+  brand: string;
+  name: string;
+  type: MachineType;
+  price: number;
+  powerConsumptionWatts: number;
+  printVolumeXmm: number;
+  printVolumeYmm: number;
+  printVolumeZmm: number;
+  depreciationCostPerHour: number;
+  maintenanceCostPerHour: number;
+}
+
+export interface MachineCatalogImportRowError {
+  row: number;
+  brand: string;
+  name: string;
+  message: string;
+}
+
+export interface MachineCatalogImportResult {
+  created: number;
+  updated: number;
+  errors: MachineCatalogImportRowError[];
 }
 
 export interface MaterialResource {

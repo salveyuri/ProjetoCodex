@@ -1294,3 +1294,67 @@ visualmente pixel a pixel - validado por revisão de código + tipos
 batendo depois da migration, não por inspeção visual do PDF renderizado.
 Suite completa do backend: 95/95 passando. Lint/build limpos em
 shared/backend/frontend.
+
+## 2026-08-18 - Tela admin do catálogo de impressoras + import CSV
+
+### CRUD segue exatamente o padrão de `/admin/plans`/`/admin/system-formulas`
+
+`machine-catalog.service.ts` (que já tinha só `search()`, usado pelo
+autocomplete de cadastro de máquina das empresas) ganhou
+`listAll`/`getById`/`create`/`update`/`remove`, mesmo desenho dos outros
+recursos admin: conflito de `@@unique([brand, name])` vira `409
+MACHINE_CATALOG_CONFLICT` (não um 500 genérico), cada mutação grava
+`AuditLog` (`ADMIN_MACHINE_CATALOG_CREATED/UPDATED/DELETED`). Confirmado
+que `Machine` (a tabela por empresa) não tem FK pra `MachineCatalog` -
+é só uma fonte de autocomplete, os valores são copiados na hora do
+cadastro - então excluir uma linha do catálogo nunca quebra nada em
+orçamentos/máquinas já existentes.
+
+### Import CSV: parse no frontend, validação linha-a-linha no backend
+
+Decisão de não adicionar `multer` (ou qualquer parser de CSV) no backend -
+o catálogo é uma tabela de referência pequena (~60-100 linhas, não
+milhares), então o parser roda no navegador
+(`frontend/src/lib/csv.ts`, RFC4180 básico: campos entre aspas, aspas
+duplicadas escapando, vírgula dentro de aspas) e o resultado vai como
+JSON (`{ rows: [...] }`) pro backend. Mesma filosofia já seguida o resto
+da sessão (i18n sem `next-intl`, lista de países sem lib) - zero
+dependência nova pra um problema pequeno.
+
+Ponto importante descoberto ainda na primeira versão: se o schema Zod
+validasse o array inteiro de uma vez (`z.array(machineCatalogCreateSchema)`),
+UMA linha inválida rejeitava o lote inteiro (Zod falha o `.parse()` no
+primeiro erro de qualquer elemento do array). Isso contradiz o objetivo
+do recurso - um CSV real de dezenas de linhas com um typo numérico não
+pode invalidar as 59 linhas boas. Corrigido: a rota só valida que `rows`
+é um array de objetos (`z.array(z.record(z.string(), z.unknown()))`), e
+`machineCatalogService.importRows()` roda `machineCatalogCreateSchema
+.safeParse()` **linha por linha**, coletando erro com número da linha
+sem abortar o resto. Validado ao vivo com um CSV de 3 linhas (2 boas, 1
+com preço negativo) - resultado exato: 2 criadas, 1 erro reportado com
+"Linha 3 (CsvBrand Bad Model): Too small: expected number to be >=0",
+catálogo com as 2 linhas boas.
+
+### Import é upsert por (brand, name), não insert puro
+
+Reenviar o mesmo CSV (ou uma versão corrigida) nunca duplica - o
+`brand_name` (chave composta do `@@unique`) decide se a linha atualiza
+uma existente ou cria uma nova, contabilizado separadamente em
+`created`/`updated` na resposta. Isso é literalmente o motivo do pedido
+do Yuri (`Notas/TODO.md` já registrava "preços do catálogo desatualizam
+com o tempo, sem tela pra editar") - reimportar um arquivo com preços
+corrigidos é o fluxo esperado, não um erro. Validado ao vivo: reimportar
+um CSV de 1 linha com preço diferente atualizou o valor sem criar
+duplicata (contagem total de itens não mudou).
+
+### Bug achado testando: `entityId` de auditoria não aceita string livre
+
+`AuditLog.entityId` é `@db.Uuid` no schema - a primeira versão do log de
+auditoria da importação usava `entityId: "bulk"` (não existe UM registro
+pra essa ação, é um lote) e isso falhava silenciosamente
+(`audit-log.service.ts` engole erro de escrita de log, só loga
+"Audit log write failed" e segue - decisão antiga de nunca deixar
+auditoria quebrar a ação principal). Corrigido omitindo `entityId`
+inteiramente nesse caso (campo já é opcional) - o resumo do lote
+(`created`/`updated`/`errorCount`) já vai inteiro em `metadata`. Achado
+rodando o teste de integração novo, não em produção.

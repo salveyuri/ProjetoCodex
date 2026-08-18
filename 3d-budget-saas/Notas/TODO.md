@@ -190,13 +190,14 @@ Passo") em 2026-08-12.
       `maintenanceCostPerHour` derivados automaticamente (depreciação e
       manutenção somadas no custo base do orçamento). Ver
       `Contextos/Decisoes.md` (2026-08-14).
-- [ ] **Preços do catálogo são referência de 2026-08-14** (pesquisa
-      Mercado Livre/AliExpress + estimativa cambial pra quem não achou
-      preço nacional) — vão desatualizar com o tempo. Não existe tela
-      admin pra editar o catálogo ainda; hoje só dá pra corrigir via SQL
-      direto na tabela `machine_catalog`. Se isso incomodar no dia a dia,
-      vale pedir uma tela `/admin/machine-catalog` (mesmo padrão CRUD de
-      `/admin/plans`).
+- [x] **Tela `/admin/machine-catalog` implementada em 2026-08-18** —
+      CRUD completo (criar/editar/excluir) + import por CSV (upsert por
+      marca+modelo, valida linha por linha, uma linha ruim não derruba o
+      resto do arquivo, botão "baixar modelo"). Preços do catálogo
+      seguem sendo referência de pesquisa manual (Mercado Livre/
+      AliExpress) de quando foram cadastrados — agora dá pra manter
+      atualizado direto pela tela, sem precisar de SQL. Ver
+      `Contextos/Decisoes.md` (2026-08-18).
 - [ ] Cobertura de marcas ficou em modelos "atuais" conhecidos em
       2026-08-14 — lançamentos novos ou marcas menores (ex. Elegoo Neptune
       5, Bambu Lab H2D se já tiver saído, marcas nacionais brasileiras)

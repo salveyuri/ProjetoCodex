@@ -1905,3 +1905,34 @@ preview in-app antes do download.
   exato do PDF (posicionamento de CNPJ/telefone/termos) nao foi inspecionado
   pixel a pixel - validado por revisao de codigo + tipos batendo. Suite do
   backend: 95/95 passando. Lint/build limpos em shared/backend/frontend.
+
+## 2026-08-18 - Tela admin do catalogo de impressoras + import CSV
+
+Pedido do Yuri: tela admin pra incluir/remover/editar o catalogo de
+impressoras, mais opcao de subir um CSV que insere novas impressoras do
+arquivo (pendencia registrada desde 2026-08-14).
+
+- `machine-catalog.service.ts` ganhou CRUD completo (list/get/create/
+  update/remove) alem do `search()` ja existente, seguindo o padrao de
+  `/admin/plans`. Conflito de marca+modelo duplicado vira 409, cada
+  mutacao grava auditoria.
+- Import CSV: parser hand-rolled no frontend (`frontend/src/lib/csv.ts`,
+  sem lib nova) que le o arquivo e manda `{ rows: [...] }` como JSON.
+  Backend valida **linha por linha** (`importRows`, `safeParse` por
+  linha) em vez de validar o array inteiro de uma vez - uma linha
+  invalida e reportada com o numero da linha e pulada, sem abortar o
+  resto do arquivo. E upsert por (marca, modelo): reenviar um CSV com
+  precos corrigidos atualiza em vez de duplicar.
+- Nova tela `/admin/machine-catalog` (tabela + modal de criar/editar +
+  excluir + upload de CSV + botao "baixar modelo"), link novo no menu
+  admin.
+- Achado durante o teste de integracao: log de auditoria da importacao
+  usava `entityId: "bulk"`, mas a coluna e `@db.Uuid` - falhava
+  silenciosamente. Corrigido omitindo `entityId` (campo opcional) nesse
+  caso. Ver `Contextos/Decisoes.md` (2026-08-18).
+- Validado ao vivo: criar/editar/excluir item funcionando; CSV com 3
+  linhas (2 boas + 1 com preco negativo) importou as 2 boas e reportou a
+  invalida com numero da linha e mensagem; reimportar o mesmo CSV com
+  preco diferente atualizou em vez de duplicar (contagem de itens nao
+  mudou). Suite completa do backend: 101/101 passando (6 testes novos).
+  Lint/build limpos em shared/backend/frontend.

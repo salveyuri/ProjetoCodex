@@ -3,6 +3,8 @@ import type {
   EmailTemplateKey,
   EmailTemplateResource,
   EmailTemplateTestResult,
+  MachineCatalogImportResult,
+  MachineCatalogResource,
   PlanResource,
   SupportedLanguage,
   SystemFormulaResource,
@@ -18,6 +20,7 @@ import {
   emailTemplateService,
   toEmailTemplateResource,
 } from "../services/email-template.service";
+import { machineCatalogService, toMachineCatalogResource } from "../services/machine-catalog.service";
 import { planService, toPlanResource } from "../services/plan.service";
 import {
   systemFormulaService,
@@ -29,6 +32,11 @@ import {
   emailTemplateTestSchema,
   emailTemplateUpdateSchema,
 } from "../validators/email-template.validator";
+import {
+  machineCatalogCreateSchema,
+  machineCatalogImportSchema,
+  machineCatalogUpdateSchema,
+} from "../validators/machine-catalog.validator";
 import { planCreateSchema, planUpdateSchema } from "../validators/plan.validator";
 import {
   systemFormulaSchema,
@@ -311,6 +319,117 @@ export class AdminController {
         metadata: { code: before.code },
       });
       response.status(204).send();
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async machineCatalog(
+    _request: Request,
+    response: Response<MachineCatalogResource[]>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const rows = await machineCatalogService.listAll();
+      response.status(200).json(rows);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createMachineCatalogItem(
+    request: Request,
+    response: Response<MachineCatalogResource>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const input = machineCatalogCreateSchema.parse(request.body);
+      const row = await machineCatalogService.create(input);
+      await auditLogService.record({
+        action: "ADMIN_MACHINE_CATALOG_CREATED",
+        entityType: "MachineCatalog",
+        entityId: row.id,
+        actorUserId: request.auth?.userId,
+        after: toAuditJson(row),
+        metadata: { brand: row.brand, name: row.name },
+      });
+      response.status(201).json(row);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async updateMachineCatalogItem(
+    request: Request,
+    response: Response<MachineCatalogResource>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { id } = idParamSchema.parse(request.params);
+      const input = machineCatalogUpdateSchema.parse(request.body);
+      const before = toMachineCatalogResource(await machineCatalogService.getById(id));
+      const row = await machineCatalogService.update(id, input);
+      await auditLogService.record({
+        action: "ADMIN_MACHINE_CATALOG_UPDATED",
+        entityType: "MachineCatalog",
+        entityId: id,
+        actorUserId: request.auth?.userId,
+        before: toAuditJson(before),
+        after: toAuditJson(row),
+        metadata: { changedFields: Object.keys(input) },
+      });
+      response.status(200).json(row);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async deleteMachineCatalogItem(
+    request: Request,
+    response: Response<void>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { id } = idParamSchema.parse(request.params);
+      const before = toMachineCatalogResource(await machineCatalogService.getById(id));
+      await machineCatalogService.remove(id);
+      await auditLogService.record({
+        action: "ADMIN_MACHINE_CATALOG_DELETED",
+        entityType: "MachineCatalog",
+        entityId: id,
+        actorUserId: request.auth?.userId,
+        before: toAuditJson(before),
+        metadata: { brand: before.brand, name: before.name },
+      });
+      response.status(204).send();
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async importMachineCatalog(
+    request: Request,
+    response: Response<MachineCatalogImportResult>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { rows } = machineCatalogImportSchema.parse(request.body);
+      const result = await machineCatalogService.importRows(rows);
+      await auditLogService.record({
+        action: "ADMIN_MACHINE_CATALOG_IMPORTED",
+        entityType: "MachineCatalog",
+        // No single entity — entityId is a @db.Uuid column, "bulk"/etc.
+        // would fail the write. The summary lives in metadata instead.
+        actorUserId: request.auth?.userId,
+        after: toAuditJson(result),
+        metadata: {
+          submitted: rows.length,
+          created: result.created,
+          updated: result.updated,
+          errorCount: result.errors.length,
+        },
+      });
+      response.status(200).json(result);
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);
     }

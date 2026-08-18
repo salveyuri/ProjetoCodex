@@ -83,8 +83,18 @@ Passo") em 2026-08-12.
       `Contextos/Auditoria.md` (TEST-001) e `Contextos/Ambientes.md`
       (seção "Testes automatizados" — nota importante: roda contra o MESMO
       banco do `npm run dev`, sem banco de teste isolado ainda).
-- [ ] Testes de frontend/E2E — última fase de TEST-001, ainda não
-      iniciada.
+- [x] **Testes de frontend/E2E implementados em 2026-08-18** — última fase
+      de TEST-001. Playwright configurado em `frontend/` (`npm run
+      test:e2e`), 3 testes em 2 specs: `e2e/auth.spec.ts` (registro → vai
+      pro dashboard → logout → login de novo; senha errada mostra erro sem
+      navegar) e `e2e/quote-creation.spec.ts` (cadastra máquina + material
+      → cria orçamento → aparece na listagem). Cobertura deliberadamente
+      não-exaustiva (fluxo feliz dos caminhos mais centrais, não todo caso
+      de borda). Achado real de i18n durante a implementação: o rótulo do
+      campo de e-mail é "E-mail" no cadastro mas "Email" (sem hífen) no
+      login — inconsistência do dicionário PT do próprio app, sinalizada
+      mas não corrigida (fora do escopo pedido). Ver
+      `Contextos/Decisoes.md` (2026-08-18).
 - [ ] Banco de teste isolado para os testes de integração (hoje rodam
       contra o Postgres de dev) — só vira necessário de verdade quando
       houver CI (`DEVOPS-001`).

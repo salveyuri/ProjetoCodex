@@ -51,6 +51,11 @@ npm-debug.log*
 !Contextos/Chat.log
 !**/Contextos/Chat.log
 
+# Playwright E2E output (frontend/e2e — specs themselves ARE tracked)
+/frontend/playwright-report/
+/frontend/test-results/
+/frontend/blob-report/
+
 # Editor / IDE
 .vscode/
 .idea/

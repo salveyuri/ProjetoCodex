@@ -1358,3 +1358,73 @@ auditoria quebrar a ação principal). Corrigido omitindo `entityId`
 inteiramente nesse caso (campo já é opcional) - o resumo do lote
 (`created`/`updated`/`errorCount`) já vai inteiro em `metadata`. Achado
 rodando o teste de integração novo, não em produção.
+
+## 2026-08-18 - Testes E2E de frontend com Playwright (fase 3 de TEST-001)
+
+### Setup: Playwright direto em `frontend/`, sem CI ainda
+
+`@playwright/test` como devDependency, Chromium apenas instalado
+(`npx playwright install chromium`). `frontend/playwright.config.ts`:
+`webServer` como array com dois entries (backend `:3001/api/health`,
+frontend `:3000`), cada um com `reuseExistingServer: true` - deixa o
+Playwright subir os dois servidores do zero numa máquina limpa, mas
+também anexa a processos `npm run dev` já rodando (o caso comum de
+desenvolvimento local) em vez de dar erro de porta ocupada. Mesma
+filosofia de "sem infra nova" já seguida a sessão inteira: nenhum banco
+de teste isolado (os specs registram sua própria empresa via UI a cada
+run, mesma limitação já documentada pros testes de integração do
+backend em `Contextos/Ambientes.md`), sem pipeline de CI (roda manual
+via `npm run test:e2e` de dentro de `frontend/`).
+
+### Achado real: locale do Playwright quebra a própria detecção de idioma do app
+
+Primeira rodada falhou inteira com timeout em `getByLabel('Nome
+completo')`. Causa: o contexto de browser do Playwright usa `en-US` por
+padrão, e `LanguageContext.tsx` detecta o idioma da UI via
+`navigator.language` - a página de cadastro renderizou inteira em
+inglês. Corrigido com `use: { locale: "pt-BR" }` no config. Vale como
+lembrete: qualquer novo spec que dependa de texto em português precisa
+desse locale fixado, não é comportamento automático do Playwright.
+
+### Achado real (não bug de teste): rótulo do campo de e-mail diverge entre cadastro e login
+
+Depois do fix de locale, o teste ainda travava em `getByLabel("E-mail")`
+na tela de **login**. A árvore de acessibilidade real (capturada no
+`error-context.md` que o Playwright gera em toda falha) mostrou que o
+campo de login se chama exatamente "Email" (sem hífen, chave
+`auth.login.email`), enquanto o de cadastro é "E-mail" (com hífen,
+`auth.register.email`) - inconsistência de tradução dentro do próprio
+dicionário PT do app, não um erro de locator. Também descoberto ali: o
+`<label>` da senha no login engloba o link "Esqueci minha senha" no
+mesmo elemento, então o nome acessível do campo vira "Senha Esqueci
+minha senha" - `getByLabel("Senha", {exact:true})` nunca bate.
+Corrigido nos specs (`getByLabel("Email", {exact:true})` /
+`getByLabel("Senha")` sem exact, só na seção de login) - a
+inconsistência em si **não foi corrigida no app**, fica sinalizada aqui
+e em `Notas/TODO.md` para o Yuri decidir se vale padronizar.
+
+### Achado real: rate limit de registro pode ser atingido reexecutando a suíte rápido demais
+
+`registerRateLimiter` (5/min por IP) já existia e já tinha o mesmo
+problema resolvido nos testes de integração do backend (IP falso via
+`X-Forwarded-For`, ver `TEST-001` em `Contextos/Auditoria.md`). E2E
+dirigido por browser real não tem como forjar IP por request da mesma
+forma - com 3 registros por rodada completa da suíte, isso nunca é
+problema numa execução isolada, mas rodar a suíte várias vezes seguidas
+em menos de um minuto (como aconteceu durante o desenvolvimento desta
+sessão, testando specs separados e depois juntos) esbarra no limite.
+Comportamento correto do rate limit, não um bug - só documentando como
+limitação prática de reexecução.
+
+### Escopo: 3 testes, caminhos felizes centrais, não cobertura exaustiva
+
+`e2e/auth.spec.ts` (registro→dashboard→logout→login de novo; senha
+errada mostra erro sem navegar) e `e2e/quote-creation.spec.ts` (cadastra
+máquina com só o nome preenchido + material com só marca/cor
+preenchidos, relying nos defaults do resto do form - cria orçamento -
+aparece na listagem). Decisão deliberada de não perseguir cobertura
+exaustiva nesta rodada (edição, exclusão, filtros, relatórios, admin,
+etc. continuam sem E2E) - o pedido original era fechar a fase 3 de
+TEST-001, que o próprio achado da auditoria já descrevia como "testes de
+frontend/E2E são uma fase posterior", sem especificar profundidade.
+Ver `Notas/TODO.md` se quiser expandir depois.

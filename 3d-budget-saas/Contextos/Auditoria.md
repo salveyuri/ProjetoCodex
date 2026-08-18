@@ -482,10 +482,30 @@ inteiro (nenhum `*.test.ts`/`*.spec.ts` fora de `node_modules`).
   `backend/src/routes/plan-limits.test.ts` (3 — limite de 2 máquinas do
   plano FREE bloqueando a 3ª, PDF bloqueado como feature paga, bypass de
   limite para usuário promovido a `ADMIN` direto no banco). Total do
-  projeto: **57 testes** (42 unitários + 15 de integração), todos
-  passando. **Ainda não implementado** (fica para uma fase futura, fora do
-  escopo desta rodada): testes de frontend/E2E — este item continua
-  parcialmente aberto só para essa parte.
+  backend: **57 testes** (42 unitários + 15 de integração), todos
+  passando.
+  **Fase 3 (E2E de frontend) implementada em 2026-08-18** — Playwright
+  configurado em `frontend/` (`@playwright/test`, `npm run test:e2e`,
+  Chromium apenas). `playwright.config.ts` fixa `locale: "pt-BR"` (o
+  browser do Playwright usa `en-US` por padrão, o que fazia a própria
+  detecção de idioma do app — `LanguageContext.tsx` — renderizar tudo em
+  inglês e quebrar os locators). `webServer` array sobe/reaproveita
+  backend (`:3001`) e frontend (`:3000`) via `reuseExistingServer: true`.
+  3 testes em 2 specs, cada um registrando sua própria empresa via UI (sem
+  banco de teste isolado ainda, mesma limitação dos testes de integração):
+  `e2e/auth.spec.ts` (registro→dashboard→logout→login de novo; senha
+  errada mostra erro sem navegar) e `e2e/quote-creation.spec.ts` (cadastra
+  máquina+material→cria orçamento→aparece na listagem). Achado real (não
+  bug de teste): o rótulo do campo de e-mail é "E-mail" no cadastro mas
+  "Email" (sem hífen) no login — inconsistência do dicionário PT do
+  próprio app, descoberta pelos testes, sinalizada mas não corrigida (fora
+  do escopo pedido). Também descoberto: o `registerRateLimiter` (5/min por
+  IP) pode ser atingido rodando a suíte completa várias vezes seguidas em
+  menos de um minuto — comportamento esperado do rate limit, não um bug;
+  documentado como limitação prática de reexecução rápida. Total do
+  projeto: **60 testes automatizados** (57 backend + 3 E2E), todos
+  passando. Cobertura E2E deliberadamente não-exaustiva (caminhos felizes
+  centrais). Ver `Contextos/Decisoes.md` (2026-08-18).
 
 ### 📦 Dependências
 
@@ -575,7 +595,7 @@ inteiro (nenhum `*.test.ts`/`*.spec.ts` fora de `node_modules`).
 | QUAL-001 | 🧹 Qualidade | `QuoteForm.tsx` grande demais (879 linhas) | P3 | Médio | ✅ Implementado (2026-08-13) |
 | QUAL-002 | 📦 Dependências | `morgan` não utilizado | P4 | Pequeno | ✅ Implementado (2026-08-13) |
 | QUAL-003 | 🐛 Bug/problema | Conflito de código de fórmula sem tratamento | P3 | Pequeno | ✅ Implementado (2026-08-12) |
-| TEST-001 | 🧪 Testes | Zero testes automatizados | P1 | Grande | 🟡 Parcial (2026-08-13) — unit (formula-engine/Calculation) + integração (auth/multi-tenancy/planos), 57 testes; falta E2E de frontend |
+| TEST-001 | 🧪 Testes | Zero testes automatizados | P1 | Grande | ✅ Implementado (2026-08-18) — unit + integração (57 testes) + E2E de frontend (3 testes), 60 no total |
 | DEP-001 | 📦 Dependências | Dependências desatualizadas/pouco mantidas | P3 | Pequeno/Médio | 🟡 Parcial (2026-08-13) — updates seguros aplicados (9→1 vulnerabilidade); majors registrados, não aplicados por decisão do Yuri |
 | DEVOPS-001 | 🔧 DevOps | Sem estratégia de deploy de produção | P1 | Grande | ✅ Implementado (2026-08-18) — VPS + `pricify3d.com` no ar |
 

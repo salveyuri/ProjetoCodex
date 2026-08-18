@@ -1936,3 +1936,35 @@ arquivo (pendencia registrada desde 2026-08-14).
   preco diferente atualizou em vez de duplicar (contagem de itens nao
   mudou). Suite completa do backend: 101/101 passando (6 testes novos).
   Lint/build limpos em shared/backend/frontend.
+
+## 2026-08-18 - Testes E2E de frontend (fase 3 de TEST-001)
+
+Pedido do Yuri, na sequencia da tela do catalogo: "implemente a
+pendencia de testes de frontend/e2e" (registrada desde 2026-08-13 como
+ultima fase de TEST-001).
+
+- Playwright configurado em `frontend/` (`@playwright/test`, Chromium,
+  `npm run test:e2e`). `playwright.config.ts` com `locale: "pt-BR"`
+  (senao o browser roda em `en-US` e a propria deteccao de idioma do app
+  renderiza tudo em ingles) e `webServer` array pra subir/reaproveitar
+  backend+frontend.
+- 3 testes em 2 specs: `e2e/auth.spec.ts` (registro-dashboard-logout-
+  login de novo; senha errada mostra erro sem navegar) e
+  `e2e/quote-creation.spec.ts` (cadastra maquina+material minimos, cria
+  orcamento, confere que aparece na listagem). Helper compartilhado
+  `e2e/test-data.ts` registra empresa nova via UI a cada teste (sem
+  banco de teste isolado ainda, mesma limitacao dos testes de
+  integracao do backend).
+- Dois achados reais descobertos rodando os testes (nao bugs de teste):
+  (1) rotulo do campo de e-mail e "E-mail" no cadastro mas "Email" (sem
+  hifen) no login - inconsistencia de traducao no proprio dicionario PT
+  do app, sinalizada mas nao corrigida (fora do escopo pedido); (2) o
+  rate limit de registro (5/min por IP) pode ser atingido reexecutando a
+  suite completa varias vezes seguidas rapido demais - comportamento
+  esperado do limiter, nao bug. Ver `Contextos/Decisoes.md` (2026-08-18)
+  pros detalhes de cada um.
+- Validado: os 3 testes passam isolados e juntos, suite completa rodada
+  do zero apos aguardar o rate limit esfriar. Total do projeto agora:
+  60 testes automatizados (57 backend + 3 E2E).
+- TEST-001 agora fechado por completo em `Contextos/Auditoria.md`.
+  `Notas/TODO.md` atualizado.

@@ -273,3 +273,51 @@ se repetir se alguém mexer nesse código sem saber.
   `node -e "import('./shared/dist/index.js').then(m=>console.log(Object.keys(m)))"`
   (ou de fato subir `node dist/server.js` localmente por alguns segundos)
   como parte da verificação, além do `tsc --noEmit` de sempre.
+
+### Supabase Security Advisor — RLS desabilitado em todas as 22 tabelas do `public`
+
+- **Sintoma:** e-mail do Supabase em 2026-08-18 ("These issues require your
+  immediate attention") + Security Advisor mostrando 22 erros críticos
+  `RLS Disabled in Public`, um por tabela do schema `public` (todos os 20
+  models do Prisma + `_prisma_migrations` + mais uma).
+- **Causa raiz:** o Supabase expõe **toda** tabela do schema `public`
+  automaticamente via uma API REST própria (PostgREST), autenticável com a
+  `anon key` do projeto. Row-Level Security (RLS) é o que restringe o que
+  essa API consegue ler/escrever; sem RLS, qualquer um com a `anon key`
+  poderia ler/editar/apagar a tabela inteira **por fora** da autenticação
+  do Express/Prisma. O Supabase sinaliza isso pra todo projeto, mesmo que
+  a API REST nunca seja usada de fato.
+- **Risco real neste projeto:** baixo na prática — confirmado por grep que
+  o código nunca usa `@supabase/supabase-js`, `anon key` nem a API REST/
+  GraphQL do Supabase em lugar nenhum (nem frontend nem backend). O
+  `DATABASE_URL` é só uma connection string Postgres normal, consumida via
+  Prisma, que nunca passa pela camada PostgREST. Ainda assim, corrigir é
+  custo zero (dono de tabela sempre ignora RLS no Postgres, então o
+  Prisma continua funcionando igual) e fecha a superfície residual (ex.:
+  se a `anon key` vazar um dia sem querer).
+- **Fix aplicado pelo Yuri em 2026-08-18** (rodado por ele direto no SQL
+  Editor do Supabase, sem eu ter acesso ao projeto): habilitar RLS em
+  toda tabela do `public` de uma vez, sem policy nenhuma (RLS habilitado
+  + zero policies = acesso negado por padrão pra qualquer role que não
+  seja dona da tabela — exatamente o que se quer aqui, já que nenhuma
+  tabela deve ser acessada via PostgREST mesmo):
+  ```sql
+  DO $$
+  DECLARE
+    t text;
+  BEGIN
+    FOR t IN
+      SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+    LOOP
+      EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', t);
+    END LOOP;
+  END $$;
+  ```
+- **Aprendizado:** ao decidir hospedar o Postgres no Supabase só pela
+  connection string (sem usar o restante da plataforma), o Security
+  Advisor deles continua rodando e sinalizando como se o projeto
+  estivesse usando a API REST — vale revisar o Advisor de vez em quando
+  mesmo sem intenção de usar PostgREST/Auth/Storage do Supabase, e
+  aplicar `ENABLE ROW LEVEL SECURITY` (sem policy) em qualquer tabela
+  nova como higiene padrão, já que não tem custo nem risco de quebrar o
+  Prisma.

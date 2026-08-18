@@ -2005,3 +2005,21 @@ certo da estrutura, perguntando qual seria a URL ideal.
   dev` (cores/fonte/tamanho batendo com o design, CTAs com href correto,
   CSS module carregando, JS de reveal rodando sem erro, `/login`
   continua funcionando).
+
+## 2026-08-18 - Alerta de segurança do Supabase (RLS desabilitado)
+
+Yuri recebeu e-mail do Supabase sobre `rls_disabled_in_public` e pediu
+ajuda pra entender. Depois mandou print do Security Advisor mostrando os
+22 erros críticos (uma tabela por model do Prisma + `_prisma_migrations`).
+
+- Expliquei o que é RLS/PostgREST no Supabase e confirmei por grep que o
+  projeto nunca usa `@supabase/supabase-js`/`anon key`/API REST do
+  Supabase - o `DATABASE_URL` é só connection string Postgres consumida
+  via Prisma. Risco real baixo na prática, mas fix é custo zero (dono de
+  tabela ignora RLS, Prisma não é afetado) e fecha superfície residual.
+- Dei o SQL pra rodar direto no SQL Editor do Supabase (`ENABLE ROW LEVEL
+  SECURITY` em loop por todas as tabelas do `public`, sem policy nenhuma
+  - suficiente pra negar acesso por padrão a qualquer role não-dona).
+  Não rodei nada eu mesmo (sem acesso ao projeto Supabase do Yuri).
+- Yuri confirmou que já rodou. Registrado em
+  `Contextos/Conhecimento.md` (2026-08-18) pra referência futura.

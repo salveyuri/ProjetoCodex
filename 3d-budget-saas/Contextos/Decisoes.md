@@ -1583,3 +1583,141 @@ de "1 de 59" pra "1 de 7" corretamente) e confirmei que um envio real
 bem-sucedido (`SUBSCRIPTION_RENEWED` gravado pelos testes automatizados,
 que mockam o Resend) aparece com status `Enviado`/tom verde. Empresa de
 teste apagada do banco depois da verificação.
+
+## 2026-08-19 - Status de entrega do e-mail via webhook do Resend
+
+Yuri, depois de ver o log de envios: "quero mais informações, quero o
+log do envio para saber se foi entregue ou se ele deu algum erro de
+envio". O log anterior só mostrava se a **chamada à API** do Resend foi
+aceita (`status: SENT`) - não se o e-mail realmente chegou. Essas são
+coisas diferentes: a API aceita o envio de forma síncrona, mas
+entrega/bounce/spam são resolvidos depois, de forma assíncrona, do lado
+do Resend.
+
+### Só dá pra saber via webhook - não existe API síncrona pra isso
+
+Fui checar a documentação do Resend antes de supor o formato (
+`resend.com/docs/webhooks/*`) em vez de adivinhar - importante numa
+feature que verifica assinatura criptográfica em produção. Confirmado:
+Resend manda eventos assíncronos (`email.delivered`, `email.bounced`,
+`email.complained`, `email.delivery_delayed`, `email.failed`, entre
+outros) via webhook, assinado com **svix** (mesmo protocolo usado por
+Clerk, Svix mesmo, etc - não é assinatura própria do Resend). Payload
+confirmado por tabela: `data.email_id` (bate com o `resendMessageId` já
+salvo), `data.bounce.message` só em `email.bounced`, `data.failed.reason`
+só em `email.failed` - `email.complained`/`email.delivery_delayed` não
+trazem motivo estruturado, só o status em si.
+
+### Segunda descoberta na documentação: Resend também tem API de gestão de webhook
+
+Igual o Asaas, dá pra criar/listar/atualizar webhook via API
+(`POST/GET/PATCH https://api.resend.com/webhooks`) - `resendClient`
+ganhou `listWebhooks`/`createWebhook`/`updateWebhook` (fetch direto,
+mesma forma que `asaas-client.ts` já fazia, já que o SDK `resend` não
+cobre gestão de webhook, só envio). Novo script
+`backend/scripts/register-resend-webhook.ts`, mesmo padrão do script do
+Asaas: idempotente (atualiza em vez de duplicar se já existir um
+webhook pra essa URL), recusa `APP_BASE_URL` que não seja `https://`.
+**Diferença importante do Asaas**: o Resend só devolve o
+`signing_secret` **uma vez**, na criação - o script imprime ele bem
+destacado na primeira execução, instruindo colar em
+`RESEND_WEBHOOK_SECRET` no `.env` real; reexecuções (pra atualizar a
+lista de eventos, por exemplo) não imprimem segredo novo, só confirmam
+que o existente continua valendo.
+
+### Verificação de assinatura: pacote `svix`, corpo raw capturado via `verify` do `express.json`
+
+Adicionada a dependência `svix` (recomendada pela própria documentação
+do Resend pra verificar assinatura - não vale a pena reimplementar
+HMAC+tolerância de timestamp na mão numa rotina de segurança). Testado
+à mão via `require('svix')` + `Webhook.sign()`/`.verify()` (assinatura
+boa aceita, assinatura errada rejeitada) antes de escrever qualquer
+código de produção em cima disso - mesmo cuidado do aprendizado já
+registrado sobre bug de ESM/CJS em `shared/src`
+(`Contextos/Conhecimento.md`).
+
+**Pin em `svix@1.99.1`, não a versão mais nova (`2.0.0`)**: a última
+major (`2.0.0`, lançada há pouco) já roda em CommonJS via
+`require()` graças à interop nativa do Node moderno (confirmado
+funcionando aqui, que roda Node 24) - só que ela declara
+`"engines": {"node": ">=22"}` no `package.json`, e o
+`backend/Dockerfile` de produção usa `node:20-slim`
+(`Contextos/Conhecimento.md` já documenta um bug real de produção
+causado por diferença entre o Node local e o Node do container - não
+ia repetir o mesmo tipo de erro sem poder testar contra o Docker de
+verdade, que não está disponível neste ambiente). `1.99.1` (a última
+da série 1.x) não declara `engines` nenhum e já é CommonJS nativo
+(`"type":"commonjs"`, `main: dist/index.js`) - zero risco de
+incompatibilidade com o Node 20 do container, mesma API pública
+(`Webhook.sign`/`.verify`), sem nenhuma mudança de código necessária
+depois da troca.
+
+A verificação de assinatura do svix precisa dos **bytes exatos** que o
+Resend assinou - reserializar `req.body` já parseado pelo
+`express.json()` gera uma string ligeiramente diferente (ordem de
+chaves, espaçamento) e quebra a verificação. Solução: `express.json()`
+ganhou a opção `verify`, que captura o buffer bruto em `request.rawBody`
+antes do parse - usado só pela rota `/webhooks/resend`, não afeta as
+demais.
+
+### Dados: 4 colunas novas em `EmailLog`, não uma tabela separada
+
+`deliveryStatus`/`deliveryDetail`/`deliveryPayload`/`deliveryUpdatedAt`
+adicionados na mesma tabela (migração
+`20260819120000_add_email_log_delivery_status`) em vez de uma tabela de
+eventos separada - o caso de uso é "1 e-mail, 1 status de entrega atual"
+(o e-mail não é reenviado então não tem múltiplos eventos concorrentes
+de verdade pra rastrear em uma tabela própria), e olhar `EmailLog` já
+responde a pergunta do Yuri sem join nenhum. `deliveryPayload` guarda o
+payload bruto do evento (JSON) mesmo já extraindo `deliveryDetail` -
+rede de segurança caso um evento futuro tenha um formato que a extração
+não previu (o dado bruto nunca se perde, só o texto amigável que pode
+ficar incompleto).
+
+### Endpoint tolerante quando não configurado - nunca vira dependência dura
+
+Diferente do `ASAAS_WEBHOOK_TOKEN` (obrigatório em produção -
+`Contextos/Decisoes.md` anterior sobre o webhook do Asaas),
+`RESEND_WEBHOOK_SECRET` é opcional mesmo em produção. Se não estiver
+configurada, a rota só confirma recebimento (200) sem processar nada -
+decisão deliberada porque essa é uma feature 100% aditiva/informativa
+(coluna "Entrega" mostra "Aguardando" pra sempre se o webhook nunca for
+cadastrado), nunca deveria travar o boot do backend nem o envio de
+e-mail de verdade. Reforça o texto do TODO: o Yuri ainda precisa rodar
+`npm run resend:register-webhook` em produção pra essa parte realmente
+funcionar.
+
+### UI: coluna "Entrega" separada de "Status", com estado "Aguardando"
+
+Adicionei a interpretação certa pro caso comum: `deliveryStatus === null`
+não significa "sem informação" incondicionalmente - se `status === SENT`
+(a chamada à API foi aceita) e ainda não chegou evento, é "Aguardando"
+(neutro); se `status !== SENT` (falhou/pulado), a entrega nunca vai
+acontecer, mostra "—". Só quando um evento realmente chega é que vira
+Entregue/Devolvido/Marcado como spam/Atrasado/Falhou na entrega (com o
+`deliveryDetail`, quando existe, abaixo do badge). Filtro por
+`deliveryStatus` adicionado no mesmo padrão do filtro por `status` já
+existente.
+
+### Verificação
+
+7 testes de integração novos
+(`backend/src/routes/resend-webhook.routes.test.ts` - sem headers
+rejeitado, assinatura inválida rejeitada, `email.bounced` extrai a
+mensagem certa, `email.failed` extrai o motivo certo, `email.opened`
+(não rastreado) é ignorado sem tocar o registro, mensagem desconhecida
+não quebra nada). Segredo de teste fixo em `vitest.config.mts`
+(mesmo padrão já usado pro `TRUST_PROXY_HOPS=1`), assinado de verdade
+via `svix`'s `Webhook.sign()` em cada teste. Suite completa do backend:
+**112/112 passando**. `tsc`/`lint`/`build` limpos em shared/backend/
+frontend, incluindo checagem extra de que o `dist/` compilado sobe e
+responde `/api/health` de verdade (não só `tsc --noEmit`) - repetida
+depois de trocar pra `svix@1.99.1` também, pra confirmar que o pin de
+versão não quebrou nada.
+
+Testado ao vivo: criei uma linha de `EmailLog` direto no banco
+(`status: SENT`, sem evento de entrega ainda) - UI mostrou "Aguardando"
+corretamente; atualizei a mesma linha simulando um `BOUNCED` com detalhe
+- UI mostrou "Devolvido" + a mensagem da suppression list; testei o
+filtro por status de entrega (`BOUNCED` reduziu de 3 pra 1 registro
+corretamente). Dados de teste apagados depois.

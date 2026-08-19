@@ -31,7 +31,22 @@ app.use(
   }),
 );
 app.use("/api", globalRateLimiter);
-app.use(express.json({ limit: "1mb" }));
+app.use(
+  express.json({
+    limit: "1mb",
+    // Stashes the exact bytes received (before JSON parsing) onto
+    // request.rawBody — POST /api/webhooks/resend needs those to verify
+    // Resend's svix signature, which is computed over the raw body, not
+    // over a re-serialized copy of the parsed object (see
+    // webhook.controller.ts).
+    verify: (request, _response, buffer) => {
+      // body-parser types this callback's `request` as the bare Node
+      // http.IncomingMessage, not Express's Request — the rawBody
+      // augmentation in types/express.d.ts only applies to the latter.
+      (request as express.Request).rawBody = buffer;
+    },
+  }),
+);
 app.use(cookieParser());
 app.use(requestLogger);
 

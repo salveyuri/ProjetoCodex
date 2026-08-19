@@ -18,6 +18,11 @@ export default defineConfig({
     // forwarded header, same as it would behind a real reverse proxy.
     env: {
       TRUST_PROXY_HOPS: "1",
+      // Test-only secret (never used against the real Resend API) — lets
+      // webhook.controller.resend.test.ts sign payloads with svix's own
+      // Webhook.sign() and verify the controller accepts/rejects them
+      // correctly.
+      RESEND_WEBHOOK_SECRET: "whsec_gT+JQmKpl+MoHiKOOTiZ5vqECsXIjjIy",
     },
   },
 });

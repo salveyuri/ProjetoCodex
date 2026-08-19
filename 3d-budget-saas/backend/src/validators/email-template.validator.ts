@@ -25,11 +25,20 @@ const emailSendStatusSchema = z.enum([
   "SKIPPED_PREFERENCE",
 ]);
 
+const emailDeliveryStatusSchema = z.enum([
+  "DELIVERED",
+  "BOUNCED",
+  "COMPLAINED",
+  "DELAYED",
+  "FAILED",
+]);
+
 export const emailLogListQuerySchema = z
   .object({
     page: z.coerce.number().int().positive().default(1),
     pageSize: z.coerce.number().int().positive().max(100).default(20),
     status: emailSendStatusSchema.optional(),
+    deliveryStatus: emailDeliveryStatusSchema.optional(),
   })
   .strict();
 

@@ -9,3 +9,9 @@ export const webhookRoutes = Router();
 webhookRoutes.post("/asaas", (request, response, next) =>
   webhookController.asaas(request, response, next),
 );
+
+// Same reasoning — Resend calls this without a JWT, authenticity verified
+// inside the controller via the svix-* headers (see webhook.controller.ts).
+webhookRoutes.post("/resend", (request, response, next) =>
+  webhookController.resend(request, response, next),
+);

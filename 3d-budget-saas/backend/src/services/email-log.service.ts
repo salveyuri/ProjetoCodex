@@ -1,9 +1,10 @@
 import type {
+  EmailDeliveryStatus,
   EmailLogResource,
   EmailSendStatus,
   PaginatedEmailLogList,
 } from "@3d-budget/shared";
-import type { EmailLog } from "@prisma/client";
+import type { EmailLog, Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import type { EmailLogListQueryInput } from "../validators/email-template.validator";
 
@@ -15,6 +16,9 @@ export const toEmailLogResource = (log: EmailLog): EmailLogResource => ({
   status: log.status as EmailSendStatus,
   resendMessageId: log.resendMessageId,
   errorMessage: log.errorMessage,
+  deliveryStatus: log.deliveryStatus as EmailDeliveryStatus | null,
+  deliveryDetail: log.deliveryDetail,
+  deliveryUpdatedAt: log.deliveryUpdatedAt?.toISOString() ?? null,
   createdAt: log.createdAt.toISOString(),
 });
 
@@ -24,7 +28,10 @@ export const toEmailLogResource = (log: EmailLog): EmailLogResource => ({
 // mutates a log entry.
 export class EmailLogService {
   async list(query: EmailLogListQueryInput): Promise<PaginatedEmailLogList> {
-    const where = query.status ? { status: query.status } : {};
+    const where: Prisma.EmailLogWhereInput = {
+      status: query.status,
+      deliveryStatus: query.deliveryStatus,
+    };
     const skip = (query.page - 1) * query.pageSize;
 
     const [logs, total] = await prisma.$transaction([

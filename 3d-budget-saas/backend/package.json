@@ -14,7 +14,8 @@
     "prisma:migrate:init": "prisma migrate dev --name init_data_model",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
-    "asaas:register-webhook": "tsx scripts/register-asaas-webhook.ts"
+    "asaas:register-webhook": "tsx scripts/register-asaas-webhook.ts",
+    "resend:register-webhook": "tsx scripts/register-resend-webhook.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -37,6 +38,7 @@
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "resend": "^6.20.0",
+    "svix": "^1.99.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

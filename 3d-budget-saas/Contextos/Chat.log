@@ -2045,3 +2045,55 @@ e-mail"; se nao houvesse, pra implementar.
   chave real em dev), filtro por status funcionando (1172 -> 136
   registros ao filtrar por Enviado), paginacao recalculando certo.
   Empresa de teste apagada depois.
+
+## 2026-08-19 - Status de entrega do e-mail (webhook do Resend)
+
+Yuri, na sequencia do log de envios: "quero mais informacoes, quero o
+log do envio para saber se foi entregue ou se ele deu algum erro de
+envio". O log anterior so mostrava se a API do Resend aceitou o envio,
+nao se o e-mail chegou de verdade - isso so vem via webhook assincrono.
+
+- Consultei a documentacao oficial do Resend antes de implementar (nao
+  adivinhei o formato) - eventos `email.delivered/bounced/complained/
+  delivery_delayed/failed`, assinados via `svix`, payload com
+  `data.email_id` (bate com o `resendMessageId` ja salvo) e
+  `data.bounce.message`/`data.failed.reason` pros dois eventos que tem
+  motivo estruturado.
+- Novo endpoint `POST /api/webhooks/resend` (verifica assinatura via
+  `svix`, corpo raw capturado com a opcao `verify` do `express.json()`)
+  preenche 4 colunas novas em `EmailLog` (migracao
+  `20260819120000_add_email_log_delivery_status`). Achado testando: a
+  versao mais nova do pacote (`svix@2.0.0`) exige Node >=22, mas o
+  Dockerfile de producao usa `node:20-slim` - sem Docker disponivel
+  neste ambiente pra testar de verdade, optei por fixar
+  `svix@1.99.1` (sem essa exigencia, mesma API), evitando repetir o
+  tipo de erro ja documentado em `Contextos/Conhecimento.md` (bug real
+  de producao por diferenca entre Node local e Node do container).
+  `dist/server.js` compilado testado subindo e respondendo
+  `/api/health` antes e depois da troca de versao.
+- Descoberto que o Resend tambem tem API de gestao de webhook (igual o
+  Asaas) - novo `backend/scripts/register-resend-webhook.ts`,
+  idempotente, mesma familia do script do Asaas. Diferenca: o Resend so
+  mostra o `signing_secret` uma vez, na criacao - o script imprime bem
+  destacado na primeira execucao.
+- `RESEND_WEBHOOK_SECRET` opcional mesmo em producao (diferente do
+  token do Asaas) - sem ela configurada, a rota so confirma recebimento
+  sem processar, nunca trava boot nem envio de e-mail real.
+- Nova coluna "Entrega" em `/admin/email-templates`, com estado
+  "Aguardando" pra quando o envio foi aceito mas ainda nao chegou
+  confirmacao, "—" quando nunca vai chegar (envio que ja falhou/foi
+  pulado), e badge colorido quando um evento real chega. Filtro por
+  status de entrega tambem adicionado.
+- 7 testes de integracao novos (`resend-webhook.routes.test.ts`,
+  assinando payloads de verdade com `svix`'s `Webhook.sign()`). Suite
+  completa do backend: 112/112. `tsc`/`lint`/`build` limpos em
+  shared/backend/frontend.
+- Testado ao vivo: linha `SENT` sem evento mostrou "Aguardando";
+  simulei um `BOUNCED` direto no banco (a logica do webhook em si ja
+  esta coberta pelos 7 testes automatizados) e confirmei "Devolvido" +
+  mensagem da suppression list na UI; filtro por status de entrega
+  funcionando. Dados de teste apagados depois.
+- **Pendente do lado do Yuri**: rodar `npm run resend:register-webhook`
+  em producao e colar o `RESEND_WEBHOOK_SECRET` impresso no `.env` da
+  VPS (so variavel de ambiente, nao precisa rebuild). Ver
+  `Notas/TODO.md`.

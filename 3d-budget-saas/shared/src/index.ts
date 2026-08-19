@@ -791,6 +791,17 @@ export interface EmailTemplateTestResult {
   error: string | null;
 }
 
+// Filled in asynchronously by Resend's webhook, some time after `status`
+// above already settled — null means no delivery event has arrived yet
+// (which is expected/normal if RESEND_WEBHOOK_SECRET isn't configured, or
+// simply hasn't happened yet for a very recent send).
+export type EmailDeliveryStatus =
+  | "DELIVERED"
+  | "BOUNCED"
+  | "COMPLAINED"
+  | "DELAYED"
+  | "FAILED";
+
 export interface EmailLogResource {
   id: string;
   templateKey: string;
@@ -799,6 +810,9 @@ export interface EmailLogResource {
   status: EmailSendStatus;
   resendMessageId: string | null;
   errorMessage: string | null;
+  deliveryStatus: EmailDeliveryStatus | null;
+  deliveryDetail: string | null;
+  deliveryUpdatedAt: string | null;
   createdAt: string;
 }
 
@@ -806,6 +820,7 @@ export interface EmailLogListQuery {
   page?: number;
   pageSize?: number;
   status?: EmailSendStatus;
+  deliveryStatus?: EmailDeliveryStatus;
 }
 
 export interface PaginatedEmailLogList {

@@ -1,12 +1,16 @@
 import { CheckoutStatus, Prisma, SubscriptionStatus } from "@prisma/client";
 import type { NextFunction, Request, Response } from "express";
+import { Webhook } from "svix";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
 import { auditLogService } from "../services/audit-log.service";
 import { emailService } from "../services/email.service";
-import { asaasWebhookSchema } from "../validators/webhook.validator";
+import {
+  asaasWebhookSchema,
+  resendWebhookSchema,
+} from "../validators/webhook.validator";
 
 // Payment statuses that mean "money actually landed" — activates the plan
 // tied to the originating Checkout (first confirmation) or simply confirms
@@ -25,6 +29,46 @@ export const HANDLED_ASAAS_EVENTS: readonly string[] = [
   ...CONFIRMED_EVENTS,
   ...OVERDUE_EVENTS,
 ];
+
+// Resend event -> the deliveryStatus value stored on EmailLog. Only events
+// that answer "did it get delivered, or did something go wrong" (per
+// https://resend.com/docs/webhooks/event-types) — email.sent is skipped
+// (redundant with our own synchronous SENT status) and so are open/click
+// tracking and account-level events (domain.*/contact.*/suppression.*),
+// none of which this app subscribes to (see register-resend-webhook.ts).
+const RESEND_DELIVERY_STATUS_BY_EVENT: Record<string, string> = {
+  "email.delivered": "DELIVERED",
+  "email.bounced": "BOUNCED",
+  "email.complained": "COMPLAINED",
+  "email.delivery_delayed": "DELAYED",
+  "email.failed": "FAILED",
+};
+
+export const HANDLED_RESEND_EVENTS: readonly string[] = Object.keys(
+  RESEND_DELIVERY_STATUS_BY_EVENT,
+);
+
+// Confirmed against Resend's documented example payloads
+// (https://resend.com/docs/webhooks/emails/failed,
+// https://resend.com/docs/webhooks/emails/bounced) — email.complained and
+// email.delivery_delayed don't carry a structured reason field, so those
+// fall through to null (the status itself is still recorded).
+const extractResendDeliveryDetail = (
+  type: string,
+  data: Record<string, unknown>,
+): string | null => {
+  if (type === "email.bounced") {
+    const bounce = data.bounce as { message?: string } | undefined;
+    return bounce?.message ?? null;
+  }
+
+  if (type === "email.failed") {
+    const failed = data.failed as { reason?: string } | undefined;
+    return failed?.reason ?? null;
+  }
+
+  return null;
+};
 
 export class WebhookController {
   // Asaas confirms payment asynchronously, never on the checkout redirect —
@@ -189,6 +233,98 @@ export class WebhookController {
         } else {
           void emailService.sendSubscriptionRenewed(company.id, paymentRow.id);
         }
+      }
+
+      response.status(200).json({ received: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Resend calls this asynchronously, some time after the original
+  // resend.emails.send() call already returned (see resend-client.ts /
+  // EmailService.send()) — this is the only place EmailLog.deliveryStatus
+  // ever gets filled in. Acks quietly (200, no processing) whenever the
+  // webhook isn't configured yet, so this stays a purely additive feature
+  // that never affects whether email sends at all.
+  async resend(
+    request: Request,
+    response: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!env.resendWebhookSecret) {
+        response.status(200).json({ received: true });
+        return;
+      }
+
+      const svixId = request.header("svix-id");
+      const svixTimestamp = request.header("svix-timestamp");
+      const svixSignature = request.header("svix-signature");
+
+      if (!svixId || !svixTimestamp || !svixSignature || !request.rawBody) {
+        throw new AppError(
+          "Invalid webhook signature.",
+          401,
+          "RESEND_WEBHOOK_UNAUTHORIZED",
+        );
+      }
+
+      let payload: unknown;
+
+      try {
+        const webhook = new Webhook(env.resendWebhookSecret);
+        payload = webhook.verify(request.rawBody, {
+          "svix-id": svixId,
+          "svix-timestamp": svixTimestamp,
+          "svix-signature": svixSignature,
+        });
+      } catch (error) {
+        logger.warn(
+          { err: error },
+          "Resend webhook signature verification failed",
+        );
+        throw new AppError(
+          "Invalid webhook signature.",
+          401,
+          "RESEND_WEBHOOK_UNAUTHORIZED",
+        );
+      }
+
+      const parsed = resendWebhookSchema.safeParse(payload);
+
+      if (!parsed.success) {
+        logger.warn(
+          { issues: parsed.error.issues },
+          "Resend webhook payload rejected by schema",
+        );
+        response.status(200).json({ received: true });
+        return;
+      }
+
+      const { type, data } = parsed.data;
+      const deliveryStatus = RESEND_DELIVERY_STATUS_BY_EVENT[type];
+
+      if (!deliveryStatus) {
+        response.status(200).json({ received: true });
+        return;
+      }
+
+      const result = await prisma.emailLog.updateMany({
+        where: { resendMessageId: data.email_id },
+        data: {
+          deliveryStatus,
+          deliveryDetail: extractResendDeliveryDetail(type, data),
+          deliveryPayload: data as Prisma.InputJsonValue,
+          deliveryUpdatedAt: new Date(),
+        },
+      });
+
+      if (result.count === 0) {
+        logger.warn(
+          { type, resendMessageId: data.email_id },
+          "Resend webhook: no matching EmailLog row for this message id",
+        );
       }
 
       response.status(200).json({ received: true });

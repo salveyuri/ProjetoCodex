@@ -231,6 +231,24 @@ Passo") em 2026-08-12.
       Seção "Logs de envio" nova na mesma página, com filtro por status
       e paginação (`GET /admin/email-logs`). Ver `Contextos/Decisoes.md`
       (2026-08-19).
+- [x] **Status de entrega (webhook do Resend) — implementado em
+      2026-08-19.** O item acima só mostrava se a chamada à API do Resend
+      foi aceita, não se o e-mail chegou de verdade. Novo endpoint
+      `POST /api/webhooks/resend` (assinatura verificada via `svix`)
+      recebe os eventos `email.delivered/bounced/complained/
+      delivery_delayed/failed` e preenche `EmailLog.deliveryStatus` —
+      coluna "Entrega" nova na mesma tela, com filtro próprio. Ver
+      `Contextos/Decisoes.md` (2026-08-19).
+- [ ] **Falta rodar `resend:register-webhook` em produção** —
+      `docker compose exec backend npm run resend:register-webhook` (com
+      `RESEND_API_KEY` já configurada e `APP_BASE_URL` público em https,
+      ambos já verdadeiros em produção). O script imprime um
+      `RESEND_WEBHOOK_SECRET` (só aparece **uma vez** — Resend não mostra
+      de novo) — colar no `.env` da VPS e rodar `docker compose up -d`
+      de novo (não precisa rebuild, é só variável de ambiente). Sem isso
+      a coluna "Entrega" fica sempre em "Aguardando" (o app continua
+      enviando e-mail normalmente, é só a informação extra que fica
+      faltando). Mesmo padrão já usado pro webhook do Asaas.
 - [x] **Checado em 2026-08-15**: nenhum webhook está cadastrado no Asaas
       ainda (`GET /v3/webhooks` no sandbox devolveu `totalCount: 0`) — ou
       seja, hoje nem o alerta de vencimento nem os e-mails de assinatura

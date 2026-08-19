@@ -126,6 +126,18 @@ const resolveResendApiKey = (): string => {
 const resolveEmailFromAddress = (): string =>
   process.env.EMAIL_FROM_ADDRESS ?? "Pricify3D <system@pricify3d.com>";
 
+// Signing secret Resend generates when the webhook endpoint is created
+// (see backend/scripts/register-resend-webhook.ts) — verified via the
+// `svix` package against the svix-id/svix-timestamp/svix-signature headers
+// on every call to POST /api/webhooks/resend. Unlike ASAAS_WEBHOOK_TOKEN,
+// deliberately NOT required in production: this only feeds the optional
+// "delivery status" column in /admin/email-templates, never the app's
+// critical path, so the app must still boot and send email fine without
+// it configured yet. If unset, the webhook route just acks without
+// processing (see webhook.controller.ts).
+const resolveResendWebhookSecret = (): string =>
+  process.env.RESEND_WEBHOOK_SECRET ?? "";
+
 const asaasEnv = resolveAsaasEnv();
 
 export const env = {
@@ -149,4 +161,5 @@ export const env = {
   asaasWebhookToken: resolveAsaasWebhookToken(),
   resendApiKey: resolveResendApiKey(),
   emailFromAddress: resolveEmailFromAddress(),
+  resendWebhookSecret: resolveResendWebhookSecret(),
 };

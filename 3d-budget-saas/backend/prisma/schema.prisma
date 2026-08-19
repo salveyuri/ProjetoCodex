@@ -486,6 +486,18 @@ model EmailLog {
   dedupeKey       String?  @unique @map("dedupe_key")
   createdAt       DateTime @default(now()) @map("created_at")
 
+  // Filled in asynchronously by the Resend webhook (POST
+  // /api/webhooks/resend) once Resend's own delivery attempt resolves —
+  // `status`/`resendMessageId` above only reflect that Resend's *API*
+  // accepted the send request, not that the message actually reached the
+  // recipient's mail server. Null until (if ever) a webhook event arrives
+  // for this message.
+  deliveryStatus    String?   @map("delivery_status")
+  deliveryDetail    String?   @map("delivery_detail")
+  deliveryPayload   Json?     @map("delivery_payload")
+  deliveryUpdatedAt DateTime? @map("delivery_updated_at")
+
   @@index([templateKey, toEmail])
+  @@index([resendMessageId])
   @@map("email_logs")
 }

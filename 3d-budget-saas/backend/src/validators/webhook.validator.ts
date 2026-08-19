@@ -23,3 +23,20 @@ export const asaasWebhookSchema = z.object({
 });
 
 export type AsaasWebhookPayload = z.infer<typeof asaasWebhookSchema>;
+
+// Also deliberately not `.strict()` — Resend's payload shape per event
+// type (see https://resend.com/docs/webhooks/event-types) carries extra
+// fields we don't use (from/to/subject/tags/...); `data` only requires
+// `email_id`, which is the one field every event type is confirmed to
+// carry and the only one this app actually reads (to match a resendMessageId
+// back to an EmailLog row).
+export const resendWebhookSchema = z.object({
+  type: z.string(),
+  data: z
+    .object({
+      email_id: z.string(),
+    })
+    .passthrough(),
+});
+
+export type ResendWebhookPayload = z.infer<typeof resendWebhookSchema>;

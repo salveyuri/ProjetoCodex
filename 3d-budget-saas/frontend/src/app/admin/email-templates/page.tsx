@@ -1,6 +1,8 @@
 "use client";
 
 import type {
+  EmailDeliveryStatus,
+  EmailLogListQuery,
   EmailLogResource,
   EmailSendStatus,
   EmailTemplateResource,
@@ -114,6 +116,31 @@ const emailLogStatusTones: Record<
   SKIPPED_PREFERENCE: "neutral",
 };
 
+// Filled in asynchronously by Resend's webhook (see
+// backend/src/controllers/webhook.controller.ts) - only meaningful once
+// RESEND_WEBHOOK_SECRET is configured (Notas/TODO.md tracks running
+// `npm run resend:register-webhook`). "Aguardando" below covers the
+// normal in-between state: the send itself succeeded but no delivery
+// event has arrived (or ever will, if the webhook isn't set up yet).
+const emailDeliveryStatusLabels: Record<EmailDeliveryStatus, string> = {
+  DELIVERED: "Entregue",
+  BOUNCED: "Devolvido",
+  COMPLAINED: "Marcado como spam",
+  DELAYED: "Atrasado",
+  FAILED: "Falhou na entrega",
+};
+
+const emailDeliveryStatusTones: Record<
+  EmailDeliveryStatus,
+  "success" | "warning" | "danger" | "neutral"
+> = {
+  DELIVERED: "success",
+  BOUNCED: "danger",
+  COMPLAINED: "danger",
+  DELAYED: "warning",
+  FAILED: "danger",
+};
+
 export default function AdminEmailTemplatesPage() {
   const { isLoading: isAuthLoading, token, refreshUser } = useAuth();
   const [templates, setTemplates] = useState<EmailTemplateResource[]>([]);
@@ -133,6 +160,9 @@ export default function AdminEmailTemplatesPage() {
   >(null);
   const [logsPage, setLogsPage] = useState(1);
   const [logsStatusFilter, setLogsStatusFilter] = useState<EmailSendStatus | "">("");
+  const [logsDeliveryStatusFilter, setLogsDeliveryStatusFilter] = useState<
+    EmailDeliveryStatus | ""
+  >("");
   const [isLogsLoading, setIsLogsLoading] = useState(true);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
@@ -188,12 +218,14 @@ export default function AdminEmailTemplatesPage() {
     setIsLogsLoading(true);
 
     try {
+      const params: EmailLogListQuery = {
+        page: logsPage,
+        pageSize: 20,
+        status: logsStatusFilter || undefined,
+        deliveryStatus: logsDeliveryStatusFilter || undefined,
+      };
       const { data } = await api.get<PaginatedEmailLogList>("/admin/email-logs", {
-        params: {
-          page: logsPage,
-          pageSize: 20,
-          status: logsStatusFilter || undefined,
-        },
+        params,
       });
       setLogs(data.data);
       setLogsPagination(data.pagination);
@@ -209,7 +241,7 @@ export default function AdminEmailTemplatesPage() {
     } finally {
       setIsLogsLoading(false);
     }
-  }, [logsPage, logsStatusFilter, showToast, token]);
+  }, [logsDeliveryStatusFilter, logsPage, logsStatusFilter, showToast, token]);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -508,6 +540,23 @@ export default function AdminEmailTemplatesPage() {
                     </option>
                   ))}
                 </select>
+                <select
+                  value={logsDeliveryStatusFilter}
+                  onChange={(event) => {
+                    setLogsDeliveryStatusFilter(event.target.value as EmailDeliveryStatus | "");
+                    setLogsPage(1);
+                  }}
+                  className="h-10 rounded-lg border border-border bg-surface-muted px-3 text-sm outline-none focus:border-primary"
+                >
+                  <option value="">Toda entrega</option>
+                  {(Object.keys(emailDeliveryStatusLabels) as EmailDeliveryStatus[]).map(
+                    (status) => (
+                      <option key={status} value={status}>
+                        {emailDeliveryStatusLabels[status]}
+                      </option>
+                    ),
+                  )}
+                </select>
                 <button
                   type="button"
                   onClick={() => void loadLogs()}
@@ -547,6 +596,7 @@ export default function AdminEmailTemplatesPage() {
                         <th className="px-5 py-3">Para</th>
                         <th className="px-5 py-3">Assunto</th>
                         <th className="px-5 py-3">Status</th>
+                        <th className="px-5 py-3">Entrega</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -569,6 +619,22 @@ export default function AdminEmailTemplatesPage() {
                             {log.errorMessage ? (
                               <p className="mt-1 max-w-xs text-xs text-danger">
                                 {log.errorMessage}
+                              </p>
+                            ) : null}
+                          </td>
+                          <td className="px-5 py-4">
+                            {log.deliveryStatus ? (
+                              <StatusBadge tone={emailDeliveryStatusTones[log.deliveryStatus]}>
+                                {emailDeliveryStatusLabels[log.deliveryStatus]}
+                              </StatusBadge>
+                            ) : log.status === "SENT" ? (
+                              <StatusBadge tone="neutral">Aguardando</StatusBadge>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                            {log.deliveryDetail ? (
+                              <p className="mt-1 max-w-xs text-xs text-danger">
+                                {log.deliveryDetail}
                               </p>
                             ) : null}
                           </td>

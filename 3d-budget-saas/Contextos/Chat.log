@@ -2023,3 +2023,25 @@ ajuda pra entender. Depois mandou print do Security Advisor mostrando os
   Não rodei nada eu mesmo (sem acesso ao projeto Supabase do Yuri).
 - Yuri confirmou que já rodou. Registrado em
   `Contextos/Conhecimento.md` (2026-08-18) pra referência futura.
+
+## 2026-08-19 - Log de e-mails visivel em /admin/email-templates
+
+Yuri perguntou se existia log do e-mail enviado na funcao "testar
+e-mail"; se nao houvesse, pra implementar.
+
+- Confirmei por grep que o log ja existia (`EmailLog`, gravado por
+  `EmailService.send()` desde a implementacao original) - so faltava
+  uma tela pra ver. Adicionei secao "Logs de envio" na propria pagina
+  `/admin/email-templates` (nao uma rota admin nova): backend `GET
+  /admin/email-logs` paginado com filtro por status
+  (`emailLogService.list()`), frontend com tabela + filtro + paginacao,
+  atualiza sozinho depois de um "Testar e-mail".
+- 4 testes de integracao novos (`email-log.routes.test.ts`). Suite
+  completa do backend: 105/105. `tsc`/`lint`/`build` limpos em
+  shared/backend/frontend.
+- Testado ao vivo: registrei conta, promovi a ADMIN direto no banco,
+  cliquei "Testar e-mail" e confirmei a linha aparecendo automaticamente
+  no topo (status FAILED/"RESEND_API_KEY not configured", esperado sem
+  chave real em dev), filtro por status funcionando (1172 -> 136
+  registros ao filtrar por Enviado), paginacao recalculando certo.
+  Empresa de teste apagada depois.

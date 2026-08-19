@@ -791,6 +791,33 @@ export interface EmailTemplateTestResult {
   error: string | null;
 }
 
+export interface EmailLogResource {
+  id: string;
+  templateKey: string;
+  toEmail: string;
+  subject: string;
+  status: EmailSendStatus;
+  resendMessageId: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface EmailLogListQuery {
+  page?: number;
+  pageSize?: number;
+  status?: EmailSendStatus;
+}
+
+export interface PaginatedEmailLogList {
+  data: EmailLogResource[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 export interface ForgotPasswordPayload {
   email: string;
 }

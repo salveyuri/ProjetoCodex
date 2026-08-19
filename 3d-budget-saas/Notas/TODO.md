@@ -224,6 +224,13 @@ Passo") em 2026-08-12.
       2026-08-18.
 - [x] **Domínio `pricify3d.com` verificado no Resend** (SPF/DKIM) —
       confirmado em 2026-08-18.
+- [x] **Log de e-mails visível em `/admin/email-templates` — implementado
+      em 2026-08-19.** O registro em si (`EmailLog`) já existia desde a
+      implementação original — todo envio, real ou de teste, sempre
+      gravava uma linha — mas não tinha nenhuma tela pra visualizar.
+      Seção "Logs de envio" nova na mesma página, com filtro por status
+      e paginação (`GET /admin/email-logs`). Ver `Contextos/Decisoes.md`
+      (2026-08-19).
 - [x] **Checado em 2026-08-15**: nenhum webhook está cadastrado no Asaas
       ainda (`GET /v3/webhooks` no sandbox devolveu `totalCount: 0`) — ou
       seja, hoje nem o alerta de vencimento nem os e-mails de assinatura

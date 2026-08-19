@@ -1527,3 +1527,59 @@ hrefs dos CTAs corretos (`/login`, `/register`), chunk CSS do módulo
 carregando com 200, JS de scroll-reveal rodando sem erro (confirmado
 indiretamente via `animationPlayState` do card de cálculo), `/login`
 continua acessível normalmente depois da mudança no `proxy.ts`.
+
+## 2026-08-19 - Log de e-mails visível em `/admin/email-templates`
+
+Yuri perguntou se existia log do e-mail enviado na função "testar
+e-mail" e pediu pra implementar se não houvesse.
+
+### O log já existia — faltava só a tela
+
+`EmailService.send()` (o método usado por **todo** disparo, incluindo
+`sendTest()` por trás do botão "Testar e-mail") já gravava uma linha em
+`EmailLog` desde a implementação original do sistema de e-mails
+(2026-08-15) - status `SENT`/`FAILED`/`SKIPPED_INACTIVE`/
+`SKIPPED_PREFERENCE`, `resendMessageId`, `errorMessage`. Só não existia
+nenhuma rota admin nem tela pra ler essa tabela - os dados estavam sendo
+salvos "no escuro". Confirmado por grep antes de escrever qualquer
+código, pra não duplicar o que já existia.
+
+### Onde mora: nova seção na mesma página, não uma rota admin separada
+
+"Logs de envio" virou uma segunda `Card` na própria
+`/admin/email-templates` (abaixo da tabela de templates), em vez de uma
+tela nova no menu admin - é exatamente onde um admin já está quando
+clica em "Testar e-mail" e quer saber se funcionou, sem precisar
+navegar pra outro lugar. Backend: `GET /admin/email-logs`
+(`emailLogService.list()`, paginado - `page`/`pageSize`/`status`,
+mesmo formato de paginação já usado em `QuoteService.list()`), filtro
+opcional por status. Sem create/update/delete - é só leitura, os dados
+já são escritos automaticamente pelo `EmailService`.
+
+### UX: log atualiza sozinho depois de mandar um teste
+
+O botão "Testar e-mail" agora chama `loadLogs()` no `finally` do envio
+(sucesso, falha ou erro de rede) - o admin vê a nova linha aparecer sem
+precisar clicar em "Atualizar" manualmente. A seção também tem filtro
+por status (Enviado/Falhou/Pulado-inativo/Pulado-preferência) e
+paginação (20 por página, com botão anterior/próximo), já que a tabela
+cresce rápido (cada teste manual + cada disparo real grava uma linha).
+
+### Verificação
+
+`tsc --noEmit`/`lint`/`build` limpos em shared/backend/frontend. 4
+testes novos de integração (`backend/src/routes/email-log.routes.test.ts`
+- não-admin bloqueado, listagem com paginação e ordenação por mais
+recente primeiro, filtro por status, filtro inválido rejeitado com
+`VALIDATION_ERROR`). Suite completa do backend: 105/105 passando.
+Testado ao vivo: registrei uma empresa nova via UI, promovi a `ADMIN`
+direto no banco (mesmo atalho dos testes de integração), cliquei em
+"Testar e-mail" num template - a linha nova apareceu no topo da lista
+automaticamente, com status `FAILED`/"RESEND_API_KEY not configured"
+(esperado em dev sem a chave real do Resend - confirma que o mecanismo
+inteiro funciona, incluindo o caminho de erro). Testei o filtro por
+status (`Enviado` reduziu de 1172 pra 136 registros, paginação recalculou
+de "1 de 59" pra "1 de 7" corretamente) e confirmei que um envio real
+bem-sucedido (`SUBSCRIPTION_RENEWED` gravado pelos testes automatizados,
+que mockam o Resend) aparece com status `Enviado`/tom verde. Empresa de
+teste apagada do banco depois da verificação.

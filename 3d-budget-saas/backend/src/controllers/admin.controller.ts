@@ -5,6 +5,7 @@ import type {
   EmailTemplateTestResult,
   MachineCatalogImportResult,
   MachineCatalogResource,
+  PaginatedEmailLogList,
   PlanResource,
   SupportedLanguage,
   SystemFormulaResource,
@@ -15,6 +16,7 @@ import { ZodError } from "zod";
 import { AppError } from "../middlewares/error-handler";
 import { adminService } from "../services/admin.service";
 import { auditLogService } from "../services/audit-log.service";
+import { emailLogService } from "../services/email-log.service";
 import { emailService } from "../services/email.service";
 import {
   emailTemplateService,
@@ -29,6 +31,7 @@ import {
 import { idParamSchema } from "../validators/common.validator";
 import { adminUserUpdateSchema } from "../validators/admin.validator";
 import {
+  emailLogListQuerySchema,
   emailTemplateTestSchema,
   emailTemplateUpdateSchema,
 } from "../validators/email-template.validator";
@@ -231,6 +234,20 @@ export class AdminController {
         metadata: { to, key: template.key, result: result.status },
       });
       response.status(200).json(result);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async emailLogs(
+    request: Request,
+    response: Response<PaginatedEmailLogList>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const query = emailLogListQuerySchema.parse(request.query);
+      const logs = await emailLogService.list(query);
+      response.status(200).json(logs);
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);
     }

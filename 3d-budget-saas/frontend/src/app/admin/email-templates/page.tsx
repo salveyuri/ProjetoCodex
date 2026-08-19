@@ -1,15 +1,21 @@
 "use client";
 
 import type {
+  EmailLogResource,
+  EmailSendStatus,
   EmailTemplateResource,
   EmailTemplateTestResult,
   EmailTemplateUpdatePayload,
   EmailTemplateVariable,
+  PaginatedEmailLogList,
 } from "@3d-budget/shared";
 import axios from "axios";
 import {
+  ChevronLeft,
+  ChevronRight,
   Edit3,
   Eye,
+  ListChecks,
   Loader2,
   Mail,
   RefreshCcw,
@@ -91,6 +97,23 @@ const buildPreviewHtml = (
   });
 };
 
+const emailLogStatusLabels: Record<EmailSendStatus, string> = {
+  SENT: "Enviado",
+  FAILED: "Falhou",
+  SKIPPED_INACTIVE: "Pulado (inativo)",
+  SKIPPED_PREFERENCE: "Pulado (preferencia)",
+};
+
+const emailLogStatusTones: Record<
+  EmailSendStatus,
+  "success" | "warning" | "danger" | "neutral"
+> = {
+  SENT: "success",
+  FAILED: "danger",
+  SKIPPED_INACTIVE: "neutral",
+  SKIPPED_PREFERENCE: "neutral",
+};
+
 export default function AdminEmailTemplatesPage() {
   const { isLoading: isAuthLoading, token, refreshUser } = useAuth();
   const [templates, setTemplates] = useState<EmailTemplateResource[]>([]);
@@ -104,6 +127,13 @@ export default function AdminEmailTemplatesPage() {
   const [isAccessDenied, setIsAccessDenied] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [logs, setLogs] = useState<EmailLogResource[]>([]);
+  const [logsPagination, setLogsPagination] = useState<
+    PaginatedEmailLogList["pagination"] | null
+  >(null);
+  const [logsPage, setLogsPage] = useState(1);
+  const [logsStatusFilter, setLogsStatusFilter] = useState<EmailSendStatus | "">("");
+  const [isLogsLoading, setIsLogsLoading] = useState(true);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const showToast = useCallback((nextToast: ToastState) => {
@@ -148,6 +178,44 @@ export default function AdminEmailTemplatesPage() {
       })();
     }
   }, [isAuthLoading, loadTemplates, refreshUser, token]);
+
+  const loadLogs = useCallback(async () => {
+    if (!token) {
+      setIsLogsLoading(false);
+      return;
+    }
+
+    setIsLogsLoading(true);
+
+    try {
+      const { data } = await api.get<PaginatedEmailLogList>("/admin/email-logs", {
+        params: {
+          page: logsPage,
+          pageSize: 20,
+          status: logsStatusFilter || undefined,
+        },
+      });
+      setLogs(data.data);
+      setLogsPagination(data.pagination);
+    } catch (error) {
+      // 403 is already surfaced by the templates card above (isAccessDenied)
+      // - avoid a second, redundant "access denied" toast for the same page.
+      if (!(axios.isAxiosError(error) && error.response?.status === 403)) {
+        showToast({
+          tone: "danger",
+          message: getApiErrorMessage(error, "Nao foi possivel carregar os logs de e-mail."),
+        });
+      }
+    } finally {
+      setIsLogsLoading(false);
+    }
+  }, [logsPage, logsStatusFilter, showToast, token]);
+
+  useEffect(() => {
+    if (!isAuthLoading) {
+      void loadLogs();
+    }
+  }, [isAuthLoading, loadLogs]);
 
   const openModal = (template: EmailTemplateResource) => {
     setSelected(template);
@@ -208,6 +276,7 @@ export default function AdminEmailTemplatesPage() {
         message: getApiErrorMessage(error, "Nao foi possivel enviar o e-mail de teste."),
       });
     } finally {
+      void loadLogs();
       setIsSendingTest(false);
     }
   };
@@ -404,6 +473,141 @@ export default function AdminEmailTemplatesPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </Card>
+        ) : null}
+
+        {!isAccessDenied ? (
+          <Card className="overflow-hidden">
+            <div className="flex flex-col justify-between gap-3 border-b border-border p-5 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-3">
+                <ListChecks className="h-5 w-5 text-primary" />
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Logs de envio
+                  </h2>
+                  <p className="text-sm text-muted">
+                    {logsPagination ? `${logsPagination.total} registros.` : "Carregando..."}{" "}
+                    Todo envio (real ou de teste) grava uma linha aqui.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={logsStatusFilter}
+                  onChange={(event) => {
+                    setLogsStatusFilter(event.target.value as EmailSendStatus | "");
+                    setLogsPage(1);
+                  }}
+                  className="h-10 rounded-lg border border-border bg-surface-muted px-3 text-sm outline-none focus:border-primary"
+                >
+                  <option value="">Todos os status</option>
+                  {(Object.keys(emailLogStatusLabels) as EmailSendStatus[]).map((status) => (
+                    <option key={status} value={status}>
+                      {emailLogStatusLabels[status]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void loadLogs()}
+                  disabled={!token}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Atualizar
+                </button>
+              </div>
+            </div>
+
+            {isLogsLoading ? (
+              <div className="grid gap-3 p-5">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="grid gap-3 rounded-lg border border-border bg-background p-4 md:grid-cols-4"
+                  >
+                    <SkeletonText className="w-32" />
+                    <SkeletonText className="w-40" />
+                    <SkeletonText className="w-48" />
+                    <SkeletonText className="w-20" />
+                  </div>
+                ))}
+              </div>
+            ) : logs.length === 0 ? (
+              <p className="p-5 text-sm text-muted">Nenhum e-mail registrado ainda.</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="border-b border-border bg-background text-xs uppercase text-muted">
+                      <tr>
+                        <th className="px-5 py-3">Data</th>
+                        <th className="px-5 py-3">Template</th>
+                        <th className="px-5 py-3">Para</th>
+                        <th className="px-5 py-3">Assunto</th>
+                        <th className="px-5 py-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {logs.map((log) => (
+                        <tr key={log.id} className="bg-surface/40 align-top">
+                          <td className="whitespace-nowrap px-5 py-4 text-muted">
+                            {new Date(log.createdAt).toLocaleString("pt-BR")}
+                          </td>
+                          <td className="px-5 py-4 font-mono text-xs text-foreground">
+                            {log.templateKey}
+                          </td>
+                          <td className="px-5 py-4 text-foreground">{log.toEmail}</td>
+                          <td className="max-w-xs truncate px-5 py-4 text-muted">
+                            {log.subject}
+                          </td>
+                          <td className="px-5 py-4">
+                            <StatusBadge tone={emailLogStatusTones[log.status]}>
+                              {emailLogStatusLabels[log.status]}
+                            </StatusBadge>
+                            {log.errorMessage ? (
+                              <p className="mt-1 max-w-xs text-xs text-danger">
+                                {log.errorMessage}
+                              </p>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {logsPagination && logsPagination.totalPages > 1 ? (
+                  <div className="flex items-center justify-between gap-4 border-t border-border p-4 text-sm text-muted">
+                    <span>
+                      Pagina {logsPagination.page} de {logsPagination.totalPages}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setLogsPage((page) => Math.max(1, page - 1))}
+                        disabled={logsPagination.page <= 1}
+                        className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLogsPage((page) =>
+                            Math.min(logsPagination.totalPages, page + 1),
+                          )
+                        }
+                        disabled={logsPagination.page >= logsPagination.totalPages}
+                        className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </>
             )}
           </Card>
         ) : null}

@@ -18,5 +18,21 @@ export const emailTemplateTestSchema = z
   })
   .strict();
 
+const emailSendStatusSchema = z.enum([
+  "SENT",
+  "FAILED",
+  "SKIPPED_INACTIVE",
+  "SKIPPED_PREFERENCE",
+]);
+
+export const emailLogListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().positive().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).default(20),
+    status: emailSendStatusSchema.optional(),
+  })
+  .strict();
+
 export type EmailTemplateUpdateInput = z.infer<typeof emailTemplateUpdateSchema>;
 export type EmailTemplateTestInput = z.infer<typeof emailTemplateTestSchema>;
+export type EmailLogListQueryInput = z.infer<typeof emailLogListQuerySchema>;

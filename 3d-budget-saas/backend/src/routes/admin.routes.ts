@@ -47,6 +47,10 @@ adminRoutes.post(
   (request, response, next) => adminController.testEmailTemplate(request, response, next),
 );
 
+adminRoutes.get("/email-logs", (request, response, next) =>
+  adminController.emailLogs(request, response, next),
+);
+
 adminRoutes.get("/system-formulas", (request, response, next) =>
   adminController.systemFormulas(request, response, next),
 );

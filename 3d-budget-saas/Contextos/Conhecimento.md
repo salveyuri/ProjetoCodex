@@ -371,3 +371,48 @@ se repetir se alguém mexer nesse código sem saber.
   raiz, sem `backend/node_modules`) antes de dar a mudança por
   concluída — não só rodar localmente com o `backend/node_modules`
   "de sobra" ainda no lugar.
+
+### `vitest run` falhando de forma intermitente com "toHaveBeenCalledTimes(1) mas foi chamado 2x"
+
+- **Sintoma:** ao adicionar `resend-webhook.routes.test.ts` e
+  `email-log.routes.test.ts` (2026-08-20), a suite completa
+  (`npm run test`) passou a falhar de vez em quando com
+  `email-template-test.routes.test.ts` reportando
+  `expected "send" to be called 1 times, but got 2 times` num teste que
+  não tinha relação nenhuma com os arquivos novos.
+- **Causa raiz:** `resendClient` é um singleton de módulo de verdade
+  (`export const resendClient = {...}`) e vários arquivos de teste
+  diferentes fazem `vi.spyOn(resendClient, "send")` cada um no seu
+  próprio teste. `vitest.config.mts` já usava `pool: "threads"`
+  (threads compartilham um processo/module cache, ao contrário de
+  `forks` - decisão de 2026-08-13, documentada ali mesmo) **e**, por
+  padrão, o Vitest roda arquivos de teste diferentes **em paralelo**.
+  Combinando os dois: dois arquivos diferentes rodando ao mesmo tempo
+  literal podiam acabar apontando pro mesmo `resendClient` em memória -
+  uma chamada real disparada pelo teste do arquivo A ficava registrada
+  no spy do arquivo B, que then contava errado. Já era um risco latente
+  antes (`email.service.test.ts` e `email-template-test.routes.test.ts`
+  já faziam a mesma coisa), só que com poucos arquivos a chance de
+  colisão era baixa o bastante pra nunca ter aparecido - os 2 arquivos
+  novos aumentaram o número de testes concorrentes mexendo no mesmo
+  singleton o suficiente pra reproduzir com frequência.
+- **Fix:** `fileParallelism: false` em `vitest.config.mts` - força os
+  arquivos de teste a rodar um de cada vez (não só as threads dentro de
+  um arquivo). Confirmado com 6 rodadas seguidas da suite completa: as
+  116 asserções sempre passaram depois da mudança (nenhuma falha de
+  contagem de chamada), contra falhar em pelo menos 1 de cada 3-4
+  rodadas antes.
+- **Achado à parte, não corrigido**: mesmo com `fileParallelism: false`,
+  o processo do `vitest` ainda crasha ocasionalmente com um erro nativo
+  do Windows (`Segmentation fault`, ou `STATUS_STACK_BUFFER_OVERRUN`)
+  **depois** de todos os testes já terem passado (ou, mais raramente,
+  no meio da suite) - mesma família do problema já documentado acima
+  ("Prisma no Windows sob `threads`"), não parece 100% eliminado, só
+  mitigado. Não bloqueia nada de verdade: é só o exit code do processo
+  que fica errado às vezes, os resultados dos testes em si (visíveis no
+  output do próprio `vitest`, antes do crash) sempre bateram certo nas
+  6 rodadas. Não afeta o build/deploy (`docker compose build` nunca
+  roda `vitest`, só `tsc`). Se aparecer de novo, rodar a suite mais uma
+  vez costuma bastar - não é motivo pra desconfiar de um teste
+  específico sem antes conferir se ele realmente reportou falha (`Tests
+  N failed`) ou só o processo caiu depois de reportar sucesso.

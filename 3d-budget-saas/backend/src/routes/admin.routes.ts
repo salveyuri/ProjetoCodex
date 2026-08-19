@@ -51,6 +51,10 @@ adminRoutes.get("/email-logs", (request, response, next) =>
   adminController.emailLogs(request, response, next),
 );
 
+adminRoutes.get("/email-logs/:id", (request, response, next) =>
+  adminController.emailLogDetail(request, response, next),
+);
+
 adminRoutes.get("/system-formulas", (request, response, next) =>
   adminController.systemFormulas(request, response, next),
 );

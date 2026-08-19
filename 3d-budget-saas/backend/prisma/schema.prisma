@@ -486,6 +486,14 @@ model EmailLog {
   dedupeKey       String?  @unique @map("dedupe_key")
   createdAt       DateTime @default(now()) @map("created_at")
 
+  // Exact HTML actually sent (after variable substitution — the real reset
+  // link, the real customer name, etc.), not just the subject. Lets an
+  // admin re-read what a specific customer was sent (e.g. a password reset
+  // link) straight from the log — see /admin/email-templates' preview
+  // modal. Null for rows written before this column existed, and for
+  // SKIPPED_INACTIVE (nothing was ever rendered).
+  bodyHtml String? @map("body_html") @db.Text
+
   // Filled in asynchronously by the Resend webhook (POST
   // /api/webhooks/resend) once Resend's own delivery attempt resolves —
   // `status`/`resendMessageId` above only reflect that Resend's *API*

@@ -1,5 +1,6 @@
 import type {
   AdminUserResource,
+  EmailLogDetailResource,
   EmailTemplateKey,
   EmailTemplateResource,
   EmailTemplateTestResult,
@@ -248,6 +249,22 @@ export class AdminController {
       const query = emailLogListQuerySchema.parse(request.query);
       const logs = await emailLogService.list(query);
       response.status(200).json(logs);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  // Only place bodyHtml is ever returned — deliberately not part of the
+  // paginated list response (see EmailLogDetailResource in shared).
+  async emailLogDetail(
+    request: Request,
+    response: Response<EmailLogDetailResource>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { id } = idParamSchema.parse(request.params);
+      const log = await emailLogService.getById(id);
+      response.status(200).json(log);
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);
     }

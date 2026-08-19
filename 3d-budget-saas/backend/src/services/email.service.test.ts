@@ -47,6 +47,15 @@ describe("EmailService.send", () => {
     // itemsHtml is a pre-built HTML fragment (key ends in "Html") and must
     // pass through untouched, not double-escaped.
     expect(html).toContain("<tr><td>Peca segura</td></tr>");
+
+    // The exact rendered HTML is also persisted on the EmailLog row, so an
+    // admin can re-read what a customer was actually sent later (e.g. a
+    // password reset link) — see /admin/email-logs/:id.
+    const log = await prisma.emailLog.findFirst({
+      where: { toEmail: "customer@example.com", resendMessageId: "resend-id-1" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(log?.bodyHtml).toBe(html);
   });
 
   it("strips newlines from subject variables but does not HTML-escape them", async () => {

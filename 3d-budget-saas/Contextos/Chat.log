@@ -2125,3 +2125,42 @@ mostrou `Error: Cannot find module 'svix'`.
   porque testes locais nao pegam esse tipo de erro.
 - Pedido ao Yuri: `git pull` + `docker compose build` + `docker compose
   up -d` de novo pra aplicar a correcao (sem migracao nova dessa vez).
+
+## 2026-08-20 - Previa do conteudo enviado + correcao de teste flaky
+
+Yuri perguntou se o log mostra envios reais junto dos de teste
+(confirmado: sim, sem distincao hoje) e pediu uma previa do e-mail
+enviado, pro caso de um cliente com problema no reset de senha nao ter
+recebido e precisar do link/informacao pra passar manualmente.
+
+- Achado antes de implementar: `EmailLog` nunca guardava o HTML de
+  verdade que foi enviado (com o link/token real), so o assunto - o
+  pedido do Yuri nao era possivel com os dados existentes. Precisou de
+  coluna nova (`body_html`, migracao
+  `20260820090000_add_email_log_body_html`), preenchida no mesmo
+  `prisma.emailLog.create()` que ja gravava status/assunto.
+- Endpoint novo `GET /admin/email-logs/:id` (`EmailLogDetailResource`)
+  separado da listagem - `bodyHtml` nao entra na resposta paginada
+  (pode ser grande), so busca sob demanda quando o admin clica em "Ver
+  conteudo enviado".
+- Novo botao na tabela de logs abre modal com iframe sandboxed (mesmo
+  padrao ja usado na previa de template), mostrando o HTML exato que
+  foi mandado.
+- Achado nos testes (nao relacionado a feature em si): suite completa
+  comecou a falhar de vez em quando com contagem de chamada errada -
+  causa era `resendClient` sendo um singleton real, testes em arquivos
+  diferentes rodando em paralelo por padrao no Vitest, e mais arquivos
+  novos mexendo nele aumentou a chance de colisao. Corrigido com
+  `fileParallelism: false`. Confirmado com 6 rodadas seguidas sem
+  falha de asercao. Detalhe registrado, nao 100% resolvido: o processo
+  do vitest ainda pode crashar por erro nativo do Windows depois dos
+  testes ja terem passado (mesma familia do bug de Prisma+threads ja
+  documentado) - nao afeta o resultado dos testes, so o exit code as
+  vezes. Ver `Contextos/Conhecimento.md` (2026-08-20).
+- Testado ao vivo: mandei teste do template PASSWORD_RESET, abri a
+  previa, confirmei via resposta de rede que o `bodyHtml` chegou com o
+  link `href="https://app.pricify3d.com/reset-password?token=..."` -
+  exatamente o cenario que o Yuri descreveu. Dados de teste apagados
+  depois.
+- Migracao nova precisa ser aplicada em producao
+  (`docker compose run --rm backend npx prisma migrate deploy`).

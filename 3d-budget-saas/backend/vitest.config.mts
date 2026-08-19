@@ -11,6 +11,19 @@ export default defineConfig({
     // Contextos/Conhecimento.md. Threads share one process/module cache
     // instead, which avoided it across a dozen repeated runs.
     pool: "threads",
+    // Multiple test files independently `vi.spyOn(resendClient, "send")` —
+    // resendClient is a real module-level singleton, and with threads
+    // sharing one process/module cache (see above), two DIFFERENT test
+    // files running in parallel can end up pointed at the very same spy
+    // instance: a call meant for one file's assertion gets recorded
+    // against another file's, intermittently failing an unrelated
+    // "toHaveBeenCalledTimes(1)" check. Found while adding
+    // resend-webhook.routes.test.ts / email-log.routes.test.ts (2026-08-20)
+    // — more files touching resendClient.send raised the odds of hitting
+    // this enough to reproduce reliably. Forcing files to run one at a
+    // time removes the race; the suite already isn't optimized for raw
+    // speed (integration tests hit a real shared Postgres).
+    fileParallelism: false,
     // Integration tests simulate many different "companies" registering
     // from many different IPs (via X-Forwarded-For in test-utils/
     // register-test-company.ts) to avoid tripping the real

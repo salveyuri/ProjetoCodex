@@ -239,16 +239,21 @@ Passo") em 2026-08-12.
       delivery_delayed/failed` e preenche `EmailLog.deliveryStatus` —
       coluna "Entrega" nova na mesma tela, com filtro próprio. Ver
       `Contextos/Decisoes.md` (2026-08-19).
-- [ ] **Falta rodar `resend:register-webhook` em produção** —
-      `docker compose exec backend npm run resend:register-webhook` (com
-      `RESEND_API_KEY` já configurada e `APP_BASE_URL` público em https,
-      ambos já verdadeiros em produção). O script imprime um
-      `RESEND_WEBHOOK_SECRET` (só aparece **uma vez** — Resend não mostra
-      de novo) — colar no `.env` da VPS e rodar `docker compose up -d`
-      de novo (não precisa rebuild, é só variável de ambiente). Sem isso
-      a coluna "Entrega" fica sempre em "Aguardando" (o app continua
-      enviando e-mail normalmente, é só a informação extra que fica
-      faltando). Mesmo padrão já usado pro webhook do Asaas.
+- [x] **Webhook do Resend cadastrado em produção — confirmado em
+      2026-08-19.** A chave de API de produção era restrita só a envio
+      (não conseguia gerenciar webhook via API — `401
+      restricted_api_key`) — cadastrado manualmente pelo Yuri direto no
+      painel do Resend em vez de rodar o script. `RESEND_WEBHOOK_SECRET`
+      configurado no `.env` da VPS.
+- [x] **Prévia do conteúdo enviado — implementado em 2026-08-20.**
+      Botão novo na tela "Logs de envio" abre modal com o HTML exato
+      que foi mandado pro destinatário (nome, link/token reais — não
+      dados de exemplo). Existia um buraco real: `EmailLog` nunca
+      guardava esse HTML antes, só o assunto — coluna `body_html` nova
+      resolve isso. Serve principalmente pro caso de um cliente com
+      problema no reset de senha não ter recebido o e-mail — dá pra ver
+      o link direto no log e passar manualmente. Ver
+      `Contextos/Decisoes.md` (2026-08-20).
 - [x] **Checado em 2026-08-15**: nenhum webhook está cadastrado no Asaas
       ainda (`GET /v3/webhooks` no sandbox devolveu `totalCount: 0`) — ou
       seja, hoje nem o alerta de vencimento nem os e-mails de assinatura

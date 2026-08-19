@@ -1,11 +1,13 @@
 import type {
   EmailDeliveryStatus,
+  EmailLogDetailResource,
   EmailLogResource,
   EmailSendStatus,
   PaginatedEmailLogList,
 } from "@3d-budget/shared";
 import type { EmailLog, Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
+import { AppError } from "../middlewares/error-handler";
 import type { EmailLogListQueryInput } from "../validators/email-template.validator";
 
 export const toEmailLogResource = (log: EmailLog): EmailLogResource => ({
@@ -20,6 +22,11 @@ export const toEmailLogResource = (log: EmailLog): EmailLogResource => ({
   deliveryDetail: log.deliveryDetail,
   deliveryUpdatedAt: log.deliveryUpdatedAt?.toISOString() ?? null,
   createdAt: log.createdAt.toISOString(),
+});
+
+export const toEmailLogDetailResource = (log: EmailLog): EmailLogDetailResource => ({
+  ...toEmailLogResource(log),
+  bodyHtml: log.bodyHtml,
 });
 
 // Read-only — every row is written by EmailService.send()/skipForPreference()
@@ -53,6 +60,16 @@ export class EmailLogService {
         totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
       },
     };
+  }
+
+  async getById(id: string): Promise<EmailLogDetailResource> {
+    const log = await prisma.emailLog.findUnique({ where: { id } });
+
+    if (!log) {
+      throw new AppError("Email log not found.", 404, "EMAIL_LOG_NOT_FOUND");
+    }
+
+    return toEmailLogDetailResource(log);
   }
 }
 

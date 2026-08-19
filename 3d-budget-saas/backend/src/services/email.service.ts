@@ -185,6 +185,7 @@ export class EmailService {
           resendMessageId: result.id,
           errorMessage: result.error,
           dedupeKey: options.dedupeKey,
+          bodyHtml: html,
         },
       });
 

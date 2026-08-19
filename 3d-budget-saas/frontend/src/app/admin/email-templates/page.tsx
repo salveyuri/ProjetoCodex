@@ -2,6 +2,7 @@
 
 import type {
   EmailDeliveryStatus,
+  EmailLogDetailResource,
   EmailLogListQuery,
   EmailLogResource,
   EmailSendStatus,
@@ -164,6 +165,11 @@ export default function AdminEmailTemplatesPage() {
     EmailDeliveryStatus | ""
   >("");
   const [isLogsLoading, setIsLogsLoading] = useState(true);
+  const [logPreview, setLogPreview] = useState<{
+    summary: EmailLogResource;
+    bodyHtml: string | null;
+    isLoading: boolean;
+  } | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const showToast = useCallback((nextToast: ToastState) => {
@@ -248,6 +254,27 @@ export default function AdminEmailTemplatesPage() {
       void loadLogs();
     }
   }, [isAuthLoading, loadLogs]);
+
+  // Fetches the exact HTML that was sent to this recipient — e.g. so an
+  // admin can grab a password reset link a customer says never arrived,
+  // and pass it along manually. Only ever fetched one row at a time
+  // (bodyHtml isn't part of the paginated list response).
+  const openLogPreview = async (log: EmailLogResource) => {
+    setLogPreview({ summary: log, bodyHtml: null, isLoading: true });
+
+    try {
+      const { data } = await api.get<EmailLogDetailResource>(`/admin/email-logs/${log.id}`);
+      setLogPreview({ summary: log, bodyHtml: data.bodyHtml, isLoading: false });
+    } catch (error) {
+      showToast({
+        tone: "danger",
+        message: getApiErrorMessage(error, "Nao foi possivel carregar o conteudo do e-mail."),
+      });
+      setLogPreview(null);
+    }
+  };
+
+  const closeLogPreview = () => setLogPreview(null);
 
   const openModal = (template: EmailTemplateResource) => {
     setSelected(template);
@@ -597,6 +624,7 @@ export default function AdminEmailTemplatesPage() {
                         <th className="px-5 py-3">Assunto</th>
                         <th className="px-5 py-3">Status</th>
                         <th className="px-5 py-3">Entrega</th>
+                        <th className="px-5 py-3">Acoes</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -637,6 +665,17 @@ export default function AdminEmailTemplatesPage() {
                                 {log.deliveryDetail}
                               </p>
                             ) : null}
+                          </td>
+                          <td className="px-5 py-4">
+                            <button
+                              type="button"
+                              title="Ver conteudo enviado"
+                              aria-label="Ver conteudo enviado"
+                              onClick={() => void openLogPreview(log)}
+                              className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -829,6 +868,54 @@ export default function AdminEmailTemplatesPage() {
               sandbox=""
               className="h-[70vh] w-full bg-white"
             />
+          </div>
+        </div>
+      ) : null}
+
+      {logPreview ? (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center bg-black/70 px-4 py-6"
+          onClick={closeLogPreview}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-background shadow-panel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-border p-4">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold">Conteudo enviado</h2>
+                <p className="truncate text-xs text-muted">
+                  Para {logPreview.summary.toEmail} - {logPreview.summary.subject}
+                </p>
+              </div>
+              <button
+                type="button"
+                title="Fechar"
+                aria-label="Fechar"
+                onClick={closeLogPreview}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {logPreview.isLoading ? (
+              <div className="grid h-[50vh] place-items-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted" />
+              </div>
+            ) : logPreview.bodyHtml ? (
+              <iframe
+                title="Conteudo do e-mail enviado"
+                srcDoc={logPreview.bodyHtml}
+                sandbox=""
+                className="h-[70vh] w-full bg-white"
+              />
+            ) : (
+              <p className="p-6 text-sm text-muted">
+                Este envio nao tem conteudo salvo (enviado antes da gravacao do
+                corpo do e-mail ter sido adicionada, ou pulado sem chegar a
+                renderizar nada).
+              </p>
+            )}
           </div>
         </div>
       ) : null}

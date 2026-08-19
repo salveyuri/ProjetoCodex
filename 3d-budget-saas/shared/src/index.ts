@@ -816,6 +816,15 @@ export interface EmailLogResource {
   createdAt: string;
 }
 
+// Exact HTML actually sent (after variable substitution — the real reset
+// link, the real customer name, etc.) — only ever fetched one row at a
+// time (GET /admin/email-logs/:id), never included in the paginated list,
+// since it can be large. Null for rows sent before this was captured, or
+// for a SKIPPED_INACTIVE row (nothing was ever rendered).
+export interface EmailLogDetailResource extends EmailLogResource {
+  bodyHtml: string | null;
+}
+
 export interface EmailLogListQuery {
   page?: number;
   pageSize?: number;

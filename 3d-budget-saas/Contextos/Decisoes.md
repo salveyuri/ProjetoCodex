@@ -1721,3 +1721,97 @@ corretamente; atualizei a mesma linha simulando um `BOUNCED` com detalhe
 - UI mostrou "Devolvido" + a mensagem da suppression list; testei o
 filtro por status de entrega (`BOUNCED` reduziu de 3 pra 1 registro
 corretamente). Dados de teste apagados depois.
+
+## 2026-08-20 - Prévia do conteúdo enviado (achado: HTML nunca era salvo)
+
+Yuri, depois de conferir que o log mostra envios reais e de teste
+juntos: pediu prévia do e-mail enviado pra caso um cliente com
+problema no reset de senha não tenha recebido, poder ver o link/
+informação e passar manualmente.
+
+### Achado antes de implementar: o `EmailLog` nunca guardava o HTML de verdade
+
+`EmailService.send()` sempre computou `html` (com as variáveis já
+substituídas - inclusive o token real do link de reset) só pra mandar
+pro Resend - nunca gravava esse HTML em lugar nenhum, só o `subject`.
+Ou seja, o pedido do Yuri (ver o link que foi mandado de verdade pra um
+cliente específico) **não era possível** com os dados que já existiam -
+o token de reset é gerado uma vez, no momento do envio, e não dá pra
+reconstruir depois só a partir do template (é aleatório). Precisou de
+uma coluna nova, não só uma tela nova.
+
+### `bodyHtml` na própria linha do `EmailLog`, não numa tabela separada
+
+Coluna `body_html TEXT` nova (migração
+`20260820090000_add_email_log_body_html`), preenchida no mesmo
+`prisma.emailLog.create()` que já gravava status/assunto -
+`EmailService.send()` só precisou passar `bodyHtml: html` a mais.
+Guarda o HTML **exato** que foi de fato enviado (nome do cliente, link
+com o token real, etc.), não uma reconstrução a partir do template
+atual - importante porque o template pode ter sido editado depois, e o
+token do link é único por envio.
+
+### Endpoint de detalhe separado da listagem, por causa do tamanho
+
+`bodyHtml` **não** entra na resposta paginada de `GET /admin/email-logs`
+(list) - só a listagem já carrega até 20 linhas de uma vez, e HTML de
+e-mail formatado facilmente passa de alguns KB por linha. Novo
+`GET /admin/email-logs/:id` (`EmailLogDetailResource` no shared, estende
+`EmailLogResource` só com `bodyHtml`) busca **uma** linha por vez,
+chamado só quando o admin clica no botão de prévia - mesmo raciocínio
+de "campo pesado só sob demanda" que outras APIs desse projeto já
+seguem.
+
+### Reusa o padrão de modal com iframe sandboxed que a prévia de template já tinha
+
+`/admin/email-templates` já tinha um modal de prévia (pro **template**,
+com dados de exemplo) usando `<iframe sandbox="" srcDoc={html}>` -
+mesmo padrão pro **envio real** (modal novo, estado `logPreview`
+separado, busca sob demanda via `GET /admin/email-logs/:id`, loading
+spinner enquanto busca, mensagem de fallback se `bodyHtml` for `null` -
+cobre linhas gravadas antes dessa migração, ou `SKIPPED_INACTIVE` onde
+nada chegou a ser renderizado). `sandbox=""` sem `allow-same-origin`
+também bloqueia o próprio parent de inspecionar o conteúdo via JS -
+confirmado sem querer durante o teste ao vivo (script de verificação
+não conseguiu ler `iframe.contentDocument`), o que é o comportamento de
+segurança correto, não um bug.
+
+### Achado nos testes, não relacionado à feature em si: corrida entre arquivos de teste
+
+Ao adicionar os testes novos (que também usam `vi.spyOn(resendClient,
+"send")`), a suite completa (`npm run test`) começou a falhar de vez em
+quando com uma contagem de chamada errada num teste **sem relação**
+nenhuma com essa mudança. Causa: `resendClient` é um singleton de
+verdade, `vitest.config.mts` já usava `pool: "threads"` (threads
+compartilham processo/module cache - decisão de 2026-08-13), e por
+padrão o Vitest roda arquivos de teste em paralelo - com mais arquivos
+mexendo no mesmo singleton ao mesmo tempo, a chance de um teste
+"roubar" uma chamada do spy de outro arquivo ficou alta o bastante pra
+reproduzir com frequência (risco que já existia, só que raro antes).
+Corrigido com `fileParallelism: false` em `vitest.config.mts` -
+confirmado com 6 rodadas seguidas da suite completa, sem nenhuma falha
+de asserção depois da mudança. Detalhe à parte, não 100% resolvido: o
+processo do `vitest` ainda crasha ocasionalmente com erro nativo do
+Windows (mesma família do problema já documentado sobre Prisma +
+threads) - não afeta o resultado dos testes em si (sempre bateram
+certo nas 6 rodadas), só o exit code do processo às vezes. Ver
+`Contextos/Conhecimento.md` (2026-08-20) para os dois achados
+detalhados.
+
+### Verificação
+
+Novos testes: `email.service.test.ts` ganhou uma asserção confirmando
+que `EmailLog.bodyHtml` bate exatamente com o HTML mandado pro Resend;
+`email-log.routes.test.ts` ganhou uma descrição nova
+(`GET /api/admin/email-logs/:id`) com casos de não-admin bloqueado,
+404 pra id desconhecido, e conteúdo renderizado correto (sem
+`{{variavel}}` sobrando) - mais um teste confirmando que a listagem
+**não** inclui `bodyHtml`. `tsc`/`lint`/`build` limpos em
+shared/backend/frontend. Testado ao vivo: mandei um teste do template
+`PASSWORD_RESET`, abri a prévia pelo botão novo na linha do log,
+confirmei via inspeção da resposta de rede (não do DOM do iframe, por
+causa do sandbox) que `bodyHtml` chegou com o HTML completo, incluindo
+o link `href="https://app.pricify3d.com/reset-password?token=..."` -
+exatamente o cenário que o Yuri descreveu (cliente sem receber,
+precisar ver o link pra passar manualmente). Dados de teste apagados
+depois.

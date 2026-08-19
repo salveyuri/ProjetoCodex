@@ -119,4 +119,86 @@ describe("GET /api/admin/email-logs", () => {
     expect(response.status).toBe(400);
     expect(response.body.code).toBe("VALIDATION_ERROR");
   });
+
+  it("does not include bodyHtml in the list response", async () => {
+    const company = await registerTestCompany(app, "email-log-list-no-body");
+    await promoteToAdmin(company.userId);
+    const template = await prisma.emailTemplate.findFirstOrThrow({
+      where: { key: "ACCOUNT_CREATED" },
+    });
+    vi.spyOn(resendClient, "send").mockResolvedValue({ id: "resend-id", error: null });
+
+    await request(app)
+      .post(`/api/admin/email-templates/${template.id}/test`)
+      .set(authHeader(company.token))
+      .send({ to: "log-list-no-body@example.com" });
+
+    const response = await request(app)
+      .get("/api/admin/email-logs")
+      .query({ pageSize: 100 })
+      .set(authHeader(company.token));
+
+    expect(response.status).toBe(200);
+    expect(
+      (response.body.data as Array<Record<string, unknown>>).every(
+        (log) => !("bodyHtml" in log),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("GET /api/admin/email-logs/:id", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("rejects a non-admin caller", async () => {
+    const company = await registerTestCompany(app, "email-log-detail-non-admin");
+
+    const response = await request(app)
+      .get("/api/admin/email-logs/00000000-0000-4000-8000-000000000000")
+      .set(authHeader(company.token));
+
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe("ADMIN_REQUIRED");
+  });
+
+  it("returns 404 for an unknown id", async () => {
+    const company = await registerTestCompany(app, "email-log-detail-404");
+    await promoteToAdmin(company.userId);
+
+    const response = await request(app)
+      .get("/api/admin/email-logs/00000000-0000-4000-8000-000000000000")
+      .set(authHeader(company.token));
+
+    expect(response.status).toBe(404);
+    expect(response.body.code).toBe("EMAIL_LOG_NOT_FOUND");
+  });
+
+  it("returns the exact rendered HTML that was sent", async () => {
+    const company = await registerTestCompany(app, "email-log-detail-body");
+    await promoteToAdmin(company.userId);
+    const template = await prisma.emailTemplate.findFirstOrThrow({
+      where: { key: "PASSWORD_RESET" },
+    });
+    vi.spyOn(resendClient, "send").mockResolvedValue({ id: "resend-id-detail", error: null });
+
+    await request(app)
+      .post(`/api/admin/email-templates/${template.id}/test`)
+      .set(authHeader(company.token))
+      .send({ to: "log-detail-body@example.com" });
+
+    const log = await prisma.emailLog.findFirstOrThrow({
+      where: { resendMessageId: "resend-id-detail" },
+    });
+
+    const response = await request(app)
+      .get(`/api/admin/email-logs/${log.id}`)
+      .set(authHeader(company.token));
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(log.id);
+    expect(typeof response.body.bodyHtml).toBe("string");
+    expect(response.body.bodyHtml).not.toMatch(/\{\{\w+\}\}/);
+  });
 });

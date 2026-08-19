@@ -486,6 +486,12 @@ export default function LandingPage() {
                     </svg>
                     Fórmula padrão do sistema
                   </li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                      <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Interface em português ou inglês
+                  </li>
                 </ul>
                 <Link href="/register" className={`${styles.btn} ${styles.btnGhost} ${styles.btnBlock}`}>
                   Começar grátis
@@ -545,7 +551,7 @@ export default function LandingPage() {
           <div className={styles.wrap}>
             <div className={`${styles.sectionHead} ${styles.reveal}`} data-reveal>
               <span className={styles.eyebrow}>Dúvidas frequentes</span>
-              <h2>Antes de você perguntar</h2>
+              <h2>Você pode querer saber</h2>
             </div>
             <div className={`${styles.faqList} ${styles.reveal}`} data-reveal>
               <details className={styles.faqItem} open>
@@ -569,7 +575,7 @@ export default function LandingPage() {
                 <summary>Dá pra usar o sistema em inglês?</summary>
                 <p>
                   Sim. A interface, os PDFs de orçamento e os e-mails têm versão em português e em
-                  inglês — cada usuário escolhe o próprio idioma, mesmo dentro da mesma empresa.
+                  inglês — cada usuário escolhe o próprio idioma.
                 </p>
               </details>
               <details className={styles.faqItem}>

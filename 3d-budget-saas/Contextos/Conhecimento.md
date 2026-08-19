@@ -321,3 +321,53 @@ se repetir se alguém mexer nesse código sem saber.
   aplicar `ENABLE ROW LEVEL SECURITY` (sem policy) em qualquer tabela
   nova como higiene padrão, já que não tem custo nem risco de quebrar o
   Prisma.
+
+### Backend em crash loop em produção — `Cannot find module 'svix'`
+
+- **Sintoma:** depois do deploy que adicionou o webhook do Resend
+  (2026-08-19), `docker compose up -d` subia os containers mas o
+  backend ficava reiniciando em loop (`docker compose exec backend ...`
+  respondia "Container ... is restarting"). `docker compose logs
+  backend` mostrava `Error: Cannot find module 'svix'` ao carregar
+  `webhook.controller.js`, com `MODULE_NOT_FOUND`.
+- **Causa raiz:** `svix` foi instalado (`npm install svix` rodado de
+  dentro de `backend/`) e ficou registrado no `package-lock.json` como
+  `backend/node_modules/svix` — **não** hoisted pra raiz do monorepo
+  como todo outro dependency do backend (`resend`, `express`, etc.,
+  todos em `node_modules/<pkg>` na raiz). Localmente isso não dava erro
+  nenhum: rodando `node dist/server.js` de dentro de `backend/`, a
+  resolução de módulo do Node sobe os diretórios e acha
+  `backend/node_modules/svix` direto, sem precisar da raiz. Só que
+  `backend/Dockerfile` (stage `runtime`) só copia **`/app/node_modules`
+  (a raiz)** pro container — nunca `backend/node_modules` — porque
+  todo o resto do projeto sempre dependeu só da raiz. Resultado: local
+  "funcionava" e produção quebrava, mesma categoria do bug já registrado
+  aqui sobre `libssl` (ambiente de teste local não reflete o container).
+- **Por que só aconteceu com o `svix` e não com os outros pacotes:**
+  não foi conflito de versão (conferido — nenhum outro pacote do
+  monorepo depende de `svix`/`standardwebhooks`). Parece ter sido só um
+  detalhe de como o `npm install <pkg>` incremental (rodado a partir de
+  `backend/`, inclusive quando troquei a versão de `2.0.0` pra
+  `1.99.1`) decide onde colocar um pacote novo — ele reaproveita a
+  forma resolvida já existente no lockfile em vez de recalcular hoisting
+  do zero, então nem `rm -rf node_modules && npm install` limpo
+  resolvia sozinho.
+- **Fix:** apagar manualmente as entradas `backend/node_modules/svix` e
+  `node_modules/standardwebhooks` de dentro de `package-lock.json`
+  (`packages`), forçando o npm a resolver os dois do zero na próxima
+  instalação — só então ele hoisted os dois pra raiz
+  (`node_modules/svix`), igual todo o resto. Confirmado com `npm ci`
+  (o mesmo comando que o Dockerfile roda) que o resultado bate: sem
+  `backend/node_modules` nenhum, tudo na raiz.
+- **Aprendizado:** depois de adicionar **qualquer** dependência nova a
+  um workspace deste monorepo, checar onde ela ficou registrada no
+  `package-lock.json` (`grep -n '"node_modules/<pkg>"'` deve mostrar a
+  entrada na **raiz**, não `backend/node_modules/<pkg>` nem
+  `frontend/node_modules/<pkg>`) antes de considerar a mudança pronta —
+  `tsc`/testes locais não pegam esse tipo de problema porque a
+  resolução de módulo do Node funciona igual dos dois jeitos fora do
+  Docker. Mais forte ainda: testar o `dist/` compilado simulando
+  exatamente o que o `Dockerfile` copia (só `/app/node_modules` da
+  raiz, sem `backend/node_modules`) antes de dar a mudança por
+  concluída — não só rodar localmente com o `backend/node_modules`
+  "de sobra" ainda no lugar.

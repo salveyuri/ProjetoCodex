@@ -2097,3 +2097,31 @@ nao se o e-mail chegou de verdade - isso so vem via webhook assincrono.
   em producao e colar o `RESEND_WEBHOOK_SECRET` impresso no `.env` da
   VPS (so variavel de ambiente, nao precisa rebuild). Ver
   `Notas/TODO.md`.
+
+## 2026-08-19 (mesmo dia) - Incidente de producao: backend em crash loop apos o deploy do webhook do Resend
+
+Yuri seguiu os passos de deploy (git pull + build + migrate + up) e o
+backend entrou em loop de reinicio - `docker compose logs backend`
+mostrou `Error: Cannot find module 'svix'`.
+
+- **Causa raiz**: `svix` tinha sido instalado ficando registrado no
+  `package-lock.json` como `backend/node_modules/svix`, nao hoisted
+  pra raiz do monorepo como todo o resto (`resend`, `express`, etc). Em
+  dev local isso nunca deu erro (resolucao de modulo do Node sobe os
+  diretorios e acha do mesmo jeito), mas `backend/Dockerfile` so copia
+  `/app/node_modules` (a raiz) pro container final - nunca
+  `backend/node_modules` - entao em producao o modulo simplesmente nao
+  existia.
+- Corrigido apagando as entradas erradas do `package-lock.json` na mao
+  e deixando o npm resolver de novo do zero - dessa vez hoisted certo
+  pra raiz. Confirmado com `npm ci` (mesmo comando do Dockerfile) e
+  testando o `dist/` compilado sem nenhum `backend/node_modules` no
+  caminho (simulando exatamente o que o container tem). Suite completa
+  do backend: 112/112 ainda passando. Diff final: só o
+  `package-lock.json`, nenhuma mudanca de codigo.
+  Registrado em `Contextos/Conhecimento.md` (2026-08-19) - aprendizado:
+  depois de adicionar qualquer dependencia nova, checar se ela ficou
+  hoisted na raiz do lockfile antes de considerar a mudanca pronta,
+  porque testes locais nao pegam esse tipo de erro.
+- Pedido ao Yuri: `git pull` + `docker compose build` + `docker compose
+  up -d` de novo pra aplicar a correcao (sem migracao nova dessa vez).

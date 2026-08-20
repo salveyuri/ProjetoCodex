@@ -2,9 +2,11 @@ import type {
   FormulaPreviewResponse,
   FormulaResource,
   FormulaVariable,
+  SupportedLanguage,
 } from "@3d-budget/shared";
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
+import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
 import { formulaService } from "../services/formula.service";
 import { getAuthenticatedCompanyId } from "../utils/request-auth";
@@ -42,7 +44,15 @@ export class FormulaController {
   ): Promise<void> {
     try {
       const companyId = getAuthenticatedCompanyId(request);
-      const variables = await formulaService.variables(companyId);
+      // Variable descriptions live server-side (unlike the rest of the UI,
+      // translated client-side) — same reasoning as the PDF/email content,
+      // read from the DB rather than trusting a client-supplied locale.
+      const user = await prisma.user.findUnique({
+        where: { id: request.auth?.userId ?? "" },
+        select: { language: true },
+      });
+      const language = (user?.language ?? "pt-BR") as SupportedLanguage;
+      const variables = await formulaService.variables(companyId, language);
       response.status(200).json(variables);
     } catch (error) {
       next(error);

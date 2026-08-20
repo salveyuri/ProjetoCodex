@@ -190,6 +190,70 @@ describe("Email preference gating", () => {
     expect(log?.status).toBe("SKIPPED_PREFERENCE");
   });
 
+  it("skips sendPaymentOverdue when the user opted out of financial emails", async () => {
+    const company = await registerTestCompany(app, "email-pref-overdue");
+
+    await request(app)
+      .patch("/api/auth/me")
+      .set(authHeader(company.token))
+      .send({ emailPreferences: { financial: false } });
+
+    const payment = await prisma.payment.create({
+      data: {
+        companyId: company.companyId,
+        asaasPaymentId: `pay_overdue_pref_${Date.now()}`,
+        status: "OVERDUE",
+        value: 49.9,
+        dueDate: new Date(),
+        rawPayload: {},
+      },
+    });
+
+    const sendSpy = vi.spyOn(resendClient, "send");
+
+    await emailService.sendPaymentOverdue(company.companyId, payment.id);
+
+    expect(sendSpy).not.toHaveBeenCalled();
+    const log = await prisma.emailLog.findFirst({
+      where: { templateKey: "PAYMENT_OVERDUE", toEmail: company.email },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(log?.status).toBe("SKIPPED_PREFERENCE");
+  });
+
+  it("sends sendPaymentOverdue with a payment link, falling back to the billing page when Asaas gave no invoiceUrl", async () => {
+    // registerTestCompany triggers its own fire-and-forget sendAccountCreated
+    // in the background — wait for it to finish before spying on
+    // resendClient.send below, otherwise it can still be in flight and get
+    // counted alongside the sendPaymentOverdue call this test cares about.
+    const accountCreatedSpy = vi.spyOn(emailService, "sendAccountCreated");
+    const company = await registerTestCompany(app, "email-overdue-link");
+    await accountCreatedSpy.mock.results[0]?.value;
+    accountCreatedSpy.mockRestore();
+
+    const payment = await prisma.payment.create({
+      data: {
+        companyId: company.companyId,
+        asaasPaymentId: `pay_overdue_link_${Date.now()}`,
+        status: "OVERDUE",
+        value: 49.9,
+        dueDate: new Date(),
+        invoiceUrl: null,
+        rawPayload: {},
+      },
+    });
+
+    const sendSpy = vi
+      .spyOn(resendClient, "send")
+      .mockResolvedValue({ id: "resend-overdue", error: null });
+
+    await emailService.sendPaymentOverdue(company.companyId, payment.id);
+
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    const [{ html }] = sendSpy.mock.calls[0];
+    expect(html).toContain("/dashboard/billing");
+  });
+
   it("never gates sendAccountCreated on any preference", async () => {
     const company = await registerTestCompany(app, "email-pref-account-created");
 

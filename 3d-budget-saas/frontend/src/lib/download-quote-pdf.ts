@@ -1,9 +1,11 @@
+import type { QuotePdfFormat } from "@3d-budget/shared";
 import axios, { type AxiosResponse } from "axios";
 import { api } from "./api";
 
 interface DownloadQuotePdfParams {
   quoteId: string;
   customerName?: string;
+  format?: QuotePdfFormat;
 }
 
 const sanitizeFilenamePart = (value: string): string => {
@@ -113,6 +115,7 @@ export const fetchQuotePdf = async (
     response = await api.get<Blob>(`/quotes/${params.quoteId}/pdf`, {
       responseType: "blob",
       timeout: 20000,
+      params: params.format ? { format: params.format } : undefined,
     });
   } catch (error) {
     throw await toDownloadError(error);

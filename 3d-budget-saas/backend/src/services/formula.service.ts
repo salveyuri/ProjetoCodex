@@ -4,6 +4,7 @@ import type {
   FormulaPreviewResponse,
   FormulaResource,
   FormulaVariable,
+  SupportedLanguage,
 } from "@3d-budget/shared";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
@@ -39,108 +40,187 @@ type FormulaRow = {
   updatedAt: Date;
 };
 
+// Descriptions come from the backend (unlike the rest of the UI, which is
+// translated client-side), so they need their own pt-BR/en pair instead of
+// a plain string — see Contextos/Decisoes.md (2026-08-20).
 const systemVariableMeta: Record<
   (typeof INTERNAL_VARIABLES)[number],
-  { description: string; type: CustomVariableType; previewValue: number }
+  {
+    description: Record<SupportedLanguage, string>;
+    type: CustomVariableType;
+    previewValue: number;
+  }
 > = {
   peso: {
-    description: "Soma do peso de todas as mesas do orcamento, em gramas.",
+    description: {
+      "pt-BR": "Soma do peso de todas as mesas do orcamento, em gramas.",
+      en: "Sum of the weight of every table in the quote, in grams.",
+    },
     type: "FLOAT",
     previewValue: 100,
   },
   tempo: {
-    description: "Soma do tempo de impressao de todas as mesas, em horas.",
+    description: {
+      "pt-BR": "Soma do tempo de impressao de todas as mesas, em horas.",
+      en: "Sum of the print time of every table, in hours.",
+    },
     type: "FLOAT",
     previewValue: 2,
   },
   material_cost: {
-    description: "Custo total de material somado de todas as mesas do orcamento.",
+    description: {
+      "pt-BR": "Custo total de material somado de todas as mesas do orcamento.",
+      en: "Total material cost, summed across every table in the quote.",
+    },
     type: "FLOAT",
     previewValue: 10,
   },
   energia_total: {
-    description: "Custo total de energia somado de todas as mesas do orcamento.",
+    description: {
+      "pt-BR": "Custo total de energia somado de todas as mesas do orcamento.",
+      en: "Total energy cost, summed across every table in the quote.",
+    },
     type: "FLOAT",
     previewValue: 0.24,
   },
   depreciacao_maquina: {
-    description: "Custo de depreciacao somado de todas as mesas do orcamento.",
+    description: {
+      "pt-BR": "Custo de depreciacao somado de todas as mesas do orcamento.",
+      en: "Depreciation cost, summed across every table in the quote.",
+    },
     type: "FLOAT",
     previewValue: 6,
   },
   manutencao_maquina: {
-    description: "Custo de manutencao somado de todas as mesas do orcamento.",
+    description: {
+      "pt-BR": "Custo de manutencao somado de todas as mesas do orcamento.",
+      en: "Maintenance cost, summed across every table in the quote.",
+    },
     type: "FLOAT",
     previewValue: 3,
   },
   custo_base: {
-    description:
-      "Custo total do orcamento: material + energia (com taxa de erro aplicada) + depreciacao + manutencao, somados de todas as mesas. Calculado uma unica vez pro orcamento inteiro, nao por mesa.",
+    description: {
+      "pt-BR":
+        "Custo total do orcamento: material + energia (com taxa de erro aplicada) + depreciacao + manutencao, somados de todas as mesas. Calculado uma unica vez pro orcamento inteiro, nao por mesa.",
+      en: "Total quote cost: material + energy (with the error rate applied) + depreciation + maintenance, summed across every table. Calculated once for the whole quote, not per table.",
+    },
     type: "FLOAT",
     previewValue: 19.24,
   },
   margem_lucro: {
-    description: "Margem como taxa. No teste, digite 30 para simular 0.30.",
+    description: {
+      "pt-BR": "Margem como taxa. No teste, digite 30 para simular 0.30.",
+      en: "Margin as a rate. In the test, type 30 to simulate 0.30.",
+    },
     type: "PERCENTAGE",
     previewValue: 30,
   },
   custo_kwh: {
-    description: "Custo monetario do kWh.",
+    description: {
+      "pt-BR": "Custo monetario do kWh.",
+      en: "Monetary cost per kWh.",
+    },
     type: "FLOAT",
     previewValue: 1,
   },
   taxa_cartao: {
-    description: "Taxa de cartao. No teste, digite 5 para simular 0.05.",
+    description: {
+      "pt-BR": "Taxa de cartao. No teste, digite 5 para simular 0.05.",
+      en: "Card fee rate. In the test, type 5 to simulate 0.05.",
+    },
     type: "PERCENTAGE",
     previewValue: 5,
   },
   taxa_administrativa: {
-    description: "Taxa administrativa. No teste, digite 2 para simular 0.02.",
+    description: {
+      "pt-BR": "Taxa administrativa. No teste, digite 2 para simular 0.02.",
+      en: "Administrative fee rate. In the test, type 2 to simulate 0.02.",
+    },
     type: "PERCENTAGE",
     previewValue: 2,
   },
   taxas_percentuais: {
-    description:
-      "Soma da taxa de cartao com a administrativa (nao inclui taxa de erro - essa ja entra dentro de custo_base). No teste, digite 7 para simular 0.07.",
+    description: {
+      "pt-BR":
+        "Soma da taxa de cartao com a administrativa (nao inclui taxa de erro - essa ja entra dentro de custo_base). No teste, digite 7 para simular 0.07.",
+      en: "Sum of the card fee and the administrative fee (does not include the error rate - that's already inside custo_base). In the test, type 7 to simulate 0.07.",
+    },
     type: "PERCENTAGE",
     previewValue: 7,
   },
   consumo_kw: {
-    description: "Soma do consumo (kW) das maquinas de todas as mesas do orcamento.",
+    description: {
+      "pt-BR": "Soma do consumo (kW) das maquinas de todas as mesas do orcamento.",
+      en: "Sum of the machines' power consumption (kW) across every table in the quote.",
+    },
     type: "FLOAT",
     previewValue: 0.12,
   },
   horas_pintura: {
-    description: "Horas totais estimadas para pintura do orcamento inteiro (nao por mesa).",
+    description: {
+      "pt-BR": "Horas totais estimadas para pintura do orcamento inteiro (nao por mesa).",
+      en: "Total estimated painting hours for the whole quote (not per table).",
+    },
     type: "FLOAT",
     previewValue: 1,
   },
   valor_hora_pintura: {
-    description: "Valor monetario cobrado por hora de pintura.",
+    description: {
+      "pt-BR": "Valor monetario cobrado por hora de pintura.",
+      en: "Monetary rate charged per hour of painting.",
+    },
     type: "FLOAT",
     previewValue: 35,
   },
   horas_acabamento: {
-    description:
-      "Horas totais estimadas para acabamento ou lixamento do orcamento inteiro (nao por mesa).",
+    description: {
+      "pt-BR":
+        "Horas totais estimadas para acabamento ou lixamento do orcamento inteiro (nao por mesa).",
+      en: "Total estimated finishing/sanding hours for the whole quote (not per table).",
+    },
     type: "FLOAT",
     previewValue: 1.5,
   },
   valor_hora_acabamento: {
-    description: "Valor monetario cobrado por hora de acabamento.",
+    description: {
+      "pt-BR": "Valor monetario cobrado por hora de acabamento.",
+      en: "Monetary rate charged per hour of finishing.",
+    },
     type: "FLOAT",
     previewValue: 30,
   },
   quantidade_mesas: {
-    description: "Quantidade de mesas/itens dentro do orcamento.",
+    description: {
+      "pt-BR": "Quantidade de mesas/itens dentro do orcamento.",
+      en: "Number of tables/items in the quote.",
+    },
     type: "INTEGER",
     previewValue: 2,
   },
   taxa_erro: {
-    description:
-      "Taxa de erro/desperdicio, aplicada so sobre material+energia (nunca sobre depreciacao/manutencao) e ja embutida em custo_base. Se nao preenchida (0), nao afeta o calculo. No teste, digite 3 para simular 0.03.",
+    description: {
+      "pt-BR":
+        "Taxa de erro/desperdicio, aplicada so sobre material+energia (nunca sobre depreciacao/manutencao) e ja embutida em custo_base. Se nao preenchida (0), nao afeta o calculo. No teste, digite 3 para simular 0.03.",
+      en: "Error/waste rate, applied only to material+energy (never to depreciation/maintenance) and already baked into custo_base. If unset (0), it doesn't affect the calculation. In the test, type 3 to simulate 0.03.",
+    },
     type: "PERCENTAGE",
     previewValue: 3,
+  },
+};
+
+const customVariableDescriptions: Record<CustomVariableType, Record<SupportedLanguage, string>> = {
+  PERCENTAGE: {
+    "pt-BR": "Variavel customizada percentual. O parser recebe valor / 100.",
+    en: "Custom percentage variable. The parser receives value / 100.",
+  },
+  FLOAT: {
+    "pt-BR": "Variavel customizada salva em custos fixos.",
+    en: "Custom variable saved under fixed costs.",
+  },
+  INTEGER: {
+    "pt-BR": "Variavel customizada salva em custos fixos.",
+    en: "Custom variable saved under fixed costs.",
   },
 };
 
@@ -214,14 +294,17 @@ export class FormulaService {
     ];
   }
 
-  async variables(companyId: string): Promise<FormulaVariable[]> {
+  async variables(
+    companyId: string,
+    language: SupportedLanguage,
+  ): Promise<FormulaVariable[]> {
     const settings = await settingsService.get(companyId);
 
     return [
       ...INTERNAL_VARIABLES.map((name) => ({
         name,
         label: name,
-        description: systemVariableMeta[name].description,
+        description: systemVariableMeta[name].description[language],
         source: "SYSTEM" as const,
         type: systemVariableMeta[name].type,
         value: systemVariableMeta[name].previewValue,
@@ -233,10 +316,7 @@ export class FormulaService {
       ...Object.entries(settings.customVariables).map(([name, variable]) => ({
         name,
         label: name,
-        description:
-          variable.type === "PERCENTAGE"
-            ? "Variavel customizada percentual. O parser recebe valor / 100."
-            : "Variavel customizada salva em custos fixos.",
+        description: customVariableDescriptions[variable.type][language],
         source: "CUSTOM" as const,
         type: variable.type,
         value: variable.value,

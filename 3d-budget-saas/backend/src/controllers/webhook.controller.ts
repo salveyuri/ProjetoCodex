@@ -233,6 +233,8 @@ export class WebhookController {
         } else {
           void emailService.sendSubscriptionRenewed(company.id, paymentRow.id);
         }
+      } else if (isNewPaymentRecord && OVERDUE_EVENTS.has(event)) {
+        void emailService.sendPaymentOverdue(company.id, paymentRow.id);
       }
 
       response.status(200).json({ received: true });

@@ -1908,3 +1908,108 @@ Plano Cortesia: confirmado aparecendo em `/admin/plans` com badge
 `/admin/users`; atribuí de verdade a uma empresa de teste e confirmei
 via resposta de rede que virou `planId` da Cortesia, sem nenhuma
 chamada ao Asaas nos logs do backend. Dados de teste apagados depois.
+
+## 2026-08-20 - E-mail de pagamento atrasado, PDF bilíngue/traduzido e exportação resumida
+
+Quatro pedidos na mesma rodada: confirmar o webhook do Asaas em
+produção no TODO, um e-mail de "pagamento atrasado", tradução das
+descrições de variáveis de fórmula e dos termos customizados do PDF, e
+uma opção de exportar o orçamento em versão resumida (só o valor
+total, sem detalhe por mesa).
+
+### `PAYMENT_OVERDUE`: mesma guarda de idempotência que confirmada/renovada já usava
+
+`webhook.controller.ts` já calculava `isNewPaymentRecord` (linha antes
+do `payment.upsert`, comparando se já existia uma linha com aquele
+`asaasPaymentId`) pra evitar reenvio de e-mail em reentrega do mesmo
+webhook do Asaas (garantia "at least once" deles). Só adicionei um
+`else if (isNewPaymentRecord && OVERDUE_EVENTS.has(event))` ao lado do
+`if` que já existia pra `CONFIRMED_EVENTS`, chamando
+`emailService.sendPaymentOverdue(company.id, paymentRow.id)` do mesmo
+jeito fire-and-forget (`void`) que os outros 6 e-mails do sistema. Novo
+template (`EMAIL_TEMPLATE_KEYS`/migração `..._add_payment_overdue_template`),
+mesmo layout genérico dos outros, variável `invoiceUrl` cai pro link do
+painel de cobrança (`/dashboard/billing`) quando o Asaas não manda um
+link de fatura no payload do webhook.
+
+### Termos customizados agora bilíngues - decisão deliberada: sem fallback cruzado entre idiomas
+
+Até aqui `Company.customTerms` era só português, decisão documentada
+como "não vale a pena" (ver entrada anterior no TODO). O Yuri pediu
+pra reverter isso. Nova coluna `customTermsEn` (migração
+`..._add_company_custom_terms_en`), campo próprio na aba Perfil,
+completamente independente do campo em português - **sem fallback de
+um pro outro**: se a empresa só preencheu o campo em português e gera
+um PDF em inglês, o PDF usa os termos **padrão em inglês** do sistema,
+nunca o texto em português digitado pelo usuário. A alternativa
+(cair pro campo preenchido, seja qual for o idioma) foi descartada de
+propósito - vazar texto em português num PDF que o cliente lê em
+inglês (ou vice-versa) é pior do que simplesmente usar o termo padrão
+localizado. `resolveTerms()` em `quote-pdf.service.ts` decide o campo
+pelo idioma do PDF (`quote.company.user.language`), não pelo idioma de
+quem está exportando.
+
+### Descrições de variáveis de fórmula: só a descrição traduz, o nome (identificador) não
+
+`systemVariableMeta` em `formula.service.ts` guardava só uma string em
+português por variável - virou `Record<SupportedLanguage, string>`.
+Mesma coisa pra `customVariableDescriptions` (o texto genérico mostrado
+pras variáveis que a própria empresa cria em Custos Fixos).
+`GET /formulas/variables` agora lê o idioma do usuário logado
+(`User.language`) e devolve a descrição já traduzida. Decisão
+importante: o **nome** da variável (`peso`, `tempo`,
+`taxa_administrativa`, etc.) continua sempre em português, mesmo com a
+UI em inglês - é o identificador que o usuário efetivamente digita
+dentro da fórmula (`peso * 2 + tempo`), não um rótulo decorativo;
+traduzir o nome quebraria fórmulas já salvas ou obrigaria o usuário a
+decorar dois vocabulários pro mesmo conceito.
+
+### Exportação resumida: mesmo `renderQuotePdf`, só troca o miolo da página
+
+`GET /quotes/:id/pdf?format=FULL|SUMMARY` (novo query param, Zod
+`z.enum(["FULL","SUMMARY"]).default("FULL")` em
+`quotePdfExportQuerySchema`). `FULL` é o comportamento de sempre
+(tabela de mesas + subtotal/descontos/total). `SUMMARY` pula a tabela
+inteira e desenha só uma caixa compacta com o valor total
+(`drawFinancialSummarySimple`) - sem material, sem máquina, sem
+peso/tempo, sem o preço de cada mesa individual, só o número final que
+o cliente precisa saber. Motivo do pedido: o Yuri quer poder mandar
+uma versão pro cliente final sem expor o detalhamento interno de custo
+por mesa (informação que pode revelar margem por item). O nome do
+arquivo ganha sufixo (`_Resumido`/`_Summary`) pra quem baixa saber
+qual versão é qual sem abrir. UI: toggle Completo/Resumido no topo do
+`QuotePdfPreviewModal.tsx`, mesmo modal usado nos dois lugares que já
+geravam PDF.
+
+### Verificação
+
+Testes novos: 2 em `email.service.test.ts` (pagamento atrasado
+respeita preferência de e-mails financeiros; fallback do link de
+fatura), `asaas-webhook.routes.test.ts` (dispara no evento novo, não
+duplica em reentrega), `quote-pdf.routes.test.ts` (default é FULL,
+SUMMARY gera arquivo menor e nomeado direito, formato inválido rejeita
+com 400), `formula-variables.routes.test.ts` (descrição pt-BR por
+padrão, inglês depois de trocar o idioma do usuário). Um teste novo
+tinha corrida de verdade (`sendPaymentOverdue` contando 2 chamadas em
+vez de 1 porque o e-mail de boas-vindas do próprio `registerTestCompany`
+ainda estava em voo) - corrigido esperando esse e-mail de fundo
+terminar antes de instalar o spy, mesmo padrão já usado antes nesta
+sessão pra corrida parecida no teste do webhook. Suíte completa: os 16
+arquivos / 127 testes passam limpo quando rodados em 2 lotes de 8
+arquivos cada (processo único trava com o crash nativo Windows/Prisma
+já documentado em `Contextos/Conhecimento.md` - dessa vez com
+frequência bem mais alta que o normal, 7 tentativas seguidas travando
+sozinhas antes de eu trocar pra rodar em lotes; vale investigar depois
+se isso está piorando com o tamanho do banco de dev). `tsc`/`lint`/
+`build` limpos em shared/backend/frontend.
+
+Verificado ao vivo: registrei uma empresa de teste, promovi pro plano
+Pro e preenchi os dois campos de termos via Prisma direto (pra não
+precisar navegar o dropdown gigante de país da tela de Perfil), criei
+um orçamento de uma mesa e baixei os 4 PDFs (FULL/SUMMARY × pt-BR/en)
+via chamada direta à API. Confirmado nos PDFs: SUMMARY realmente omite
+a tabela e mostra só "Valor total"; o PDF em português mostra o termo
+em português digitado; o PDF em inglês mostra o termo em inglês
+digitado (nenhum vazou pro idioma errado); `GET /formulas/variables`
+com o usuário em inglês devolveu a descrição de `peso` traduzida,
+mantendo o nome `peso` intacto. Dados de teste apagados depois.

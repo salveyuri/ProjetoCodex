@@ -96,6 +96,9 @@ export const en: Record<TranslationKey, string> = {
   "quotes.pdfPreview.loading": "Generating the PDF...",
   "quotes.pdfPreview.error": "Could not generate the PDF.",
   "quotes.pdfPreview.retry": "Try again",
+  "quotes.pdfPreview.formatLabel": "PDF version",
+  "quotes.pdfPreview.formatFull": "Full",
+  "quotes.pdfPreview.formatSummary": "Summary",
 
   "quotes.list.badge": "Core active",
   "quotes.list.title": "Quotes",
@@ -336,9 +339,12 @@ export const en: Record<TranslationKey, string> = {
   "settings.profile.taxId": "Tax ID",
   "settings.profile.phone": "Phone",
   "settings.profile.address": "Address",
-  "settings.profile.customTerms": "Custom terms and conditions",
+  "settings.profile.customTerms": "Custom terms and conditions (Portuguese)",
   "settings.profile.customTermsNote":
-    "One term per line. Replaces the PDF's default terms. Leave blank to use the system defaults.",
+    "One term per line. Replaces the PDF's default terms when the quote is generated in Portuguese. Leave blank to use the system defaults.",
+  "settings.profile.customTermsEn": "Custom terms and conditions (English)",
+  "settings.profile.customTermsEnNote":
+    "Only applies to PDFs generated in English. Independent from the Portuguese field - filling in one doesn't affect the other. Leave blank to use the system's English defaults.",
   "settings.profile.companyName": "Company name",
   "settings.profile.emailPrefsTitle": "Email preferences",
   "settings.profile.emailPrefsNote":

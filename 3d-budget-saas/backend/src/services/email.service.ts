@@ -395,6 +395,50 @@ export class EmailService {
     );
   }
 
+  // Fired from webhook.controller.ts on a PAYMENT_OVERDUE event, guarded
+  // the same way sendSubscriptionConfirmed/Renewed are (isNewPaymentRecord,
+  // checked before the Payment upsert) so a redelivered webhook for the
+  // same overdue invoice never sends this twice.
+  async sendPaymentOverdue(companyId: string, paymentId: string): Promise<void> {
+    const [company, payment] = await Promise.all([
+      prisma.company.findUnique({
+        where: { id: companyId },
+        include: {
+          user: { select: { email: true, language: true, notifyFinancialEmails: true } },
+          plan: { select: { name: true } },
+        },
+      }),
+      prisma.payment.findUnique({ where: { id: paymentId } }),
+    ]);
+
+    if (!company || !payment) {
+      return;
+    }
+
+    if (!company.user.notifyFinancialEmails) {
+      await this.skipForPreference("PAYMENT_OVERDUE", company.user.email);
+      return;
+    }
+
+    const language = company.user.language as SupportedLanguage;
+
+    await this.send(
+      "PAYMENT_OVERDUE",
+      language,
+      company.user.email,
+      {
+        accountName: company.name,
+        planName: company.plan.name,
+        planPrice: toMoney(Number(payment.value), language),
+        dueDate: payment.dueDate ? toDateLabel(payment.dueDate, language) : "-",
+        // Asaas doesn't always send an invoiceUrl on this event — fall back
+        // to the billing dashboard so the button never points nowhere.
+        invoiceUrl: payment.invoiceUrl ?? `${env.appBaseUrl}/dashboard/billing`,
+      },
+      { dedupeKey: `PAYMENT_OVERDUE:${payment.id}` },
+    );
+  }
+
   async sendQuoteSummary(
     companyId: string,
     quoteId: string,

@@ -56,9 +56,14 @@ Passo") em 2026-08-12.
       tipos batendo depois da migration — não por inspeção pixel a pixel
       do PDF renderizado. Se algo parecer deslocado/cortado na prática,
       avisar pra ajustar o layout em `quote-pdf.service.ts`.
-- [ ] Termos customizados não são bilíngues — o texto aparece exatamente
-      como foi digitado, independente do idioma do PDF (decisão
-      deliberada, ver `Contextos/Decisoes.md`).
+- [x] Termos customizados agora são bilíngues — `Company.customTermsEn`
+      (2026-08-20) guarda um texto próprio pra PDFs gerados em inglês, sem
+      fallback cruzado entre os dois idiomas. Ver `Contextos/Decisoes.md`.
+- [x] Exportação de orçamento em PDF com opção completa/resumida —
+      `GET /quotes/:id/pdf?format=FULL|SUMMARY` (2026-08-20). Resumida
+      omite a tabela de mesas (material/máquina/peso/tempo/valor por mesa),
+      mostrando só o valor total. Toggle no `QuotePdfPreviewModal.tsx`. Ver
+      `Contextos/Decisoes.md`.
 
 ## Analytics
 
@@ -164,13 +169,8 @@ Passo") em 2026-08-12.
       funcionando; a chamada real de registro não foi testada com dado
       válido pra não sujar o sandbox com um webhook de teste). Ver
       `Contextos/Decisoes.md` (2026-08-18).
-- [ ] **Ainda falta rodar o script em produção** —
-      `docker compose exec backend npm run asaas:register-webhook` (ou
-      `npx tsx scripts/register-asaas-webhook.ts` dentro do container) na
-      VPS. Depois de rodar, conferir no retorno do script que o webhook foi
-      criado/atualizado com sucesso, e via
-      `GET https://api.asaas.com/v3/webhooks` (com a API key real) que ele
-      aparece listado e `enabled: true`.
+- [x] **Webhook do Asaas cadastrado em produção** — confirmado em
+      2026-08-20.
 - [x] **Preços reais de Pro/Enterprise definidos** — confirmado em
       2026-08-18, editado pelo Yuri via `/admin/plans` (os R$49,90/R$199,90
       da seed eram só placeholder).
@@ -280,9 +280,10 @@ Passo") em 2026-08-12.
       (2026-08-15). **Assinatura confirmada/renovada continuam dependendo
       do webhook de produção ser cadastrado** (são reações a um evento que
       aconteceu, não dá pra "puxar" o mesmo jeito).
-- [ ] Nenhum e-mail de "pagamento atrasado" (`PAYMENT_OVERDUE`) foi
-      implementado nesta rodada — só era pedido confirmada/renovada/perto
-      de vencer. Avaliar se vale adicionar depois.
+- [x] E-mail de "pagamento atrasado" (`PAYMENT_OVERDUE`) implementado em
+      2026-08-20 — dispara no webhook do Asaas (`OVERDUE_EVENTS`), mesma
+      guarda de idempotência `isNewPaymentRecord` usada pra
+      confirmada/renovada. Ver `Contextos/Decisoes.md`.
 - [ ] `Quote` não guarda e-mail do cliente final — o resumo de orçamento
       vai pro dono da conta, não pro cliente. Se um dia fizer sentido
       mandar direto pro cliente, precisa de um campo novo + migração.
@@ -331,12 +332,13 @@ Passo") em 2026-08-12.
       formatacao, nunca conversao de valor real). Painel Admin permanece
       100% portugues por decisao do Yuri. Ver `Contextos/Decisoes.md`
       (2026-08-17).
-- [ ] Descricoes/nomes de variaveis de formula (`/formulas/variables`,
-      `systemVariableMeta` em `formula.service.ts`) continuam so em
-      portugues, mesmo com o resto da tela de Formulas traduzido - sao
-      dado do backend, nao string estatica de UI. Precisaria de i18n no
-      backend (a rota devolver descricao no idioma do usuario) pra
-      resolver.
+- [x] Descricoes de variaveis de formula traduzidas em 2026-08-20 —
+      `systemVariableMeta`/`customVariableDescriptions` em
+      `formula.service.ts` agora guardam `Record<SupportedLanguage, string>`;
+      `GET /formulas/variables` devolve no idioma do usuario logado. Nomes
+      das variaveis (`peso`, `tempo`, etc.) continuam sem traducao de
+      proposito — sao o identificador digitavel na formula. Ver
+      `Contextos/Decisoes.md`.
 - [ ] `<html lang="pt-BR">` em `app/layout.tsx` fica fixo independente do
       idioma escolhido pelo usuario - `RootLayout` e Server Component,
       mudar isso exigiria cookie/middleware de locale. Limitacao

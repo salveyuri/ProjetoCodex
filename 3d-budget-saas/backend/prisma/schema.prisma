@@ -128,8 +128,11 @@ model Company {
   // Overrides the PDF's default localized terms/warranty text when set
   // (raw multi-line text, one term per line — see quote-pdf.service.ts).
   // Null keeps the built-in pt-BR/en defaults for everyone who never
-  // touches this.
+  // touches this. Each language field only overrides that language's PDF —
+  // customTerms alone set does NOT leak into an English PDF, it falls back
+  // to the standard English terms instead (see resolveTerms()).
   customTerms           String?            @map("custom_terms") @db.Text
+  customTermsEn         String?            @map("custom_terms_en") @db.Text
   planId                String             @map("plan_id") @db.Uuid
   subscriptionStatus    SubscriptionStatus @default(ACTIVE) @map("subscription_status")
   asaasCustomerId       String?            @map("asaas_customer_id")

@@ -15,6 +15,7 @@ import { idParamSchema } from "../validators/common.validator";
 import {
   quoteCreateSchema,
   quoteListQuerySchema,
+  quotePdfExportQuerySchema,
   quotePreviewSchema,
   quoteUpdateSchema,
 } from "../validators/quote.validator";
@@ -63,7 +64,8 @@ export class QuoteController {
     try {
       const companyId = getAuthenticatedCompanyId(request);
       const { id } = idParamSchema.parse(request.params);
-      const pdf = await quotePdfService.generate(companyId, id);
+      const { format } = quotePdfExportQuerySchema.parse(request.query);
+      const pdf = await quotePdfService.generate(companyId, id, format);
       void emailService.sendQuoteSummary(companyId, id, "EXPORTED");
 
       response

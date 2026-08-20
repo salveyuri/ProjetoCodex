@@ -10,7 +10,8 @@ export const countryCodeSchema = z
   .toUpperCase()
   .refine(isValidCountryCode, "Unknown country.");
 
-// Business info fields (taxId/phone/address/customTerms) are all optional
+// Business info fields (taxId/phone/address/customTerms/customTermsEn) are
+// all optional
 // and independently clearable — undefined leaves the stored value alone,
 // null (or an empty string, normalized to null here) clears it, any other
 // string sets it. Distinct from country/companyName, which must always
@@ -91,6 +92,7 @@ export const updateProfileSchema = z
     phone: clearableText(32),
     address: clearableText(240),
     customTerms: clearableText(2000),
+    customTermsEn: clearableText(2000),
     language: supportedLanguageSchema.optional(),
     emailPreferences: z
       .object({
@@ -111,6 +113,7 @@ export const updateProfileSchema = z
       value.phone !== undefined ||
       value.address !== undefined ||
       value.customTerms !== undefined ||
+      value.customTermsEn !== undefined ||
       value.language !== undefined ||
       value.emailPreferences !== undefined,
     { message: "At least one field must be provided." },

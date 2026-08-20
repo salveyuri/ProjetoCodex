@@ -112,6 +112,16 @@ export const quoteListQuerySchema = z
   })
   .strict();
 
+// FULL (default): today's PDF — per-table breakdown, material/machine,
+// weight/time, each table's own price. SUMMARY: no per-table section at
+// all, just the customer/quote header and the total amount — see
+// quote-pdf.service.ts.
+export const quotePdfExportQuerySchema = z
+  .object({
+    format: z.enum(["FULL", "SUMMARY"]).default("FULL"),
+  })
+  .strict();
+
 // Live, unsaved preview of a whole quote-in-progress — same item shape as
 // quoteCreateSchema, minus the fields (customerName/status/validUntil)
 // that don't affect price.
@@ -155,3 +165,4 @@ export type QuoteCreateInput = z.infer<typeof quoteCreateSchema>;
 export type QuoteUpdateInput = z.infer<typeof quoteUpdateSchema>;
 export type QuoteListQuery = z.infer<typeof quoteListQuerySchema>;
 export type QuotePreviewInput = z.infer<typeof quotePreviewSchema>;
+export type QuotePdfExportQuery = z.infer<typeof quotePdfExportQuerySchema>;

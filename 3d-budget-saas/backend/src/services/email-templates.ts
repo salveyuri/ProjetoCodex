@@ -4,6 +4,7 @@ export const EMAIL_TEMPLATE_KEYS = [
   "SUBSCRIPTION_CONFIRMED",
   "SUBSCRIPTION_RENEWED",
   "SUBSCRIPTION_EXPIRING",
+  "PAYMENT_OVERDUE",
   "QUOTE_SUMMARY",
 ] as const;
 
@@ -71,6 +72,18 @@ export const EMAIL_TEMPLATE_VARIABLES: Record<
     { name: "planName", description: "Nome do plano assinado.", sampleValue: "Pro" },
     { name: "dueDate", description: "Data do vencimento.", sampleValue: "18/08/2026" },
     { name: "daysRemaining", description: "Dias restantes ate o vencimento.", sampleValue: "3" },
+    { name: "logoUrl", description: "URL da logo do Pricify3D.", sampleValue: "/logo_full.webp" },
+  ],
+  PAYMENT_OVERDUE: [
+    { name: "accountName", description: "Nome da empresa/conta.", sampleValue: "Oficina 3D Exemplo" },
+    { name: "planName", description: "Nome do plano assinado.", sampleValue: "Pro" },
+    { name: "planPrice", description: "Valor da fatura em atraso, formatado em R$.", sampleValue: "R$ 49,90" },
+    { name: "dueDate", description: "Data em que a fatura venceu.", sampleValue: "18/08/2026" },
+    {
+      name: "invoiceUrl",
+      description: "Link para pagar a fatura (ou pra tela de assinatura, se o Asaas nao mandar um link direto).",
+      sampleValue: "https://app.pricify3d.com/dashboard/billing",
+    },
     { name: "logoUrl", description: "URL da logo do Pricify3D.", sampleValue: "/logo_full.webp" },
   ],
   QUOTE_SUMMARY: [

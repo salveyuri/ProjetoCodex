@@ -189,6 +189,7 @@ export default function SettingsPage() {
   const [profilePhone, setProfilePhone] = useState("");
   const [profileAddress, setProfileAddress] = useState("");
   const [profileCustomTerms, setProfileCustomTerms] = useState("");
+  const [profileCustomTermsEn, setProfileCustomTermsEn] = useState("");
   const [profileLanguage, setProfileLanguage] = useState<SupportedLanguage>("pt-BR");
   const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
     financial: true,
@@ -218,6 +219,7 @@ export default function SettingsPage() {
       setProfilePhone(user.company?.phone ?? "");
       setProfileAddress(user.company?.address ?? "");
       setProfileCustomTerms(user.company?.customTerms ?? "");
+      setProfileCustomTermsEn(user.company?.customTermsEn ?? "");
       setProfileLanguage(user.language);
       setEmailPreferences(user.emailPreferences);
     }
@@ -398,6 +400,7 @@ export default function SettingsPage() {
       phone: profilePhone.trim() || null,
       address: profileAddress.trim() || null,
       customTerms: profileCustomTerms.trim() || null,
+      customTermsEn: profileCustomTermsEn.trim() || null,
       language: profileLanguage,
       emailPreferences,
     };
@@ -825,6 +828,20 @@ export default function SettingsPage() {
                   />
                   <span className="text-xs font-normal text-muted">
                     {t("settings.profile.customTermsNote")}
+                  </span>
+                </label>
+
+                <label className="grid min-w-0 gap-2 text-sm font-medium">
+                  {t("settings.profile.customTermsEn")}
+                  <textarea
+                    value={profileCustomTermsEn}
+                    onChange={(event) => setProfileCustomTermsEn(event.target.value)}
+                    maxLength={2000}
+                    rows={4}
+                    className="w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 py-2 outline-none focus:border-primary"
+                  />
+                  <span className="text-xs font-normal text-muted">
+                    {t("settings.profile.customTermsEnNote")}
                   </span>
                 </label>
               </div>

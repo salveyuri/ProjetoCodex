@@ -2204,3 +2204,56 @@ Pro.
   seletor de `/admin/users`, e atribuido de verdade a uma empresa de
   teste sem nenhuma chamada ao Asaas. Dados de teste apagados depois.
 - Migracoes novas precisam ser aplicadas em producao.
+
+## 2026-08-20 (mesmo dia) - E-mail de pagamento atrasado, PDF bilingue/traduzido e exportacao resumida
+
+Pedido: confirmar no TODO que o webhook do Asaas ja foi cadastrado em
+producao, implementar e-mail de "pagamento atrasado", traduzir as
+descricoes de variaveis de formula e os termos customizados do PDF, e
+adicionar opcao de exportar o orcamento em versao resumida (so o valor
+total, sem detalhe por mesa).
+
+- TODO.md atualizado: item do webhook do Asaas marcado `[x]`.
+- `PAYMENT_OVERDUE`: novo e-mail (7o template), dispara no webhook do
+  Asaas via a mesma guarda `isNewPaymentRecord` que confirmada/renovada
+  ja usava pra nao duplicar em reentrega. Link da fatura cai pro painel
+  de cobranca quando o Asaas nao manda um no payload.
+- Termos customizados do PDF agora sao bilingues - reverte a decisao
+  anterior de deixar so em portugues. Coluna nova `customTermsEn`,
+  campo proprio na aba Perfil, **sem fallback cruzado**: PDF em ingles
+  sem o campo em ingles preenchido usa o termo padrao em ingles do
+  sistema, nunca o texto em portugues do outro campo.
+- Descricoes de variaveis de formula traduzidas -
+  `systemVariableMeta`/`customVariableDescriptions` em
+  `formula.service.ts` viram `Record<SupportedLanguage, string>`;
+  `/formulas/variables` devolve no idioma do usuario logado. O
+  **nome** da variavel (`peso`, `tempo`, etc.) continua so em
+  portugues de proposito - e o identificador digitado dentro da
+  formula, nao um rotulo de UI.
+- Exportacao resumida: `GET /quotes/:id/pdf?format=FULL|SUMMARY`.
+  SUMMARY pula a tabela de mesas inteira e mostra so uma caixa com o
+  valor total (sem material/maquina/peso/tempo/preco por mesa) - pra
+  nao expor detalhamento de custo interno pro cliente final. Nome do
+  arquivo ganha sufixo (`_Resumido`/`_Summary`). Toggle novo no topo
+  do `QuotePdfPreviewModal.tsx`.
+- Testes novos: 2 em `email.service.test.ts`, mais
+  `asaas-webhook.routes.test.ts`, `quote-pdf.routes.test.ts`,
+  `formula-variables.routes.test.ts`. Um teste novo tinha corrida de
+  verdade (e-mail de boas-vindas do proprio registro de teste ainda em
+  voo inflava a contagem de chamadas) - corrigido esperando esse envio
+  de fundo terminar antes de instalar o spy, mesmo padrao ja usado
+  nesta sessao pra corrida parecida no webhook. Suite completa: 127/127
+  (16 arquivos) rodando em 2 lotes de 8 - o processo unico travou 7
+  vezes seguidas pelo crash nativo Windows/Prisma ja documentado (
+  frequencia bem mais alta que o normal dessa vez; vale investigar se
+  esta piorando com o tamanho do banco de dev). `tsc`/`lint`/`build`
+  limpos em shared/backend/frontend.
+- Testado ao vivo: empresa de teste promovida pro plano Pro, termos
+  pt/en preenchidos, orcamento criado, 4 PDFs baixados e inspecionados
+  (FULL/SUMMARY x pt-BR/en) - SUMMARY realmente so mostra o total, cada
+  PDF mostra o termo do idioma certo sem vazar pro outro, descricao de
+  `peso` traduzida em ingles mantendo o nome da variavel intacto. Dados
+  de teste apagados depois.
+- Migracoes novas precisam ser aplicadas em producao
+  (`20260820160000_add_payment_overdue_template`,
+  `20260820170000_add_company_custom_terms_en`).

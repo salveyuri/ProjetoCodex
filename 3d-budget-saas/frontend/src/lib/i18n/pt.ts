@@ -94,6 +94,9 @@ export const pt = {
   "quotes.pdfPreview.loading": "Gerando o PDF...",
   "quotes.pdfPreview.error": "Nao foi possivel gerar o PDF.",
   "quotes.pdfPreview.retry": "Tentar novamente",
+  "quotes.pdfPreview.formatLabel": "Versao do PDF",
+  "quotes.pdfPreview.formatFull": "Completo",
+  "quotes.pdfPreview.formatSummary": "Resumido",
 
   "quotes.list.badge": "Core ativo",
   "quotes.list.title": "Orcamentos",
@@ -338,9 +341,12 @@ export const pt = {
   "settings.profile.taxId": "CNPJ/CPF",
   "settings.profile.phone": "Telefone",
   "settings.profile.address": "Endereco",
-  "settings.profile.customTerms": "Termos e condicoes customizados",
+  "settings.profile.customTerms": "Termos e condicoes customizados (portugues)",
   "settings.profile.customTermsNote":
-    "Um termo por linha. Substitui os termos padrao do PDF. Deixe em branco pra usar os termos padrao do sistema.",
+    "Um termo por linha. Substitui os termos padrao do PDF quando o orcamento e gerado em portugues. Deixe em branco pra usar os termos padrao do sistema.",
+  "settings.profile.customTermsEn": "Termos e condicoes customizados (ingles)",
+  "settings.profile.customTermsEnNote":
+    "So vale pra PDFs gerados em ingles. Independente do campo em portugues - preencher um nao afeta o outro. Deixe em branco pra usar os termos padrao do sistema em ingles.",
   "settings.profile.emailPrefsTitle": "Preferencias de e-mail",
   "settings.profile.emailPrefsNote":
     "E-mails de criacao de conta e redefinicao de senha sao sempre enviados, independente destas preferencias.",

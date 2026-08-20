@@ -46,6 +46,7 @@ const companySelect = {
   phone: true,
   address: true,
   customTerms: true,
+  customTermsEn: true,
   plan: { select: { code: true, name: true } },
 } as const;
 
@@ -69,6 +70,7 @@ const toAuthUser = (user: {
     phone: string | null;
     address: string | null;
     customTerms: string | null;
+    customTermsEn: string | null;
     plan: { code: string; name: string };
   } | null;
 }): AuthUser => ({
@@ -96,6 +98,7 @@ const toAuthUser = (user: {
         phone: user.company.phone,
         address: user.company.address,
         customTerms: user.company.customTerms,
+        customTermsEn: user.company.customTermsEn,
       }
     : null,
 });
@@ -489,7 +492,8 @@ export class AuthService {
         input.taxId !== undefined ||
         input.phone !== undefined ||
         input.address !== undefined ||
-        input.customTerms !== undefined;
+        input.customTerms !== undefined ||
+        input.customTermsEn !== undefined;
 
       if (hasCompanyChanges) {
         await transaction.company.update({
@@ -503,6 +507,9 @@ export class AuthService {
             ...(input.phone !== undefined ? { phone: input.phone } : {}),
             ...(input.address !== undefined ? { address: input.address } : {}),
             ...(input.customTerms !== undefined ? { customTerms: input.customTerms } : {}),
+            ...(input.customTermsEn !== undefined
+              ? { customTermsEn: input.customTermsEn }
+              : {}),
           },
         });
       }

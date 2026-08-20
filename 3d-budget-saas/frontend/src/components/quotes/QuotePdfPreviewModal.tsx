@@ -1,9 +1,11 @@
 "use client";
 
+import type { QuotePdfFormat } from "@3d-budget/shared";
 import { AlertTriangle, Download, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { cn } from "@/lib/cn";
 import {
   fetchQuotePdf,
   triggerBlobDownload,
@@ -22,6 +24,7 @@ export const QuotePdfPreviewModal = ({
   onClose,
 }: QuotePdfPreviewModalProps) => {
   const { t } = useLanguage();
+  const [format, setFormat] = useState<QuotePdfFormat>("FULL");
   const [file, setFile] = useState<QuotePdfFile | null>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -33,13 +36,16 @@ export const QuotePdfPreviewModal = ({
     setIsLoading(true);
     setErrorMessage(null);
 
-    fetchQuotePdf({ quoteId, customerName })
+    fetchQuotePdf({ quoteId, customerName, format })
       .then((result) => {
         if (cancelled) {
           return;
         }
 
         setFile(result);
+        // The cleanup effect below (keyed on objectUrl) revokes the
+        // previous blob URL automatically whenever this changes - including
+        // on every format switch, not just on unmount.
         setObjectUrl(URL.createObjectURL(result.blob));
       })
       .catch((error: unknown) => {
@@ -56,8 +62,12 @@ export const QuotePdfPreviewModal = ({
     return () => {
       cancelled = true;
     };
-  }, [quoteId, customerName, reloadToken, t]);
+  }, [quoteId, customerName, format, reloadToken, t]);
 
+  // Runs on every objectUrl change, not just unmount - React tears down the
+  // previous effect instance (and its captured objectUrl) before setting up
+  // the new one, so this revokes the old blob URL each time a new PDF is
+  // fetched (format switch or retry), not only when the modal closes.
   useEffect(() => {
     return () => {
       if (objectUrl) {
@@ -100,6 +110,31 @@ export const QuotePdfPreviewModal = ({
             >
               <X className="h-5 w-5" />
             </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+          <span className="text-xs font-medium text-muted">
+            {t("quotes.pdfPreview.formatLabel")}
+          </span>
+          <div className="inline-flex rounded-lg border border-border bg-surface-muted p-1">
+            {(["FULL", "SUMMARY"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setFormat(option)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-semibold transition",
+                  format === option
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted hover:text-foreground",
+                )}
+              >
+                {option === "FULL"
+                  ? t("quotes.pdfPreview.formatFull")
+                  : t("quotes.pdfPreview.formatSummary")}
+              </button>
+            ))}
           </div>
         </div>
 

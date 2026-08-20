@@ -117,8 +117,10 @@ export interface AuthCompany {
   address: string | null;
   // Overrides the PDF's default localized terms/warranty text when set —
   // raw multi-line text, one term per line. Null keeps the built-in
-  // pt-BR/en defaults.
+  // pt-BR/en defaults. Each field only affects its own language's PDF —
+  // setting one does not carry over into the other.
   customTerms: string | null;
+  customTermsEn: string | null;
 }
 
 export interface EmailPreferences {
@@ -150,6 +152,7 @@ export interface UpdateProfilePayload {
   phone?: string | null;
   address?: string | null;
   customTerms?: string | null;
+  customTermsEn?: string | null;
   language?: SupportedLanguage;
   emailPreferences?: Partial<EmailPreferences>;
 }
@@ -553,6 +556,11 @@ export interface CalculationResponse {
 
 export type QuoteStatus = "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
 
+// FULL: today's PDF (per-table breakdown, material/machine, weight/time,
+// each table's own price). SUMMARY: no per-table section at all, just the
+// header/customer block and the total amount — see quote-pdf.service.ts.
+export type QuotePdfFormat = "FULL" | "SUMMARY";
+
 export interface QuoteItemPayload extends CalculationRequest {
   modelName?: string;
 }
@@ -747,6 +755,7 @@ export type EmailTemplateKey =
   | "SUBSCRIPTION_CONFIRMED"
   | "SUBSCRIPTION_RENEWED"
   | "SUBSCRIPTION_EXPIRING"
+  | "PAYMENT_OVERDUE"
   | "QUOTE_SUMMARY";
 
 export interface EmailTemplateVariable {

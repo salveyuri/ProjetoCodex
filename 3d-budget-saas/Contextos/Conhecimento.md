@@ -416,3 +416,19 @@ se repetir se alguém mexer nesse código sem saber.
   vez costuma bastar - não é motivo pra desconfiar de um teste
   específico sem antes conferir se ele realmente reportou falha (`Tests
   N failed`) ou só o processo caiu depois de reportar sucesso.
+- **Atualização 2026-08-20**: nessa rodada a frequência do crash subiu
+  bastante - 7 tentativas seguidas de `npm run test` (suite completa,
+  16 arquivos) travaram sem chegar a imprimir o resumo final (`EXIT:139`
+  a maior parte, uma com stack trace completo de panic Rust através de
+  `napi_register_module_v1`, o motor nativo do Prisma). "Rodar de novo"
+  parou de ser suficiente sozinho dessa vez. **Contorno que funcionou**:
+  dividir os 16 arquivos em 2 lotes de 8 e rodar cada lote com
+  `npx vitest run <arquivo1> <arquivo2> ...` separadamente - os dois
+  lotes passaram limpo (47 + 80 = 127 testes) na primeira tentativa de
+  cada. Não investiguei a causa da piora (suspeita não confirmada: o
+  banco de dev acumulou muitas linhas em `email_logs` ao longo da
+  sessão, deixando algumas queries mais pesadas sob o pool `threads` -
+  não teve tempo de validar essa hipótese). Se o crash voltar a ser
+  raro nas próximas sessões, ignorar esta nota; se continuar frequente,
+  vale considerar rodar a suite sempre em lotes por padrão em vez de
+  como contorno pontual.

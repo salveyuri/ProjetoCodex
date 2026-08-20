@@ -33,12 +33,21 @@ const emailDeliveryStatusSchema = z.enum([
   "FAILED",
 ]);
 
+// z.coerce.boolean() would treat the *string* "false" as truthy (JS
+// Boolean("false") === true) — a well-known Zod gotcha. Query params only
+// ever arrive as strings, so this matches "true"/"false" explicitly
+// instead of coercing.
+const booleanQueryParamSchema = z
+  .enum(["true", "false"])
+  .transform((value) => value === "true");
+
 export const emailLogListQuerySchema = z
   .object({
     page: z.coerce.number().int().positive().default(1),
     pageSize: z.coerce.number().int().positive().max(100).default(20),
     status: emailSendStatusSchema.optional(),
     deliveryStatus: emailDeliveryStatusSchema.optional(),
+    isTest: booleanQueryParamSchema.optional(),
   })
   .strict();
 

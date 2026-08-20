@@ -192,6 +192,12 @@ Passo") em 2026-08-12.
       de plano sempre cria um novo checkout e cancela a assinatura Asaas
       anterior (sem proration) — comportamento MVP deliberado, documentado
       em `Contextos/Decisoes.md`.
+- [x] **Plano Cortesia — implementado em 2026-08-20.** Mesmos limites/
+      recursos do Pro, preço R$ 0, `isPublic: false` (não aparece na
+      tela de cobrança pro cliente contratar). Só o admin consegue
+      definir, direto em `/admin/users` (mesmo seletor de plano que já
+      existia) — atribuir não gera nenhuma cobrança nem chamada ao
+      Asaas. Ver `Contextos/Decisoes.md` (2026-08-20).
 
 ## Catálogo de impressoras (implementado em 2026-08-14)
 
@@ -254,6 +260,12 @@ Passo") em 2026-08-12.
       problema no reset de senha não ter recebido o e-mail — dá pra ver
       o link direto no log e passar manualmente. Ver
       `Contextos/Decisoes.md` (2026-08-20).
+- [x] **Origem teste/real + limpeza automática — implementado em
+      2026-08-20.** Coluna "Origem" nova ("Teste"/"Real") + filtro na
+      tela de logs. Job novo (`email-log-cleanup.job.ts`, roda às 3h)
+      apaga só linhas de teste com mais de 48h — envios reais nunca
+      são apagados automaticamente. Ver `Contextos/Decisoes.md`
+      (2026-08-20).
 - [x] **Checado em 2026-08-15**: nenhum webhook está cadastrado no Asaas
       ainda (`GET /v3/webhooks` no sandbox devolveu `totalCount: 0`) — ou
       seja, hoje nem o alerta de vencimento nem os e-mails de assinatura

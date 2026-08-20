@@ -813,6 +813,11 @@ export interface EmailLogResource {
   deliveryStatus: EmailDeliveryStatus | null;
   deliveryDetail: string | null;
   deliveryUpdatedAt: string | null;
+  // True only for sends triggered by the "Testar e-mail" button — real
+  // triggers (account created, password reset, subscription events,
+  // quote summary) are always false. Test rows are purged 48h after
+  // creation server-side; this flag is what the cleanup job matches on.
+  isTest: boolean;
   createdAt: string;
 }
 
@@ -830,6 +835,7 @@ export interface EmailLogListQuery {
   pageSize?: number;
   status?: EmailSendStatus;
   deliveryStatus?: EmailDeliveryStatus;
+  isTest?: boolean;
 }
 
 export interface PaginatedEmailLogList {

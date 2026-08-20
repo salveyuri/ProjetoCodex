@@ -2164,3 +2164,43 @@ recebido e precisar do link/informacao pra passar manualmente.
   depois.
 - Migracao nova precisa ser aplicada em producao
   (`docker compose run --rm backend npx prisma migrate deploy`).
+
+## 2026-08-20 (mesmo dia) - Origem teste/real no log, limpeza automatica, plano Cortesia
+
+Yuri pediu: distinguir envios de teste dos reais no log (coluna nova) e
+apagar os de teste depois de 48h; e um plano "Cortesia" novo, oculto
+pra contratacao, so atribuivel pelo admin, com as mesmas permissoes do
+Pro.
+
+- `EmailLog` ganhou `isTest` (migracao
+  `20260820140000_add_email_log_is_test`) - `sendTest()` (usado pelo
+  botao "Testar e-mail") e o unico lugar que marca `isTest: true`,
+  todo gatilho real fica `false`. Coluna "Origem" nova na tabela +
+  filtro (Teste e real / So reais / So testes).
+- Achado no meio do caminho: `z.coerce.boolean()` do Zod trata a
+  string "false" como verdadeira (pegadinha conhecida do JS) - usei
+  `z.enum(["true","false"]).transform(...)` em vez disso pro filtro.
+- Job novo `email-log-cleanup.job.ts` (mesmo padrao do job de
+  assinatura vencendo ja existente, node-cron as 3h da manha) apaga só
+  linhas com `isTest: true` e mais de 48h - linhas reais nunca sao
+  tocadas.
+- Plano Cortesia: pesquisei antes de implementar e descobri que **toda
+  a arquitetura ja existia pronta** - `Plan.isPublic` ja controla
+  visibilidade na tela de cobranca, admin ja consegue atribuir
+  qualquer plano a qualquer empresa em `/admin/users`, e isso nunca
+  fala com o Asaas (e so um update no banco). So faltava a linha do
+  plano em si - migracao nova (`20260820150000_add_courtesy_plan`)
+  insere "Cortesia" com os mesmos limites/recursos do Pro, preco 0,
+  oculto.
+- Testes novos: `email-log-cleanup.job.test.ts` e filtro `isTest` em
+  `email-log.routes.test.ts`. Suite completa: 118/118 (rodada 3x, 1
+  crash no meio pelo bug nativo do Windows ja documentado, nao uma
+  falha real).
+- Testado ao vivo, ponta a ponta: envio de teste apareceu como
+  "Teste", reset de senha real apareceu como "Real", filtro
+  funcionando nos dois sentidos, job de limpeza rodado manualmente
+  contra o banco real apagando so a linha de teste antiga. Plano
+  Cortesia confirmado em `/admin/plans` (Oculto, limites do Pro), no
+  seletor de `/admin/users`, e atribuido de verdade a uma empresa de
+  teste sem nenhuma chamada ao Asaas. Dados de teste apagados depois.
+- Migracoes novas precisam ser aplicadas em producao.

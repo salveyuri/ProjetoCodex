@@ -164,6 +164,7 @@ export default function AdminEmailTemplatesPage() {
   const [logsDeliveryStatusFilter, setLogsDeliveryStatusFilter] = useState<
     EmailDeliveryStatus | ""
   >("");
+  const [logsIsTestFilter, setLogsIsTestFilter] = useState<"" | "true" | "false">("");
   const [isLogsLoading, setIsLogsLoading] = useState(true);
   const [logPreview, setLogPreview] = useState<{
     summary: EmailLogResource;
@@ -229,6 +230,7 @@ export default function AdminEmailTemplatesPage() {
         pageSize: 20,
         status: logsStatusFilter || undefined,
         deliveryStatus: logsDeliveryStatusFilter || undefined,
+        isTest: logsIsTestFilter === "" ? undefined : logsIsTestFilter === "true",
       };
       const { data } = await api.get<PaginatedEmailLogList>("/admin/email-logs", {
         params,
@@ -247,7 +249,14 @@ export default function AdminEmailTemplatesPage() {
     } finally {
       setIsLogsLoading(false);
     }
-  }, [logsDeliveryStatusFilter, logsPage, logsStatusFilter, showToast, token]);
+  }, [
+    logsDeliveryStatusFilter,
+    logsIsTestFilter,
+    logsPage,
+    logsStatusFilter,
+    showToast,
+    token,
+  ]);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -547,7 +556,8 @@ export default function AdminEmailTemplatesPage() {
                   </h2>
                   <p className="text-sm text-muted">
                     {logsPagination ? `${logsPagination.total} registros.` : "Carregando..."}{" "}
-                    Todo envio (real ou de teste) grava uma linha aqui.
+                    Todo envio (real ou de teste) grava uma linha aqui. Registros de
+                    teste somem sozinhos apos 48h; os reais ficam pra sempre.
                   </p>
                 </div>
               </div>
@@ -584,6 +594,18 @@ export default function AdminEmailTemplatesPage() {
                     ),
                   )}
                 </select>
+                <select
+                  value={logsIsTestFilter}
+                  onChange={(event) => {
+                    setLogsIsTestFilter(event.target.value as "" | "true" | "false");
+                    setLogsPage(1);
+                  }}
+                  className="h-10 rounded-lg border border-border bg-surface-muted px-3 text-sm outline-none focus:border-primary"
+                >
+                  <option value="">Teste e real</option>
+                  <option value="false">Só reais</option>
+                  <option value="true">Só testes</option>
+                </select>
                 <button
                   type="button"
                   onClick={() => void loadLogs()}
@@ -619,6 +641,7 @@ export default function AdminEmailTemplatesPage() {
                     <thead className="border-b border-border bg-background text-xs uppercase text-muted">
                       <tr>
                         <th className="px-5 py-3">Data</th>
+                        <th className="px-5 py-3">Origem</th>
                         <th className="px-5 py-3">Template</th>
                         <th className="px-5 py-3">Para</th>
                         <th className="px-5 py-3">Assunto</th>
@@ -632,6 +655,11 @@ export default function AdminEmailTemplatesPage() {
                         <tr key={log.id} className="bg-surface/40 align-top">
                           <td className="whitespace-nowrap px-5 py-4 text-muted">
                             {new Date(log.createdAt).toLocaleString("pt-BR")}
+                          </td>
+                          <td className="px-5 py-4">
+                            <StatusBadge tone={log.isTest ? "warning" : "neutral"}>
+                              {log.isTest ? "Teste" : "Real"}
+                            </StatusBadge>
                           </td>
                           <td className="px-5 py-4 font-mono text-xs text-foreground">
                             {log.templateKey}

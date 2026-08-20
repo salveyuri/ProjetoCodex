@@ -1815,3 +1815,96 @@ o link `href="https://app.pricify3d.com/reset-password?token=..."` -
 exatamente o cenário que o Yuri descreveu (cliente sem receber,
 precisar ver o link pra passar manualmente). Dados de teste apagados
 depois.
+
+## 2026-08-20 - Origem teste/real no log + limpeza automática + plano Cortesia
+
+### Coluna "Origem" no log de e-mails
+
+`EmailLog` ganhou `isTest Boolean @default(false)` (migração
+`20260820140000_add_email_log_is_test`). `EmailService.send()` já tinha
+duas chamadas de `prisma.emailLog.create()` (caminho `SKIPPED_INACTIVE`
+e o caminho principal SENT/FAILED) - as duas passaram a gravar
+`isTest: options.isTest ?? false`. `sendTest()` (usado só pelo botão
+"Testar e-mail") é o único ponto que chama `send()` com
+`{ force: true, isTest: true }` - todo outro trigger (conta criada,
+reset de senha, eventos de assinatura, resumo de orçamento) nunca passa
+essa opção, então fica `false` por padrão. Coluna "Origem" nova na
+tabela (badge "Teste"/"Real") e filtro próprio ("Teste e real"/"Só
+reais"/"Só testes"), mesmo padrão dos filtros de status/entrega já
+existentes.
+
+Achado ao escrever o validator: `z.coerce.boolean()` do Zod trata a
+**string** `"false"` (que é o que sempre chega numa query string) como
+verdadeira - `Boolean("false") === true` em JS, pegadinha conhecida.
+Usado em vez disso `z.enum(["true","false"]).transform(v => v ===
+"true")`, que só existe porque fui conferir antes de assumir que
+`coerce.boolean()` funcionava certo.
+
+### Limpeza automática: só linhas de teste, 48h, novo job
+
+Novo `backend/src/jobs/email-log-cleanup.job.ts`, espelhando
+exatamente `subscription-expiring.job.ts` (função exportada testável +
+`node-cron` agendando às 3h da manhã, horário de menor tráfego,
+`timezone: "America/Sao_Paulo"`). `prisma.emailLog.deleteMany({ where:
+{ isTest: true, createdAt: { lt: cutoff } } })` - só apaga o que tem
+`isTest: true` E passou de 48h; linhas reais nunca são tocadas, não
+importa a idade. Registrado em `server.ts` junto do job já existente.
+Testado rodando a função direto contra o banco de dev (criei uma linha
+de teste com `createdAt` forçado pra 50h atrás, rodei o job, confirmei
+que sumiu; uma linha real "antiga" de propósito não foi tocada).
+
+### Plano Cortesia: só uma linha nova no banco, zero código
+
+Antes de escrever qualquer coisa, investiguei a arquitetura existente
+de planos - achado importante: **tudo que esse pedido precisa já
+existia, pronto, testado em produção**:
+- `Plan.isPublic` (boolean) já existe, já filtra o que aparece na tela
+  de cobrança do cliente (`planService.listPublic()`,
+  `where: { isActive: true, isPublic: true }`) - um plano com
+  `isPublic: false` já fica automaticamente invisível pra contratação,
+  sem precisar mudar nada no código.
+- Admin já consegue atribuir qualquer plano (público ou oculto) a
+  qualquer empresa direto em `/admin/users` (seletor por linha, `PATCH
+  /admin/users/:id` com `planId`) - `listAll()` (usado pra popular esse
+  seletor) não filtra por `isPublic`, só `listPublic()` (usado na tela
+  do cliente) filtra.
+- `billingService.updateSubscription()` (chamado por esse PATCH) é
+  **só um update no banco** (`prisma.company.update({ data: { planId,
+  subscriptionStatus } })`) - nunca fala com o Asaas. Atribuir Cortesia
+  não gera cobrança, checkout, nem qualquer chamada externa. Confirmado
+  lendo o código antes de implementar, não assumido.
+
+Dado isso, a única coisa que faltava de verdade era a **linha do plano
+em si**. Nova migração (`20260820150000_add_courtesy_plan`) insere
+`Cortesia` com os mesmos limites/recursos do Pro
+(`max_machines_allowed/max_materials_allowed/max_quotes_per_month =
+NULL` = ilimitado, `features: {"customFormulas":true,"pdfExport":true}`),
+`price: 0`, `is_public: false`, `is_active: true` - mesmo formato/UUID
+fixo que a migração original de Free/Pro/Enterprise já usava
+(`20260813190000_asaas_plans_checkout_payment`), pra manter
+consistência de como o catálogo de planos é semeado neste projeto (via
+migração, não `seed.ts` - `seed.ts` só promove admin).
+
+### Verificação
+
+Testes novos: `email-log-cleanup.job.test.ts` (linha de teste com mais
+de 48h é apagada, linha de teste recente e linha real antiga não são
+tocadas) e um teste novo em `email-log.routes.test.ts` pro filtro
+`isTest` (`?isTest=true`/`?isTest=false`, cada um só retornando o lado
+certo). `tsc`/`lint`/`build` limpos em shared/backend/frontend. Suite
+completa do backend: 118/118 (rodada 3x pra confirmar - 1 das 3 rodadas
+crashou no meio pelo mesmo motivo nativo do Windows já documentado em
+`Contextos/Conhecimento.md`, não uma falha de asserção real).
+
+Testado ao vivo, de ponta a ponta: mandei um "Testar e-mail" (apareceu
+"Teste" na coluna Origem) e disparei um reset de senha de verdade via
+`POST /auth/forgot-password` (apareceu "Real"); filtro por origem
+reduziu a lista corretamente nos dois sentidos (2597 registros só
+reais / 28 só testes, no banco de dev cheio de dados de sessões
+anteriores). Rodei o job de limpeza manualmente contra o banco real com
+uma linha de teste forçada pra 50h atrás - confirmado que ela sumiu.
+Plano Cortesia: confirmado aparecendo em `/admin/plans` com badge
+"Oculto" e os mesmos limites/recursos do Pro; confirmado no seletor de
+`/admin/users`; atribuí de verdade a uma empresa de teste e confirmei
+via resposta de rede que virou `planId` da Cortesia, sem nenhuma
+chamada ao Asaas nos logs do backend. Dados de teste apagados depois.

@@ -21,6 +21,7 @@ export const toEmailLogResource = (log: EmailLog): EmailLogResource => ({
   deliveryStatus: log.deliveryStatus as EmailDeliveryStatus | null,
   deliveryDetail: log.deliveryDetail,
   deliveryUpdatedAt: log.deliveryUpdatedAt?.toISOString() ?? null,
+  isTest: log.isTest,
   createdAt: log.createdAt.toISOString(),
 });
 
@@ -38,6 +39,7 @@ export class EmailLogService {
     const where: Prisma.EmailLogWhereInput = {
       status: query.status,
       deliveryStatus: query.deliveryStatus,
+      isTest: query.isTest,
     };
     const skip = (query.page - 1) * query.pageSize;
 

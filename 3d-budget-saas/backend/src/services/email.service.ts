@@ -85,6 +85,11 @@ interface SendOptions {
   // template (including one they haven't activated yet) rather than
   // simulating what a real trigger would do.
   force?: boolean;
+  // Stamped on the EmailLog row so the admin UI can tell a test send
+  // apart from a real one, and so jobs/email-log-cleanup.job.ts knows
+  // which rows are safe to purge after 48h. Only ever true from
+  // sendTest() below.
+  isTest?: boolean;
 }
 
 export interface EmailSendResult {
@@ -154,6 +159,7 @@ export class EmailService {
             subject: template?.subject ?? key,
             status: "SKIPPED_INACTIVE",
             dedupeKey: options.dedupeKey,
+            isTest: options.isTest ?? false,
           },
         });
         logger.info(
@@ -186,6 +192,7 @@ export class EmailService {
           errorMessage: result.error,
           dedupeKey: options.dedupeKey,
           bodyHtml: html,
+          isTest: options.isTest ?? false,
         },
       });
 
@@ -221,7 +228,7 @@ export class EmailService {
         .map((variable) => [variable.name, variable.sampleValue]),
     );
 
-    return this.send(key, language, to, sampleVariables, { force: true });
+    return this.send(key, language, to, sampleVariables, { force: true, isTest: true });
   }
 
   async sendAccountCreated(userId: string): Promise<void> {

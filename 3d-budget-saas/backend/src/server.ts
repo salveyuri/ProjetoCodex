@@ -1,6 +1,7 @@
 import { env } from "./config/env";
 import { prisma } from "./config/prisma";
 import { app } from "./app";
+import { startEmailLogCleanupJob } from "./jobs/email-log-cleanup.job";
 import { startSubscriptionExpiringJob } from "./jobs/subscription-expiring.job";
 
 const server = app.listen(env.port, () => {
@@ -8,6 +9,7 @@ const server = app.listen(env.port, () => {
 });
 
 startSubscriptionExpiringJob();
+startEmailLogCleanupJob();
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   console.log(`${signal} received. Closing API server.`);

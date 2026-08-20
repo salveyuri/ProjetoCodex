@@ -71,7 +71,54 @@ describe("GET /api/admin/email-logs", () => {
       status: "SENT",
       resendMessageId: "resend-id",
       errorMessage: null,
+      // Both sends went through the "Testar e-mail" button.
+      isTest: true,
     });
+  });
+
+  it("filters by isTest", async () => {
+    const company = await registerTestCompany(app, "email-log-is-test-filter");
+    await promoteToAdmin(company.userId);
+    const template = await prisma.emailTemplate.findFirstOrThrow({
+      where: { key: "ACCOUNT_CREATED" },
+    });
+    vi.spyOn(resendClient, "send").mockResolvedValue({ id: "resend-id-2", error: null });
+
+    const testEmail = "email-log-is-test-target@example.com";
+    await request(app)
+      .post(`/api/admin/email-templates/${template.id}/test`)
+      .set(authHeader(company.token))
+      .send({ to: testEmail });
+
+    const testResponse = await request(app)
+      .get("/api/admin/email-logs")
+      .query({ isTest: "true", pageSize: 100 })
+      .set(authHeader(company.token));
+
+    expect(testResponse.status).toBe(200);
+    expect(
+      (testResponse.body.data as Array<{ isTest: boolean }>).every((log) => log.isTest),
+    ).toBe(true);
+    expect(
+      (testResponse.body.data as Array<{ toEmail: string }>).some(
+        (log) => log.toEmail === testEmail,
+      ),
+    ).toBe(true);
+
+    const realResponse = await request(app)
+      .get("/api/admin/email-logs")
+      .query({ isTest: "false", pageSize: 100 })
+      .set(authHeader(company.token));
+
+    expect(realResponse.status).toBe(200);
+    expect(
+      (realResponse.body.data as Array<{ isTest: boolean }>).every((log) => !log.isTest),
+    ).toBe(true);
+    expect(
+      (realResponse.body.data as Array<{ toEmail: string }>).some(
+        (log) => log.toEmail === testEmail,
+      ),
+    ).toBe(false);
   });
 
   it("filters by status", async () => {

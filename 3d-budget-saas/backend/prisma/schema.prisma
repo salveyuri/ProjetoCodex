@@ -505,7 +505,15 @@ model EmailLog {
   deliveryPayload   Json?     @map("delivery_payload")
   deliveryUpdatedAt DateTime? @map("delivery_updated_at")
 
+  // True only for sends triggered by the "Testar e-mail" button
+  // (EmailService.sendTest) — every real trigger (account created,
+  // password reset, subscription events, quote summary) leaves this
+  // false. Test rows are purged 48h after creation by
+  // jobs/email-log-cleanup.job.ts; real rows are never auto-deleted.
+  isTest Boolean @default(false) @map("is_test")
+
   @@index([templateKey, toEmail])
   @@index([resendMessageId])
+  @@index([isTest, createdAt])
   @@map("email_logs")
 }

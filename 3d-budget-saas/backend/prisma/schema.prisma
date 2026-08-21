@@ -365,6 +365,13 @@ model Quote {
   totalWeightGrams Decimal     @default(0) @map("total_weight_grams") @db.Decimal(10, 2)
   paintingHours    Decimal     @default(0) @map("painting_hours") @db.Decimal(10, 2)
   finishingHours   Decimal     @default(0) @map("finishing_hours") @db.Decimal(10, 2)
+  // Se marcado, a taxa de cartão (Settings.cardFeePercent) é somada por
+  // cima do preço que a fórmula calculou - cardFeeAmount é o valor em
+  // dinheiro (snapshot, não recalculado se a taxa mudar depois) que essa
+  // marcação realmente acrescentou, já incluído em totalAmount. Ver
+  // Contextos/Decisoes.md (2026-08-21).
+  cardPayment      Boolean     @default(false) @map("card_payment")
+  cardFeeAmount    Decimal     @default(0) @map("card_fee_amount") @db.Decimal(12, 2)
   validUntil       DateTime    @map("valid_until")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")

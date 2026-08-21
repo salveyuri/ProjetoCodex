@@ -39,6 +39,7 @@ export default function CalculatorPage() {
   const [materialId, setMaterialId] = useState("");
   const [weightGrams, setWeightGrams] = useState("120");
   const [printTimeHours, setPrintTimeHours] = useState("4");
+  const [cardPayment, setCardPayment] = useState(false);
   const [result, setResult] = useState<CalculationResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoadingResources, setIsLoadingResources] = useState(true);
@@ -100,6 +101,7 @@ export default function CalculatorPage() {
       printTimeHours: numberFromInput(printTimeHours),
       machineId,
       materialId,
+      cardPayment,
     };
 
     setIsCalculating(true);
@@ -114,7 +116,7 @@ export default function CalculatorPage() {
     } finally {
       setIsCalculating(false);
     }
-  }, [canCalculate, machineId, materialId, printTimeHours, t, weightGrams]);
+  }, [canCalculate, cardPayment, machineId, materialId, printTimeHours, t, weightGrams]);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -261,6 +263,16 @@ export default function CalculatorPage() {
                   onChange={setPrintTimeHours}
                 />
               </div>
+
+              <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={cardPayment}
+                  onChange={(event) => setCardPayment(event.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                {t("quotes.cardPayment")}
+              </label>
             </div>
 
             <div className="mt-6 grid gap-3">

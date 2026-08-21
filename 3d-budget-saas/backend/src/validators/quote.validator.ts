@@ -39,6 +39,7 @@ export const quoteCreateSchema = z
     horas_pintura: nonNegativeNumber.optional(),
     finishingHours: nonNegativeNumber.optional(),
     horas_acabamento: nonNegativeNumber.optional(),
+    cardPayment: z.boolean().optional(),
     item: quoteItemSchema.optional(),
     items: quoteItemsSchema.optional(),
     printItems: quoteItemsSchema.optional(),
@@ -67,6 +68,7 @@ export const quoteCreateSchema = z
       formulaId: value.formulaId,
       paintingHours: value.paintingHours ?? value.horas_pintura ?? 0,
       finishingHours: value.finishingHours ?? value.horas_acabamento ?? 0,
+      cardPayment: value.cardPayment ?? false,
       items: items ?? [],
     };
   });
@@ -81,6 +83,7 @@ export const quoteUpdateSchema = z
     horas_pintura: nonNegativeNumber.optional(),
     finishingHours: nonNegativeNumber.optional(),
     horas_acabamento: nonNegativeNumber.optional(),
+    cardPayment: z.boolean().optional(),
     item: quoteItemSchema.optional(),
     items: quoteItemsSchema.optional(),
     printItems: quoteItemsSchema.optional(),
@@ -97,6 +100,7 @@ export const quoteUpdateSchema = z
     formulaId: value.formulaId,
     paintingHours: value.paintingHours ?? value.horas_pintura,
     finishingHours: value.finishingHours ?? value.horas_acabamento,
+    cardPayment: value.cardPayment,
     items:
       value.items ??
       value.printItems ??
@@ -132,6 +136,7 @@ export const quotePreviewSchema = z
     horas_pintura: nonNegativeNumber.optional(),
     finishingHours: nonNegativeNumber.optional(),
     horas_acabamento: nonNegativeNumber.optional(),
+    cardPayment: z.boolean().optional(),
     item: quoteItemSchema.optional(),
     items: quoteItemsSchema.optional(),
     printItems: quoteItemsSchema.optional(),
@@ -157,6 +162,7 @@ export const quotePreviewSchema = z
       formulaId: value.formulaId,
       paintingHours: value.paintingHours ?? value.horas_pintura ?? 0,
       finishingHours: value.finishingHours ?? value.horas_acabamento ?? 0,
+      cardPayment: value.cardPayment ?? false,
       items: items ?? [],
     };
   });

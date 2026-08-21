@@ -208,6 +208,8 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
             isSaving={isSaving}
             canSave={canSave}
             onPreviewPdf={openPdfPreview}
+            cardPayment={form.cardPayment}
+            onChangeCardPayment={(value) => updateField("cardPayment", value)}
           />
         </form>
       </div>

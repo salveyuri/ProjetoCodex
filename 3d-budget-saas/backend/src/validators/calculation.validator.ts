@@ -22,6 +22,7 @@ export const calculationSchema = z
     horas_acabamento: nonNegativeNumber.optional(),
     quoteItemsCount: positiveInteger.optional(),
     quantidade_mesas: positiveInteger.optional(),
+    cardPayment: z.boolean().optional(),
   })
   .strict()
   .transform((value, context) => {
@@ -35,6 +36,7 @@ export const calculationSchema = z
       value.finishingHours ?? value.horas_acabamento ?? 0;
     const quoteItemsCount =
       value.quoteItemsCount ?? value.quantidade_mesas ?? 1;
+    const cardPayment = value.cardPayment ?? false;
 
     if (machineId === undefined) {
       context.addIssue({
@@ -61,6 +63,7 @@ export const calculationSchema = z
       paintingHours,
       finishingHours,
       quoteItemsCount,
+      cardPayment,
     };
   });
 

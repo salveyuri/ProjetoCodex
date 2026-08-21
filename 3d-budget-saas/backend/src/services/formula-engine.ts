@@ -5,7 +5,10 @@ export const SYSTEM_DEFAULT_FORMULA_CODE = "system_default";
 
 // custo_base already has taxa_erro folded in (applied only to material+
 // energy, upstream — see CalculationService.ts's calculateAggregate).
-// taxas_percentuais here is just taxa_cartao+taxa_administrativa.
+// taxas_percentuais here is just taxa_administrativa — taxa_cartao is no
+// longer bundled into it (2026-08-21): the card fee became an opt-in
+// surcharge applied after this expression evaluates, tied to
+// Quote.cardPayment (see calculateAggregate's cardFeeAmount).
 // Post-processing (pintura/acabamento) is a separate additive term,
 // applied once per quote — never per mesa.
 export const SYSTEM_DEFAULT_FORMULA = {

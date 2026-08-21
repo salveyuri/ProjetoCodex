@@ -159,6 +159,8 @@ export interface AggregateCalculationInput {
   totalPrintTimeHours: Prisma.Decimal;
   totalPowerConsumptionKw: Prisma.Decimal;
   customVariables: ProductionSettings["customVariables"];
+  // Quote.cardPayment — see calculateAggregate's doc comment.
+  cardPayment: boolean;
 }
 
 export interface AggregateCalculationResult {
@@ -200,12 +202,19 @@ export interface AggregateCalculationResult {
  *   3. custo_base = printCost*(1+errorRate) + sum(depreciationCost) + sum(maintenanceCost).
  *   4. Post-processing (painting/finishing) is added once, not per item —
  *      the formula itself adds it as a separate term alongside custo_base.
- *   5. The formula evaluates once against these aggregate variables.
- *   6. cardFeeAmount/administrativeFeeAmount/marginAmount below are
- *      best-effort *display* estimates (subtotal * rate) — the formula is
- *      free-text, so there's no way to know exactly how an arbitrary
- *      expression split fees from margin in its result. This applies
- *      uniformly regardless of formula source (default or custom).
+ *   5. The formula evaluates once against these aggregate variables
+ *      (taxas_percentuais here is administrative-fee-only — see
+ *      formula-engine.ts).
+ *   6. administrativeFeeAmount/marginAmount below are best-effort
+ *      *display* estimates (subtotal * rate) — the formula is free-text,
+ *      so there's no way to know exactly how an arbitrary expression
+ *      split fees from margin in its result. This applies uniformly
+ *      regardless of formula source (default or custom).
+ *   7. cardFeeAmount is NOT an estimate — it's a real amount added on top
+ *      of whatever the formula produced, only when `cardPayment` is true
+ *      (Quote.cardPayment, driven by the "Pagamento Cartão" checkbox on
+ *      the quote form). Zero when unchecked or when cardFeePercent is 0.
+ *      See Contextos/Decisoes.md (2026-08-21).
  */
 export const calculateAggregate = ({
   rawCosts,
@@ -218,6 +227,7 @@ export const calculateAggregate = ({
   totalPrintTimeHours,
   totalPowerConsumptionKw,
   customVariables,
+  cardPayment,
 }: AggregateCalculationInput): AggregateCalculationResult => {
   const materialCost = rawCosts.reduce(
     (total, item) => total.add(item.materialCost),
@@ -262,7 +272,11 @@ export const calculateAggregate = ({
     custo_kwh: settings.energyCostPerKwh,
     taxa_cartao: Number(cardFeeRate.toString()),
     taxa_administrativa: Number(administrativeFeeRate.toString()),
-    taxas_percentuais: Number(cardFeeRate.add(administrativeFeeRate).toString()),
+    // Card fee is no longer part of this bundle — it became an opt-in
+    // surcharge applied after the formula evaluates (see cardFeeAmount
+    // below), tied to Quote.cardPayment. taxa_cartao stays available
+    // standalone for a formula that wants to reference it directly.
+    taxas_percentuais: Number(administrativeFeeRate.toString()),
     // Best-effort sum across items — with multiple different machines in
     // one quote this isn't any single machine's real consumption, just a
     // stand-in so the variable stays defined instead of crashing formulas
@@ -296,13 +310,22 @@ export const calculateAggregate = ({
     formulaSource = "SYSTEM_FALLBACK";
   }
 
-  const finalPrice = decimal(formulaResult.price);
-  const delta = toPositiveDelta(finalPrice, subtotalBeforeFees);
-  const cardFeeAmount = subtotalBeforeFees.mul(cardFeeRate);
+  // What the formula itself produced — before the opt-in card fee
+  // surcharge. This is what "valor acumulado" showed on the quote form
+  // prior to 2026-08-21; it's still the base the margin/fee decomposition
+  // below is estimated against.
+  const formulaPrice = decimal(formulaResult.price);
+  const delta = toPositiveDelta(formulaPrice, subtotalBeforeFees);
   const administrativeFeeAmount = subtotalBeforeFees.mul(administrativeFeeRate);
-  const feesTotal = cardFeeAmount.add(administrativeFeeAmount);
-  const marginAmount = toPositiveDelta(delta, feesTotal);
+  const marginAmount = toPositiveDelta(delta, administrativeFeeAmount);
   const subtotalWithMargin = subtotalBeforeFees.add(marginAmount);
+
+  // Real amount (not an estimate) — added on top of formulaPrice only
+  // when the quote has "Pagamento Cartão" checked. Naturally zero when
+  // cardFeePercent is 0, regardless of cardPayment.
+  const cardFeeAmount = cardPayment ? formulaPrice.mul(cardFeeRate) : decimal(0);
+  const feesTotal = cardFeeAmount.add(administrativeFeeAmount);
+  const finalPrice = formulaPrice.add(cardFeeAmount);
 
   return {
     breakdown: {
@@ -370,6 +393,7 @@ export const calculateQuoteBreakdown = ({
     totalPrintTimeHours: printTimeHours,
     totalPowerConsumptionKw: machine.powerConsumptionKw,
     customVariables: settings.customVariables,
+    cardPayment: safeRequest.cardPayment ?? false,
   });
 
   const powerConsumptionWatts = machine.powerConsumptionKw.mul(1000);
@@ -421,6 +445,7 @@ export interface QuoteCalculationInput {
   formulaId?: string;
   paintingHours?: number;
   finishingHours?: number;
+  cardPayment?: boolean;
 }
 
 export interface QuoteCalculationResult {
@@ -564,6 +589,7 @@ export class CalculationService {
       totalPrintTimeHours,
       totalPowerConsumptionKw,
       customVariables: settings.customVariables,
+      cardPayment: input.cardPayment ?? false,
     });
 
     const items: QuoteItemCostPreview[] = resolvedItems.map((item) => ({

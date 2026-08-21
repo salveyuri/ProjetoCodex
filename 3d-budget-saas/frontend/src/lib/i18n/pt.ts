@@ -81,6 +81,8 @@ export const pt = {
   "quotes.totalTime": "Tempo total",
   "quotes.painting": "Pintura",
   "quotes.finishing": "Acabamento",
+  "quotes.cardPayment": "Pagamento Cartao",
+  "quotes.cardFeeAmount": "Taxa Cartao",
   "quotes.savedValue": "Valor salvo",
   "quotes.saving": "Salvando...",
   "quotes.saveQuote": "Salvar orcamento",

@@ -51,7 +51,11 @@ describe("calculateQuoteBreakdown — system fallback formula", () => {
   // on 2026-08-17: the pricing redesign changed the system default formula
   // from a compounded "custo_base*(1+margem)*(1+taxas)" to the additive
   // "custo_base*(1+taxas+margem)" shape the user's own formula uses — see
-  // Contextos/Decisoes.md.
+  // Contextos/Decisoes.md. Re-pinned to 21.44 on 2026-08-21: card fee
+  // stopped being part of taxas_percentuais (it became an opt-in surcharge
+  // tied to Quote.cardPayment, which calculateQuoteBreakdown never sets —
+  // it has no "Pagamento Cartão" toggle, that only exists on the quote
+  // form). taxas_percentuais here is administrativeFeeRate only now (2%).
   it("matches the known-good calculation when no formula is set", () => {
     const result = calculateQuoteBreakdown({
       request: baseRequest,
@@ -68,8 +72,8 @@ describe("calculateQuoteBreakdown — system fallback formula", () => {
     expect(result.breakdown.errorCostAmount).toBe(0);
     expect(result.breakdown.baseCost).toBe(16.24);
     expect(result.breakdown.postProcessingCost).toBe(0);
-    // 16.24 * (1 + 0.07 + 0.30) = 22.2488 -> 22.25
-    expect(result.breakdown.finalPrice).toBe(22.25);
+    // 16.24 * (1 + 0.02 + 0.30) = 21.4368 -> 21.44
+    expect(result.breakdown.finalPrice).toBe(21.44);
     expect(result.formula.source).toBe("SYSTEM_FALLBACK");
   });
 
@@ -144,9 +148,11 @@ describe("calculateQuoteBreakdown — system fallback formula", () => {
     expect(result.breakdown.errorCostAmount).toBe(1.02);
     // baseCost = 10.24 + 1.024 + 6 + 0 = 17.264 -> 17.26
     expect(result.breakdown.baseCost).toBe(17.26);
-    // finalPrice = 17.264 * 1.37 = 23.65168 -> 23.65
-    expect(result.breakdown.finalPrice).toBe(23.65);
-    expect(result.breakdown.finalPrice).toBeGreaterThan(22.25);
+    // finalPrice = 17.264 * 1.32 = 22.78848 -> 22.79 (1.32 = 1 + 0.02
+    // taxas_percentuais [admin-only] + 0.30 margem_lucro)
+    expect(result.breakdown.finalPrice).toBe(22.79);
+    // Same baseSettings, errorRate 0 -> 21.44 (see the fixture above).
+    expect(result.breakdown.finalPrice).toBeGreaterThan(21.44);
   });
 
   it("normalizes a missing weight/print time to 0 instead of throwing", () => {
@@ -188,10 +194,13 @@ describe("calculateQuoteBreakdown — custom (DATABASE) formula", () => {
     expect(result.breakdown.finalPrice).toBe(32.48);
     expect(result.formula.source).toBe("DATABASE");
     expect(result.formula.id).toBe("formula-1");
-    // Card/administrative fee amounts are best-effort display estimates
-    // (subtotal * rate), computed uniformly regardless of which formula
-    // produced finalPrice — see calculateAggregate's doc comment.
-    expect(result.breakdown.cardFeeAmount).toBe(0.81);
+    // administrativeFeeAmount is a best-effort display estimate (subtotal
+    // * rate), computed uniformly regardless of which formula produced
+    // finalPrice — see calculateAggregate's doc comment. cardFeeAmount is
+    // NOT an estimate — it's 0 here because calculateQuoteBreakdown always
+    // passes cardPayment: false (no "Pagamento Cartão" toggle outside the
+    // quote form).
+    expect(result.breakdown.cardFeeAmount).toBe(0);
     expect(result.breakdown.administrativeFeeAmount).toBe(0.32);
   });
 
@@ -211,7 +220,7 @@ describe("calculateQuoteBreakdown — custom (DATABASE) formula", () => {
 
     expect(result.formula.source).toBe("SYSTEM_FALLBACK");
     // Same math as the no-formula case above.
-    expect(result.breakdown.finalPrice).toBe(22.25);
+    expect(result.breakdown.finalPrice).toBe(21.44);
   });
 });
 
@@ -247,6 +256,9 @@ describe("calculateAggregate — quote-level fix for the reported painting/finis
       totalPrintTimeHours: new Prisma.Decimal(2 * rawCosts.length),
       totalPowerConsumptionKw: baseMachine.powerConsumptionKw.mul(rawCosts.length),
       customVariables: settings.customVariables,
+      // Not what this describe block is testing — kept off so the delta
+      // math below stays about painting hours, not the card fee surcharge.
+      cardPayment: false,
     });
 
   it("applies postProcessingCost once, identically, regardless of how many mesas are in the quote", () => {
@@ -267,14 +279,15 @@ describe("calculateAggregate — quote-level fix for the reported painting/finis
     const twoItemsAfter = runAggregate([rawCost, rawCost], 8);
 
     // Extra painting cost for +3h = 3 * 10 = 30, marked up by the formula's
-    // (1 + taxas_percentuais + margem_lucro) factor = 1.37 -> 41.10, exactly
+    // (1 + taxas_percentuais + margem_lucro) factor = 1.32 (taxas_percentuais
+    // is admin-only, 2%, since cardPayment is false here) -> 39.60, exactly
     // the same delta for a 1-mesa and a 2-mesa quote.
     const oneItemDelta = oneItemAfter.breakdown.finalPrice - oneItemBefore.breakdown.finalPrice;
     const twoItemsDelta =
       twoItemsAfter.breakdown.finalPrice - twoItemsBefore.breakdown.finalPrice;
 
-    expect(oneItemDelta).toBeCloseTo(41.1, 2);
-    expect(twoItemsDelta).toBeCloseTo(41.1, 2);
+    expect(oneItemDelta).toBeCloseTo(39.6, 2);
+    expect(twoItemsDelta).toBeCloseTo(39.6, 2);
   });
 
   it("a mesa's own raw cost never changes when painting/finishing hours change", () => {

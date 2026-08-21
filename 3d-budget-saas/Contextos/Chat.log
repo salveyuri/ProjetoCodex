@@ -2293,3 +2293,48 @@ selecionada".
   de teste apagados depois.
 - Migracao nova precisa ser aplicada em producao
   (`20260820180000_add_quote_system_formula_id`).
+
+## 2026-08-21 (mesmo dia) - Taxa de cartao opcional por orcamento ("Pagamento Cartao")
+
+Pedido: taxa de cartao deixar de ser sempre embutida no preco e virar
+opcional via checkbox novo no orcamento, logo abaixo do bloco de valor
+acumulado; quando marcado, soma a taxa configurada por cima do preco e
+mostra uma linha "Taxa Cartao" acima de "Valor salvo" com o valor real
+acrescido.
+
+- Achado antes de implementar: a taxa de cartao ja era aplicada sempre
+  hoje, escondida dentro da formula padrao do sistema (via variavel
+  `taxas_percentuais` = cartao + administrativa). Pra virar opcional de
+  verdade, `taxas_percentuais` teve que mudar - agora e so a taxa
+  administrativa (essa continua sempre embutida, sem checkbox).
+  `taxa_cartao` continua disponivel isolada pra quem quiser usar direto
+  numa formula customizada.
+- Colunas novas `Quote.cardPayment`/`Quote.cardFeeAmount` (migracao
+  `20260821140000_add_quote_card_payment`) - cardFeeAmount e um
+  snapshot do valor real, nao recalcula sozinho se a taxa mudar depois.
+  `calculateAggregate` agora calcula o preco da formula primeiro, so
+  depois soma a taxa de cartao por cima (se marcado) - zero
+  automaticamente se a taxa estiver zerada.
+- `cardPayment` teve que entrar em 3 caminhos de calculo: orcamento
+  (create/update/preview), a calculadora standalone
+  (`/dashboard/calculator`, `POST /api/calculate`) tambem ganhou o
+  mesmo checkbox - sem isso ela ficaria travada mostrando "Taxa de
+  cartao: R$ 0,00" pra sempre, uma regressao silenciosa que so notei
+  revisando quem mais lia esse campo do breakdown.
+- Testes existentes em `CalculationService.test.ts` recalculados a mao
+  e re-pinados (a formula padrao agora produz preco menor nas mesmas
+  configuracoes de teste, ja que a taxa de 5% saiu do meio do calculo).
+  Teste novo dedicado `quote-card-payment.routes.test.ts`: nao soma
+  quando o campo nao e enviado, soma o valor certo quando marcado, nao
+  aumenta com taxa 0%, sobrevive a edicao que recalcula por outro
+  motivo sem reenviar cardPayment, remove a taxa quando desmarcado.
+  Suite completa: 133/133 (17 arquivos, 2 lotes). `tsc`/`lint`/`build`
+  limpos em shared/backend/frontend.
+- Testado ao vivo na UI: orcamento sem marcar (R$ 15,42), marquei
+  "Pagamento Cartao" - subiu pra R$ 16,19 e apareceu "Taxa Cartao:
+  R$ 0,77" (5% de 15,42) acima de "Valor salvo", exatamente como
+  pedido. Salvei, reabri pra editar - checkbox e linha continuaram la.
+  Testado tambem `POST /api/calculate` direto por API, mesmo resultado.
+  Dados de teste apagados depois.
+- Migracao nova precisa ser aplicada em producao
+  (`20260821140000_add_quote_card_payment`).

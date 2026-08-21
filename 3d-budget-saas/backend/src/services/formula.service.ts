@@ -126,8 +126,9 @@ const systemVariableMeta: Record<
   },
   taxa_cartao: {
     description: {
-      "pt-BR": "Taxa de cartao. No teste, digite 5 para simular 0.05.",
-      en: "Card fee rate. In the test, type 5 to simulate 0.05.",
+      "pt-BR":
+        "Taxa de cartao configurada em Configuracoes. Nao entra mais em taxas_percentuais - e aplicada automaticamente por cima do preco quando o orcamento marca 'Pagamento Cartao'. So referencie esta variavel direto numa formula customizada se quiser aplica-la sempre, independente dessa marcacao. No teste, digite 5 para simular 0.05.",
+      en: "Card fee rate from Settings. No longer part of taxas_percentuais - it's applied automatically on top of the price when the quote has 'Card Payment' checked. Only reference this variable directly in a custom formula if you want it always applied, regardless of that checkbox. In the test, type 5 to simulate 0.05.",
     },
     type: "PERCENTAGE",
     previewValue: 5,
@@ -143,11 +144,11 @@ const systemVariableMeta: Record<
   taxas_percentuais: {
     description: {
       "pt-BR":
-        "Soma da taxa de cartao com a administrativa (nao inclui taxa de erro - essa ja entra dentro de custo_base). No teste, digite 7 para simular 0.07.",
-      en: "Sum of the card fee and the administrative fee (does not include the error rate - that's already inside custo_base). In the test, type 7 to simulate 0.07.",
+        "Hoje e igual a taxa_administrativa (taxa de cartao saiu daqui - ver taxa_cartao). Nao inclui taxa de erro (essa ja entra dentro de custo_base). No teste, digite 2 para simular 0.02.",
+      en: "Today it equals taxa_administrativa (card fee moved out of this bundle - see taxa_cartao). Does not include the error rate (that's already inside custo_base). In the test, type 2 to simulate 0.02.",
     },
     type: "PERCENTAGE",
-    previewValue: 7,
+    previewValue: 2,
   },
   consumo_kw: {
     description: {

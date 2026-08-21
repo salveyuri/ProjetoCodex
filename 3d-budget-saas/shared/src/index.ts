@@ -468,6 +468,7 @@ export interface CalculationRequest {
   paintingHours?: number;
   finishingHours?: number;
   quoteItemsCount?: number;
+  cardPayment?: boolean;
 }
 
 export interface CalculationMoneyBreakdown {
@@ -489,6 +490,10 @@ export interface CalculationMoneyBreakdown {
   postProcessingCost: number;
   marginAmount: number;
   subtotalWithMargin: number;
+  // Real amount added to finalPrice — only when the quote/calculation
+  // opted into the card fee (Quote.cardPayment); 0 otherwise, including
+  // when cardFeePercent is 0. Unlike administrativeFeeAmount below, this
+  // is not a display estimate.
   cardFeeAmount: number;
   administrativeFeeAmount: number;
   feesTotal: number;
@@ -572,6 +577,9 @@ export interface QuotePayload {
   formulaId?: string;
   paintingHours?: number;
   finishingHours?: number;
+  // "Pagamento Cartão" — when true, Settings.cardFeePercent is added on
+  // top of the price the formula computed. See QuoteResource.cardFeeAmount.
+  cardPayment?: boolean;
   items: QuoteItemPayload[];
 }
 
@@ -580,6 +588,7 @@ export interface QuotePreviewRequest {
   formulaId?: string;
   paintingHours?: number;
   finishingHours?: number;
+  cardPayment?: boolean;
 }
 
 // Live, unsaved preview of a whole quote-in-progress — the SAME
@@ -607,6 +616,7 @@ export interface QuoteUpdatePayload {
   formulaId?: string;
   paintingHours?: number;
   finishingHours?: number;
+  cardPayment?: boolean;
   items?: QuoteItemPayload[];
 }
 
@@ -711,6 +721,11 @@ export interface QuoteResource {
   totalWeightGrams: number;
   paintingHours: number;
   finishingHours: number;
+  cardPayment: boolean;
+  // The real amount cardPayment added to totalAmount at save time (a
+  // snapshot — not recomputed if Settings.cardFeePercent changes later).
+  // 0 when cardPayment is false or the rate is 0.
+  cardFeeAmount: number;
   validUntil: string;
   createdAt: string;
   updatedAt: string;

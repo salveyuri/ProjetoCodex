@@ -55,6 +55,7 @@ const createEmptyForm = (): QuoteFormState => ({
   formulaId: "",
   paintingHours: "",
   finishingHours: "",
+  cardPayment: false,
   tables: [createPrintTable()],
 });
 
@@ -81,6 +82,7 @@ const toFormState = (quote: QuoteResource): QuoteFormState => ({
   formulaId: quote.formulaId ?? "",
   paintingHours: String(quote.paintingHours),
   finishingHours: String(quote.finishingHours),
+  cardPayment: quote.cardPayment,
   tables:
     quote.items.length > 0
       ? quote.items.map((item) =>
@@ -168,6 +170,7 @@ export const useQuoteForm = (quoteId?: string) => {
     const paintingHours = numberFromInput(form.paintingHours) || 0;
     const finishingHours = numberFromInput(form.finishingHours) || 0;
     const totalAmount = preview?.response.breakdown.finalPrice ?? 0;
+    const cardFeeAmount = preview?.response.breakdown.cardFeeAmount ?? 0;
 
     return {
       totalWeightGrams,
@@ -175,6 +178,7 @@ export const useQuoteForm = (quoteId?: string) => {
       paintingHours,
       finishingHours,
       totalAmount,
+      cardFeeAmount,
     };
   }, [form.finishingHours, form.paintingHours, form.tables, preview]);
 
@@ -270,6 +274,7 @@ export const useQuoteForm = (quoteId?: string) => {
         formulaId: form.formulaId || undefined,
         paintingHours: numberFromInput(form.paintingHours) || 0,
         finishingHours: numberFromInput(form.finishingHours) || 0,
+        cardPayment: form.cardPayment,
       };
       const response = await api.post<QuotePreviewResponse>(
         "/quotes/preview",
@@ -287,6 +292,7 @@ export const useQuoteForm = (quoteId?: string) => {
     }
   }, [
     canCalculate,
+    form.cardPayment,
     form.finishingHours,
     form.formulaId,
     form.paintingHours,
@@ -356,6 +362,7 @@ export const useQuoteForm = (quoteId?: string) => {
       formulaId: form.formulaId || undefined,
       paintingHours: numberFromInput(form.paintingHours) || 0,
       finishingHours: numberFromInput(form.finishingHours) || 0,
+      cardPayment: form.cardPayment,
       items: form.tables.map((table) => ({
         modelName: table.modelName,
         weightGrams: numberFromInput(table.weightGrams),

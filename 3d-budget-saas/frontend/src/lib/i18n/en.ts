@@ -83,6 +83,8 @@ export const en: Record<TranslationKey, string> = {
   "quotes.totalTime": "Total time",
   "quotes.painting": "Painting",
   "quotes.finishing": "Finishing",
+  "quotes.cardPayment": "Card Payment",
+  "quotes.cardFeeAmount": "Card Fee",
   "quotes.savedValue": "Saved value",
   "quotes.saving": "Saving...",
   "quotes.saveQuote": "Save quote",

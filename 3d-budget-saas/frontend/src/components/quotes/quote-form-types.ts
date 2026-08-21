@@ -16,5 +16,6 @@ export interface QuoteFormState {
   formulaId: string;
   paintingHours: string;
   finishingHours: string;
+  cardPayment: boolean;
   tables: PrintTableFormState[];
 }

@@ -316,11 +316,21 @@ Passo") em 2026-08-12.
       que o cliente recebeu). Só orçamentos novos/editados depois de
       2026-08-17 seguem o modelo novo. Se isso confundir relatórios
       antigos vs novos, avaliar uma migração de dados específica.
-- [ ] `cardFeeAmount`/`administrativeFeeAmount`/`marginAmount` no
-      breakdown são estimativas de exibição (`subtotal * taxa`), não um
-      valor exato extraído da fórmula (que é texto livre) - correto o
-      suficiente pra exibição, mas não usar em cálculos financeiros que
-      exijam precisão absoluta.
+- [ ] `administrativeFeeAmount`/`marginAmount` no breakdown são
+      estimativas de exibição (`subtotal * taxa`), não um valor exato
+      extraído da fórmula (que é texto livre) - correto o suficiente
+      pra exibição, mas não usar em cálculos financeiros que exijam
+      precisão absoluta. `cardFeeAmount` deixou de ser estimativa em
+      2026-08-21 - ver item logo abaixo.
+- [x] **Taxa de cartão virou opcional por orçamento (2026-08-21)** —
+      até aqui ela era sempre embutida no preço via `taxas_percentuais`
+      (mesmo pra quem não cobra no cartão). Novo campo
+      `Quote.cardPayment` (checkbox "Pagamento Cartão" no formulário,
+      logo abaixo do valor acumulado) soma a taxa configurada por cima
+      do preço só quando marcado; `Quote.cardFeeAmount` guarda o valor
+      real acrescido (snapshot). Calculadora standalone
+      (`/dashboard/calculator`) ganhou o mesmo checkbox. Ver
+      `Contextos/Decisoes.md`.
 - [x] **Bug corrigido em 2026-08-21**: selecionar uma fórmula do
       **sistema** (biblioteca global, não fórmula própria da empresa) num
       orçamento não sobrevivia à edição - reabrir sempre mostrava a

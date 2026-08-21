@@ -2107,3 +2107,79 @@ cliquei "Editar" - o dropdown de fórmula reabriu já com "Formula
 Alternativa Verificacao" selecionada, não a padrão. Dados de teste
 apagados depois (empresa, usuário, máquina, material, fórmula do
 sistema).
+
+## 2026-08-21 - Taxa de cartão opcional por orçamento ("Pagamento Cartão")
+
+Pedido: a taxa de cartão deixar de ser sempre embutida no preço e virar
+condicional a um campo novo no orçamento - um checkbox "Pagamento
+Cartão" logo abaixo do bloco de valor acumulado; quando marcado, soma
+a taxa configurada em Configurações por cima do preço, mostrando uma
+linha nova "Taxa Cartão" acima de "Valor salvo" com o valor real
+acrescido.
+
+### Achado antes de implementar: a taxa de cartão já era aplicada sempre, escondida dentro da fórmula
+
+`taxas_percentuais` (variável disponível pra qualquer fórmula,
+inclusive a padrão do sistema) já somava `taxa_cartao + taxa_administrativa`,
+e a fórmula padrão do sistema já multiplica o preço por
+`(1 + taxas_percentuais + margem_lucro)` - ou seja, a taxa de cartão
+**já entrava automaticamente em todo orçamento**, sem opção de
+desligar. Pra atender o pedido, isso teve que mudar de verdade, não só
+adicionar uma soma por cima: `taxas_percentuais` passou a ser só
+`taxa_administrativa` (a taxa administrativa continua sempre embutida,
+sem checkbox - só a de cartão virou opt-in). `taxa_cartao` continua
+disponível como variável isolada pra quem quiser referenciá-la direto
+numa fórmula customizada, fora do mecanismo do checkbox.
+
+### `Quote.cardPayment` + `Quote.cardFeeAmount` (snapshot, não recalculado)
+
+Migração `20260821140000_add_quote_card_payment` adiciona as duas
+colunas. `cardFeeAmount` é o valor em dinheiro real (não estimativa)
+que o checkbox acrescentou - grava um snapshot no momento do
+save, igual já acontecia com `appliedCardFeePercent` por item; não
+recalcula sozinho se a taxa mudar depois em Configurações.
+
+`calculateAggregate` (`CalculationService.ts`) agora separa em duas
+etapas: primeiro a fórmula calcula `formulaPrice` normalmente (sem
+taxa de cartão), depois - só se `cardPayment` for true -
+`cardFeeAmount = formulaPrice * taxa_cartao` é somado por cima,
+virando o `finalPrice` definitivo. Se a taxa estiver zerada,
+`cardFeeAmount` é matematicamente zero de qualquer forma, marcado ou
+não - não precisou de tratamento especial pra isso.
+
+### Threaded por 3 caminhos de cálculo diferentes
+
+`cardPayment` precisou entrar em `QuoteCalculationInput`
+(create/update/preview de orçamento), `CalculationRequest`
+(calculadora standalone em `/dashboard/calculator` e
+`POST /api/calculate`) e a nova flag `isSystem` que já tinha sido
+adicionada ao resultado da fórmula (rodada anterior). A calculadora
+standalone também ganhou o mesmo checkbox - sem isso, ela ficaria
+mostrando "Taxa de cartão: R$ 0,00" fixo pra sempre (regressão
+silenciosa que só percebi revisando quem mais lia `cardFeeAmount` do
+breakdown antes de considerar a mudança concluída).
+
+### Verificação
+
+Testes existentes em `CalculationService.test.ts` recalculados à mão e
+re-pinados (a fórmula padrão do sistema agora produz um preço menor
+com as mesmas configurações de teste, já que a taxa de cartão de 5%
+saiu do meio do cálculo) - confirmados rodando a suíte, não só
+recalculados no papel. Teste novo dedicado,
+`quote-card-payment.routes.test.ts`: não soma taxa quando o campo não
+é enviado; soma o valor certo quando marcado (comparado contra um
+orçamento gêmeo sem a marcação); não aumenta quando a taxa configurada
+é 0%; sobrevive a uma edição que recalcula por outro motivo
+(`paintingHours`) sem reenviar `cardPayment`; remove a taxa quando
+desmarcado explicitamente. Suíte completa: 133/133 (17 arquivos, 2
+lotes de 8/9). `tsc`/`lint`/`build` limpos em shared/backend/frontend.
+
+Verificado ao vivo na UI: criei orçamento com taxa de cartão 5%
+configurada, sem marcar o checkbox (R$ 15,42), marquei "Pagamento
+Cartão" - valor acumulado subiu pra R$ 16,19 e apareceu a linha "Taxa
+Cartão: R$ 0,77" (5% de 15,42) acima de "Valor salvo", exatamente como
+pedido. Salvei, reabri pra editar - checkbox e linha continuaram lá,
+`Valor salvo` batendo com o total gravado. Testado também
+`POST /api/calculate` (calculadora) direto por API, mesmo resultado
+(R$ 15,42 sem a marcação, R$ 16,19 com). Dados de teste apagados
+depois (duas empresas de teste).

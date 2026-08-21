@@ -4,6 +4,7 @@ import type { QuoteResource } from "@3d-budget/shared";
 import {
   Calculator,
   Clock3,
+  CreditCard,
   Download,
   Layers3,
   Paintbrush,
@@ -23,6 +24,7 @@ interface QuoteAggregate {
   paintingHours: number;
   finishingHours: number;
   totalAmount: number;
+  cardFeeAmount: number;
 }
 
 interface QuoteSummaryProps {
@@ -34,6 +36,8 @@ interface QuoteSummaryProps {
   isSaving: boolean;
   canSave: boolean;
   onPreviewPdf: () => void;
+  cardPayment: boolean;
+  onChangeCardPayment: (value: boolean) => void;
 }
 
 export const QuoteSummary = ({
@@ -45,6 +49,8 @@ export const QuoteSummary = ({
   isSaving,
   canSave,
   onPreviewPdf,
+  cardPayment,
+  onChangeCardPayment,
 }: QuoteSummaryProps) => {
   const { t, formatMoney } = useLanguage();
 
@@ -63,6 +69,16 @@ export const QuoteSummary = ({
       <p className="mt-2 text-sm text-muted">
         {isCalculating ? t("quotes.recalculating") : t("quotes.previewLabel")}
       </p>
+
+      <label className="mt-4 flex min-h-11 items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 text-sm font-medium">
+        <input
+          type="checkbox"
+          checked={cardPayment}
+          onChange={(event) => onChangeCardPayment(event.target.checked)}
+          className="h-4 w-4 rounded border-border"
+        />
+        {t("quotes.cardPayment")}
+      </label>
 
       <div className="mt-5 grid gap-3">
         <SummaryLine label={t("quotes.tablesCount")} value={String(tablesCount)} icon={Layers3} />
@@ -86,6 +102,13 @@ export const QuoteSummary = ({
           value={`${aggregate.finishingHours.toFixed(2)} h`}
           icon={Wrench}
         />
+        {cardPayment ? (
+          <SummaryLine
+            label={t("quotes.cardFeeAmount")}
+            value={formatMoney(aggregate.cardFeeAmount)}
+            icon={CreditCard}
+          />
+        ) : null}
         <SummaryLine
           label={t("quotes.savedValue")}
           value={savedQuote ? formatMoney(savedQuote.totalAmount) : "--"}

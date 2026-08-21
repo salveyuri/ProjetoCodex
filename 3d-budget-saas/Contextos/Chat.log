@@ -2257,3 +2257,39 @@ total, sem detalhe por mesa).
 - Migracoes novas precisam ser aplicadas em producao
   (`20260820160000_add_payment_overdue_template`,
   `20260820170000_add_company_custom_terms_en`).
+
+## 2026-08-21 - Bug: formula do sistema selecionada num orcamento voltava pra padrao ao editar
+
+Pedido: "Quando entro para editar um orcamento a formula selecionada
+esta voltando para a padrao, deve ficar salvo qual formula estava
+selecionada".
+
+- Causa raiz: `Quote.formulaId` so tinha FK pra `formulas` (tabela por
+  empresa). Quando o orcamento usava uma formula do **sistema**
+  (biblioteca global, `system_formulas`), o backend gravava `NULL` de
+  proposito (decisao ja documentada antes, mas o efeito colateral -
+  perder qual formula do sistema foi escolhida - nao tinha sido
+  percebido como problema).
+- Fix: coluna nova `Quote.systemFormulaId` (migracao
+  `20260820180000_add_quote_system_formula_id`), mutuamente exclusiva
+  com `formulaId`. `getFormulaForCalculation` (formula.service.ts)
+  para de forcar `id: null` pra formula do sistema - devolve o id real
+  + `isSystem: true`, repassado por `CalculationService.ts` ate
+  `quote.service.ts` decidir em qual das duas colunas gravar.
+  `update()` tambem ganhou um fallback que faltava
+  (`existing.formulaId ?? existing.systemFormulaId`) pra recalculo por
+  outro campo sem reenviar `formulaId` nao perder a escolha. PDF
+  ("Formula aplicada") corrigido junto - tinha o mesmo bug.
+- Nenhuma mudanca de frontend necessaria - o `<select>` ja era
+  controlado certo, so recebia sempre `null` do backend.
+- Teste de regressao novo em `system-formula.routes.test.ts`: cria
+  formula alternativa do sistema, orcamento com ela, recarrega e
+  confirma que persiste; PATCH que forca recalculo sem reenviar
+  formulaId tambem preserva a escolha. Suite completa: 128/128 (2
+  lotes). `tsc`/`lint`/`build` limpos.
+- Testado ao vivo na UI de verdade: criei formula alternativa como
+  admin, criei orcamento selecionando ela no dropdown, salvei, reabri
+  pra editar - dropdown mostrou a formula certa, nao a padrao. Dados
+  de teste apagados depois.
+- Migracao nova precisa ser aplicada em producao
+  (`20260820180000_add_quote_system_formula_id`).

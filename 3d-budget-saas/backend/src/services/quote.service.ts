@@ -24,6 +24,7 @@ import type {
 
 const quoteInclude = {
   formula: { select: { id: true, name: true } },
+  systemFormula: { select: { id: true, name: true } },
   printItems: {
     orderBy: { createdAt: "asc" as const },
     include: {
@@ -35,6 +36,7 @@ const quoteInclude = {
 
 const quoteListInclude = {
   formula: { select: { id: true, name: true } },
+  systemFormula: { select: { id: true, name: true } },
   printItems: {
     take: 1,
     orderBy: { createdAt: "asc" as const },
@@ -106,8 +108,8 @@ const toQuoteItemSnapshot = (
 
 const toQuoteResource = (quote: QuoteWithItems): QuoteResource => ({
   id: quote.id,
-  formulaId: quote.formulaId,
-  formulaName: quote.formula?.name ?? null,
+  formulaId: quote.formulaId ?? quote.systemFormulaId,
+  formulaName: quote.formula?.name ?? quote.systemFormula?.name ?? null,
   customerName: quote.customerName,
   status: quote.status as SharedQuoteStatus,
   totalAmount: toNumber(quote.totalAmount),
@@ -126,8 +128,8 @@ const toQuoteListItem = (quote: QuoteListRow): QuoteListItem => {
 
   return {
     id: quote.id,
-    formulaId: quote.formulaId,
-    formulaName: quote.formula?.name ?? null,
+    formulaId: quote.formulaId ?? quote.systemFormulaId,
+    formulaName: quote.formula?.name ?? quote.systemFormula?.name ?? null,
     customerName: quote.customerName,
     status: quote.status as SharedQuoteStatus,
     totalAmount: toNumber(quote.totalAmount),
@@ -236,7 +238,8 @@ export class QuoteService {
       const created = await transaction.quote.create({
         data: {
           companyId,
-          formulaId: result.formula.id,
+          formulaId: result.formula.isSystem ? null : result.formula.id,
+          systemFormulaId: result.formula.isSystem ? result.formula.id : null,
           customerName: input.customerName,
           status: input.status as QuoteStatus,
           totalAmount: result.breakdown.finalPrice,
@@ -281,7 +284,8 @@ export class QuoteService {
       input.paintingHours !== undefined ||
       input.finishingHours !== undefined;
     const itemsForCalculation = input.items ?? existing.printItems.map(toQuoteItemInput);
-    const formulaId = input.formulaId ?? existing.formulaId ?? undefined;
+    const formulaId =
+      input.formulaId ?? existing.formulaId ?? existing.systemFormulaId ?? undefined;
     const paintingHours = input.paintingHours ?? toNumber(existing.paintingHours);
     const finishingHours = input.finishingHours ?? toNumber(existing.finishingHours);
 
@@ -307,7 +311,8 @@ export class QuoteService {
           customerName: input.customerName,
           validUntil: input.validUntil,
           status: input.status as QuoteStatus | undefined,
-          formulaId: result ? result.formula.id : undefined,
+          formulaId: result ? (result.formula.isSystem ? null : result.formula.id) : undefined,
+          systemFormulaId: result ? (result.formula.isSystem ? result.formula.id : null) : undefined,
           totalAmount: result?.breakdown.finalPrice,
           totalPrintHours,
           totalWeightGrams,

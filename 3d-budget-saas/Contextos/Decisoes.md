@@ -2013,3 +2013,97 @@ em português digitado; o PDF em inglês mostra o termo em inglês
 digitado (nenhum vazou pro idioma errado); `GET /formulas/variables`
 com o usuário em inglês devolveu a descrição de `peso` traduzida,
 mantendo o nome `peso` intacto. Dados de teste apagados depois.
+
+## 2026-08-21 - Bug: fórmula do sistema selecionada num orçamento "esquecia" ao editar
+
+O Yuri reportou: ao entrar pra editar um orçamento, a fórmula
+selecionada voltava pra padrão, mesmo tendo escolhido outra
+explicitamente na criação.
+
+### Causa raiz: `Quote.formulaId` só sabia apontar pra fórmula da própria empresa
+
+`GET /formulas` mistura dois tipos de fórmula na mesma lista pro
+usuário: as próprias da empresa (tabela `formulas`, editáveis) e as
+globais do sistema (tabela `system_formulas`, biblioteca somente
+leitura administrada pelo admin - ver `FormulaResource.isSystem`).
+Ambas aparecem no mesmo `<select>` do formulário de orçamento, cada
+uma com seu próprio `id` real.
+
+O problema estava em `formula.service.ts#getFormulaForCalculation`:
+quando o `formulaId` resolvido era de uma fórmula do **sistema**, a
+função devolvia `id: null` de propósito - comentário no código dizia
+isso era necessário porque `Quote.formulaId` só tem FK pra `formulas`
+(tabela da empresa), então gravar o id de uma `system_formula` ali
+violaria a constraint. Era uma decisão deliberada documentada, não um
+descuido - só que o efeito colateral (perder a escolha específica) não
+tinha sido percebido/aceito como problema até agora.
+
+`quote.service.ts` então gravava `Quote.formulaId = null` sempre que a
+fórmula usada era do sistema. Na próxima vez que o orçamento era
+carregado pra editar, `quote.formulaId` vinha `null`, e o frontend
+(`useQuoteForm.ts`) cai de volta pro `defaultFormulaId` - daí a
+sensação de "esqueceu a fórmula".
+
+### Fix: coluna nova `Quote.systemFormulaId`, mutuamente exclusiva com `formulaId`
+
+Migração `20260820180000_add_quote_system_formula_id` adiciona
+`system_formula_id UUID` em `quotes`, com FK própria pra
+`system_formulas` (`onDelete: SetNull`, mesmo padrão de `formulaId`).
+Exatamente um dos dois fica preenchido por orçamento (ou nenhum, no
+caso raríssimo do fallback hardcoded `SYSTEM_DEFAULT_FORMULA` quando
+nem `system_formulas` tem linha nenhuma - bootstrap).
+
+Mudanças em cadeia pra carregar essa informação até o ponto de
+persistir:
+- `getFormulaForCalculation` agora devolve `isSystem: boolean` junto
+  com o resultado, e o `id` de uma fórmula do sistema deixou de ser
+  forçado pra `null` - passa a ser o id real da linha em
+  `system_formulas`.
+- `AggregateCalculationResult.formula`/`CalculationFormulaInput.formula`
+  (`CalculationService.ts`) ganharam o mesmo campo `isSystem`, só
+  repassando o valor adiante.
+- `quote.service.ts#create`/`update`: `formulaId`/`systemFormulaId`
+  gravados como um par mutuamente exclusivo baseado em
+  `result.formula.isSystem` (nunca os dois preenchidos ao mesmo
+  tempo).
+- `update()` também ganhou um fallback que faltava: ao recalcular por
+  causa de outro campo (`items`/horas) sem reenviar `formulaId`
+  explicitamente, a fórmula ativa agora resolve pra
+  `existing.formulaId ?? existing.systemFormulaId` (antes só olhava
+  `existing.formulaId`, perdendo a fórmula do sistema numa edição
+  parcial via API mesmo sem esse ser o caminho que o frontend atual
+  usa - o formulário sempre reenvia `formulaId` no save completo).
+- `toQuoteResource`/`toQuoteListItem`: `formulaId`/`formulaName` agora
+  resolvem por `quote.formulaId ?? quote.systemFormulaId` e
+  `quote.formula?.name ?? quote.systemFormula?.name`, então o
+  `<select>` do frontend recebe o id certo pra pré-selecionar,
+  qualquer que seja a origem. Nenhuma mudança necessária no frontend -
+  o `<select>` já era controlado corretamente por `form.formulaId`,
+  só recebia o valor errado (sempre `null`) vindo do backend.
+- `quote-pdf.service.ts`: o mesmo problema afetava o texto "Fórmula
+  aplicada" no PDF - sempre mostrava o texto genérico de fallback em
+  vez do nome real da fórmula do sistema escolhida (relevante quando
+  existe mais de uma fórmula na biblioteca). Corrigido junto,
+  incluindo `systemFormula` no include e usando o mesmo fallback
+  encadeado.
+
+### Verificação
+
+Teste de regressão novo em `system-formula.routes.test.ts` (describe
+"Quote formulaId persistence across a system formula"): cria uma
+fórmula do sistema não-padrão, cria um orçamento explicitamente com
+ela, recarrega e confirma que `formulaId`/`formulaName` continuam
+apontando pra ela (não pro padrão); em seguida faz um PATCH que força
+recálculo (`paintingHours`) sem reenviar `formulaId`, confirma que a
+escolha sobrevive - exercita exatamente o fallback que faltava em
+`update()`. Suíte completa: 128/128 (16 arquivos + o teste novo, 2
+lotes de 8). `tsc --noEmit`, `lint` e `build` limpos.
+
+Verificado ao vivo na UI de verdade (não só via API): logado como
+admin, criei uma fórmula alternativa em `/admin/system-formulas`,
+criei um orçamento em `/dashboard/quotes/new` selecionando
+explicitamente essa fórmula no dropdown, salvei, abri a listagem,
+cliquei "Editar" - o dropdown de fórmula reabriu já com "Formula
+Alternativa Verificacao" selecionada, não a padrão. Dados de teste
+apagados depois (empresa, usuário, máquina, material, fórmula do
+sistema).

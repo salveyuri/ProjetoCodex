@@ -11,6 +11,7 @@ const quotePdfInclude = {
     },
   },
   formula: { select: { name: true } },
+  systemFormula: { select: { name: true } },
   printItems: {
     orderBy: { createdAt: "asc" as const },
     include: {
@@ -519,7 +520,9 @@ const drawFinancialSummary = (
     .font("Helvetica")
     .fontSize(8)
     .text(
-      `${strings.formulaApplied} ${quote.formula?.name ?? strings.defaultFormulaName}`,
+      `${strings.formulaApplied} ${
+        quote.formula?.name ?? quote.systemFormula?.name ?? strings.defaultFormulaName
+      }`,
       margin,
       currentY + 12,
       { width: x - margin - 18 },

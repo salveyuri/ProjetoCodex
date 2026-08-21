@@ -49,21 +49,21 @@ enum QuoteStatus {
 }
 
 model User {
-  id                     String   @id @default(uuid()) @db.Uuid
-  email                  String   @unique
-  passwordHash           String   @map("password_hash")
-  name                   String?
-  role                   UserRole @default(USER)
-  isActive               Boolean  @default(true) @map("is_active")
-  notifyFinancialEmails  Boolean  @default(true) @map("notify_financial_emails")
-  notifyQuoteEmails      Boolean  @default(true) @map("notify_quote_emails")
-  notifyNewsletter       Boolean  @default(false) @map("notify_newsletter")
+  id                    String   @id @default(uuid()) @db.Uuid
+  email                 String   @unique
+  passwordHash          String   @map("password_hash")
+  name                  String?
+  role                  UserRole @default(USER)
+  isActive              Boolean  @default(true) @map("is_active")
+  notifyFinancialEmails Boolean  @default(true) @map("notify_financial_emails")
+  notifyQuoteEmails     Boolean  @default(true) @map("notify_quote_emails")
+  notifyNewsletter      Boolean  @default(false) @map("notify_newsletter")
   // "pt-BR" | "en" — see SupportedLanguage in shared/src/index.ts. Free-text
   // column (not a Prisma enum) so adding a language never needs a migration
   // touching this column's type, only a new EmailTemplate/dictionary set.
-  language               String   @default("pt-BR")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  language              String   @default("pt-BR")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   company             Company?
   refreshTokens       RefreshToken[]
@@ -340,6 +340,8 @@ model SystemFormula {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
+  quotes Quote[]
+
   @@map("system_formulas")
 }
 
@@ -347,6 +349,15 @@ model Quote {
   id               String      @id @default(uuid()) @db.Uuid
   companyId        String      @map("company_id") @db.Uuid
   formulaId        String?     @map("formula_id") @db.Uuid
+  // Mutuamente exclusivo com formulaId - exatamente um dos dois é
+  // preenchido (ou nenhum, se a fórmula usada foi só o fallback
+  // hardcoded SYSTEM_DEFAULT_FORMULA, caso raríssimo de bootstrap sem
+  // nenhuma linha em system_formulas). Existe pra persistir qual fórmula
+  // do sistema (não editável pela empresa) foi selecionada - sem essa
+  // coluna, selecionar uma fórmula do sistema num orçamento "esquecia"
+  // qual era ao reabrir pra editar (voltava pra padrão). Ver
+  // Contextos/Decisoes.md (2026-08-20).
+  systemFormulaId  String?     @map("system_formula_id") @db.Uuid
   customerName     String      @map("customer_name")
   status           QuoteStatus @default(DRAFT)
   totalAmount      Decimal     @default(0) @map("total_amount") @db.Decimal(12, 2)
@@ -358,12 +369,14 @@ model Quote {
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
-  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  formula    Formula?    @relation(fields: [formulaId], references: [id], onDelete: SetNull)
-  printItems PrintItem[]
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  formula       Formula?       @relation(fields: [formulaId], references: [id], onDelete: SetNull)
+  systemFormula SystemFormula? @relation(fields: [systemFormulaId], references: [id], onDelete: SetNull)
+  printItems    PrintItem[]
 
   @@index([companyId])
   @@index([formulaId])
+  @@index([systemFormulaId])
   @@index([status])
   @@index([companyId, status])
   @@index([createdAt])

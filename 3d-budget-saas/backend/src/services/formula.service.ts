@@ -561,31 +561,39 @@ export class FormulaService {
    * FORMULA constant — a bootstrap safety net for the theoretical case
    * where the system_formulas table has no rows at all).
    *
-   * A resolved system formula is returned with `id: null` — it has no row
-   * in the `formulas` table, so nothing here can be persisted as
-   * `Quote.formulaId` (that FK only points at company formulas). This
-   * mirrors exactly how the hardcoded fallback constant already behaves.
+   * A resolved system formula carries `isSystem: true` and its real id
+   * from `system_formulas` (not `formulas`) — the caller (quote.service.ts)
+   * uses that flag to persist it as `Quote.systemFormulaId` instead of
+   * `Quote.formulaId`, so which system formula was picked survives a
+   * reload (see Contextos/Decisoes.md, 2026-08-20 - previously this
+   * returned `id: null` here and the choice was silently lost).
    */
   async getFormulaForCalculation(
     companyId: string,
     formulaId?: string,
-  ): Promise<{ id: string | null; name: string; expression: string } | null> {
+  ): Promise<{
+    id: string | null;
+    name: string;
+    expression: string;
+    isSystem: boolean;
+  } | null> {
     if (formulaId) {
       const companyFormula = await prisma.formula.findFirst({
         where: { id: formulaId, companyId, isActive: true },
       });
 
       if (companyFormula) {
-        return companyFormula;
+        return { ...companyFormula, isSystem: false };
       }
 
       const systemFormula = await systemFormulaService.getActiveById(formulaId);
 
       if (systemFormula) {
         return {
-          id: null,
+          id: systemFormula.id,
           name: systemFormula.name,
           expression: systemFormula.expression,
+          isSystem: true,
         };
       }
 
@@ -598,16 +606,17 @@ export class FormulaService {
     });
 
     if (companyDefault) {
-      return companyDefault;
+      return { ...companyDefault, isSystem: false };
     }
 
     const systemDefault = await systemFormulaService.getDefault();
 
     if (systemDefault) {
       return {
-        id: null,
+        id: systemDefault.id,
         name: systemDefault.name,
         expression: systemDefault.expression,
+        isSystem: true,
       };
     }
 

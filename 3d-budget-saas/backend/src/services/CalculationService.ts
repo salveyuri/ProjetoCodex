@@ -51,6 +51,7 @@ export interface CalculationFormulaInput {
     id: string | null;
     name: string;
     expression: string;
+    isSystem: boolean;
   } | null;
 }
 
@@ -145,7 +146,12 @@ export const computeRawItemCost = (
 export interface AggregateCalculationInput {
   rawCosts: RawItemCost[];
   settings: ProductionSettings;
-  formula: { id: string | null; name: string; expression: string } | null;
+  formula: {
+    id: string | null;
+    name: string;
+    expression: string;
+    isSystem: boolean;
+  } | null;
   paintingHours: number;
   finishingHours: number;
   itemsCount: number;
@@ -176,6 +182,7 @@ export interface AggregateCalculationResult {
     name: string;
     expression: string;
     source: "DATABASE" | "SYSTEM_FALLBACK";
+    isSystem: boolean;
   };
   variables: FormulaVariables;
 }
@@ -319,6 +326,7 @@ export const calculateAggregate = ({
         formulaSource === "DATABASE" ? selectedFormula.name : SYSTEM_DEFAULT_FORMULA.name,
       expression: formulaResult.expression,
       source: formulaSource,
+      isSystem: formulaSource === "DATABASE" ? formula!.isSystem : false,
     },
     variables: formulaVariables,
   };

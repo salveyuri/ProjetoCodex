@@ -321,6 +321,14 @@ Passo") em 2026-08-12.
       valor exato extraído da fórmula (que é texto livre) - correto o
       suficiente pra exibição, mas não usar em cálculos financeiros que
       exijam precisão absoluta.
+- [x] **Bug corrigido em 2026-08-21**: selecionar uma fórmula do
+      **sistema** (biblioteca global, não fórmula própria da empresa) num
+      orçamento não sobrevivia à edição - reabrir sempre mostrava a
+      fórmula padrão de novo. Causa: `Quote.formulaId` só referenciava a
+      tabela `formulas` (por empresa); o backend gravava `NULL` de
+      propósito ao usar uma fórmula do sistema. Nova coluna
+      `Quote.systemFormulaId` guarda esse caso. Ver
+      `Contextos/Decisoes.md`.
 
 ## Traducao do sistema (implementado em 2026-08-17)
 

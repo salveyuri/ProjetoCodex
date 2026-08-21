@@ -245,3 +245,87 @@ describe("Company formula list + calculation fallback", () => {
     );
   });
 });
+
+describe("Quote formulaId persistence across a system formula", () => {
+  // Regression for the bug where picking a system (non-company) formula on
+  // a quote silently reverted to the default on the next edit — the
+  // calculation engine resolved the choice fine, but quote.service.ts had
+  // nowhere safe to persist a system formula's id (Quote.formulaId only
+  // points at the company-scoped `formulas` table), so it always wrote
+  // NULL. See Contextos/Decisoes.md (2026-08-20/21) and Quote.
+  // systemFormulaId in schema.prisma.
+  it("keeps the selected system formula after reload and after an unrelated edit", async () => {
+    const company = await registerTestCompany(app, "sysformula-quote-persist");
+    await promoteToAdmin(company.userId);
+
+    const createFormulaResponse = await request(app)
+      .post("/api/admin/system-formulas")
+      .set(authHeader(company.token))
+      .send({
+        name: "Formula alternativa do sistema",
+        expression: "custo_base * (1 + margem_lucro)",
+        isActive: true,
+        isDefault: false,
+      });
+    expect(createFormulaResponse.status).toBe(201);
+    const altSystemFormulaId = createFormulaResponse.body.id as string;
+
+    const machine = await request(app)
+      .post("/api/machines")
+      .set(authHeader(company.token))
+      .send({ name: "Sys Formula Printer", type: "FDM", price: 3000, powerConsumptionWatts: 120 });
+    const material = await request(app)
+      .post("/api/materials")
+      .set(authHeader(company.token))
+      .send({
+        brand: "PLA Sys",
+        type: "FILAMENT",
+        color: "Branco",
+        totalWeightGrams: 1000,
+        purchasePrice: 100,
+      });
+
+    const createQuoteResponse = await request(app)
+      .post("/api/quotes")
+      .set(authHeader(company.token))
+      .send({
+        customerName: "Cliente Formula Sistema",
+        formulaId: altSystemFormulaId,
+        items: [
+          {
+            modelName: "Peca",
+            weightGrams: 100,
+            printTimeHours: 2,
+            machineId: machine.body.id,
+            materialId: material.body.id,
+          },
+        ],
+      });
+    expect(createQuoteResponse.status).toBe(201);
+    expect(createQuoteResponse.body.formulaId).toBe(altSystemFormulaId);
+    const quoteId = createQuoteResponse.body.id as string;
+
+    // Reload, exactly what the edit screen does — must still show the
+    // system formula that was explicitly picked, not the default.
+    const reloadResponse = await request(app)
+      .get(`/api/quotes/${quoteId}`)
+      .set(authHeader(company.token));
+    expect(reloadResponse.status).toBe(200);
+    expect(reloadResponse.body.formulaId).toBe(altSystemFormulaId);
+    expect(reloadResponse.body.formulaName).toBe("Formula alternativa do sistema");
+
+    // Editing something that forces a recalculation (paintingHours) without
+    // re-sending formulaId must still resolve to the previously selected
+    // system formula, not fall back to the default — this is the exact
+    // fallback chain fixed in quote.service.ts's update().
+    const patchResponse = await request(app)
+      .patch(`/api/quotes/${quoteId}`)
+      .set(authHeader(company.token))
+      .send({ paintingHours: 1 });
+    expect(patchResponse.status).toBe(200);
+    expect(patchResponse.body.formulaId).toBe(altSystemFormulaId);
+    expect(patchResponse.body.formulaName).toBe("Formula alternativa do sistema");
+
+    await prisma.systemFormula.delete({ where: { id: altSystemFormulaId } });
+  });
+});

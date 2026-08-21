@@ -180,6 +180,7 @@ describe("calculateQuoteBreakdown — custom (DATABASE) formula", () => {
         id: "formula-1",
         name: "Dobro do custo base",
         expression: "custo_base * 2",
+        isSystem: false,
       },
     });
 
@@ -204,6 +205,7 @@ describe("calculateQuoteBreakdown — custom (DATABASE) formula", () => {
         id: "formula-broken",
         name: "Resultado negativo",
         expression: "custo_base - custo_base - 1",
+        isSystem: false,
       },
     });
 

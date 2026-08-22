@@ -231,10 +231,13 @@ export class WebhookController {
               checkout.coupon?.type === "ONE_TIME" &&
               subscriptionId
             ) {
-              await asaasService.revertSubscriptionToFullPrice(
-                subscriptionId,
-                checkout.plan.price.toNumber(),
-              );
+              await asaasService.revertSubscriptionToFullPrice({
+                asaasSubscriptionId: subscriptionId,
+                fullPrice: checkout.plan.price.toNumber(),
+                companyName: company.name,
+                couponCode: checkout.coupon.code,
+                paymentId: paymentRow.id,
+              });
             }
           }
 

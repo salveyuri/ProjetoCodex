@@ -5,6 +5,7 @@ import { app } from "../app";
 import { env } from "../config/env";
 import { prisma } from "../config/prisma";
 import { asaasClient } from "../services/asaas-client";
+import { emailService } from "../services/email.service";
 import { registerTestCompany } from "../test-utils/register-test-company";
 
 const authHeader = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -361,6 +362,7 @@ describe("ONE_TIME coupon reverts the subscription to full price after the first
     const revertSpy = vi
       .spyOn(asaasClient, "updateSubscriptionValue")
       .mockResolvedValue(undefined);
+    const alertSpy = vi.spyOn(emailService, "sendCouponRevertFailed");
 
     const checkoutResponse = await request(app)
       .post("/api/billing/checkout")
@@ -386,6 +388,8 @@ describe("ONE_TIME coupon reverts the subscription to full price after the first
     expect(webhookResponse.status).toBe(200);
     expect(revertSpy).toHaveBeenCalledTimes(1);
     expect(revertSpy).toHaveBeenCalledWith(subscriptionId, plan.price.toNumber());
+    // No admin alert when the revert actually succeeds.
+    expect(alertSpy).not.toHaveBeenCalled();
 
     // The company is still activated normally regardless — the revert is
     // a side effect, not a precondition for the subscription to count.
@@ -452,9 +456,15 @@ describe("ONE_TIME coupon reverts the subscription to full price after the first
     expect(revertSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("still activates the company even if reverting to full price fails", async () => {
+  it("still activates the company even if reverting to full price fails, and alerts every active admin", async () => {
     const company = await registerTestCompany(app, "coupon-onetime-revert-fails");
     const code = await createOneTimeCoupon(company);
+    // A second admin, unrelated to the company buying the coupon — proves
+    // the alert reaches admins generally, not just whoever happened to
+    // create the coupon.
+    const otherAdmin = await registerTestCompany(app, "coupon-onetime-second-admin");
+    await promoteToAdmin(otherAdmin.userId);
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { id: PRO_PLAN_ID } });
 
     vi.spyOn(asaasClient, "createCheckout").mockResolvedValue({
       id: `asaas_checkout_${randomUUID()}`,
@@ -464,21 +474,24 @@ describe("ONE_TIME coupon reverts the subscription to full price after the first
     vi.spyOn(asaasClient, "updateSubscriptionValue").mockRejectedValue(
       new Error("Asaas is down"),
     );
+    const alertSpy = vi.spyOn(emailService, "sendCouponRevertFailed");
 
     const checkoutResponse = await request(app)
       .post("/api/billing/checkout")
       .set(authHeader(company.token))
       .send({ planId: PRO_PLAN_ID, couponCode: code });
 
+    const subscriptionId = `sub_${randomUUID()}`;
+    const paymentId = `pay_${randomUUID()}`;
     const webhookResponse = await request(app)
       .post("/api/webhooks/asaas")
       .set(asaasHeader())
       .send({
         event: "PAYMENT_CONFIRMED",
         payment: {
-          id: `pay_${randomUUID()}`,
+          id: paymentId,
           customer: `cus_${randomUUID()}`,
-          subscription: `sub_${randomUUID()}`,
+          subscription: subscriptionId,
           status: "CONFIRMED",
           value: 39.92,
           externalReference: checkoutResponse.body.checkoutId,
@@ -493,6 +506,38 @@ describe("ONE_TIME coupon reverts the subscription to full price after the first
       .set(authHeader(company.token));
     expect(overview.body.plan.id).toBe(PRO_PLAN_ID);
     expect(overview.body.subscriptionStatus).toBe("ACTIVE");
+
+    // asaas.service.ts fires this fire-and-forget from inside its catch
+    // block — wait for the real work to finish before asserting anything
+    // that depends on it (same race avoided elsewhere in this session for
+    // other fire-and-forget email triggers).
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    await alertSpy.mock.results[0]?.value;
+    expect(alertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyName: "Test Co coupon-onetime-revert-fails",
+        // Coupon codes are normalized to uppercase at creation.
+        couponCode: code.toUpperCase(),
+        asaasSubscriptionId: subscriptionId,
+        fullPrice: plan.price.toNumber(),
+        errorMessage: "Asaas is down",
+      }),
+    );
+
+    // Every active admin gets their own EmailLog row for this failure — not
+    // just whichever one happened to create the coupon. Filtered by this
+    // specific admin's own (randomUUID-unique) inbox rather than "last N
+    // rows overall": this dev DB has hundreds of admin accounts
+    // accumulated from other tests' promoteToAdmin calls across this whole
+    // session, so a plain recency-based query would be unreliable noise
+    // here — and paymentId itself isn't usable for a dedupeKey-prefix
+    // query, since the value stored is Payment's own internal UUID
+    // (paymentRow.id), not the pay_xxxxx external id sent in the webhook.
+    const otherAdminLog = await prisma.emailLog.findFirst({
+      where: { templateKey: "COUPON_REVERT_FAILED", toEmail: otherAdmin.email },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(otherAdminLog).not.toBeNull();
   });
 
   it("never calls Asaas to revert a RECURRING coupon", async () => {

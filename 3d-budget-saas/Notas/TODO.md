@@ -210,13 +210,26 @@ Passo") em 2026-08-12.
       webhook confirma, o valor da assinatura no Asaas é revertido pro
       preço cheio do plano via `PUT /v3/subscriptions/{id}`). Ver
       `Contextos/Decisoes.md`.
-- [ ] A reversão de preço de um cupom `ONE_TIME` (`asaas.service.ts#
-      revertSubscriptionToFullPrice`) é best-effort — se a chamada ao
-      Asaas falhar, só fica logado como `error` no backend, sem nenhum
-      alerta automático (e-mail, Slack, etc.). Se falhar de verdade,
-      a empresa continua pagando o valor com desconto até alguém notar
-      o log e corrigir manualmente no painel do Asaas. Vale considerar
-      um alerta (e-mail pro admin?) se isso virar recorrente na prática.
+- [x] **Alerta por e-mail na falha de reversão do cupom `ONE_TIME` —
+      implementado em 2026-08-22 (mesmo dia).** Se
+      `revertSubscriptionToFullPrice` falhar, `emailService.
+      sendCouponRevertFailed` avisa todo admin ativo (empresa, id da
+      assinatura no Asaas, valor a corrigir, erro retornado, link pra
+      lista de assinaturas no painel). Ver `Contextos/Decisoes.md`.
+- [ ] Achado ao implementar o alerta acima: banco de dev tem **902
+      usuários `ADMIN` ativos** acumulados de `promoteToAdmin()` usado
+      em testes ao longo desta sessão, nunca limpos. Inofensivo até
+      agora (suíte ainda roda em segundos), mas é dívida real e a
+      primeira feature que age sobre "todo admin" em escala. Considerar
+      um helper de teste que desfaça a promoção no `afterEach`, ou um
+      script de limpeza manual sob demanda. Ver `Contextos/Conhecimento.md`.
+- [ ] Frequência do crash nativo do Vitest no Windows (já documentado em
+      `Contextos/Conhecimento.md`) piorou em 2026-08-22 — lotes de 9
+      arquivos que vinham funcionando passaram a crashar; precisou
+      dividir em lotes de 4-5 arquivos. Ainda não confirmado se está
+      relacionado à carga do fan-out de e-mail pra múltiplos admins ou é
+      só variação do problema pré-existente. Sem ação de código possível
+      (ambiente), só registrando pra não perder o padrão se piorar mais.
 - [ ] Checkout pago não pode ser testado clicando de ponta a ponta em
       dev local — o Asaas rejeita `successUrl`/`cancelUrl`/`expiredUrl`
       apontando pra `localhost` (exige URL pública). Descoberto

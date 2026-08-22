@@ -6,6 +6,7 @@ export const EMAIL_TEMPLATE_KEYS = [
   "SUBSCRIPTION_EXPIRING",
   "PAYMENT_OVERDUE",
   "QUOTE_SUMMARY",
+  "COUPON_REVERT_FAILED",
 ] as const;
 
 export type EmailTemplateKey = (typeof EMAIL_TEMPLATE_KEYS)[number];
@@ -104,6 +105,39 @@ export const EMAIL_TEMPLATE_VARIABLES: Record<
       name: "triggerLabel",
       description: "'exportado' ou 'aprovado', conforme o que disparou o envio.",
       sampleValue: "aprovado",
+    },
+    { name: "logoUrl", description: "URL da logo do Pricify3D.", sampleValue: "/logo_full.webp" },
+  ],
+  COUPON_REVERT_FAILED: [
+    {
+      name: "accountName",
+      description: "Nome da empresa cuja assinatura ficou com o valor errado.",
+      sampleValue: "Oficina 3D Exemplo",
+    },
+    {
+      name: "couponCode",
+      description: "Codigo do cupom de uso unico usado na assinatura.",
+      sampleValue: "PROMO20",
+    },
+    {
+      name: "asaasSubscriptionId",
+      description: "ID da assinatura no Asaas — usar pra localizar/filtrar no painel.",
+      sampleValue: "sub_000005123456",
+    },
+    {
+      name: "fullPrice",
+      description: "Valor cheio do plano que precisa ser configurado manualmente no Asaas.",
+      sampleValue: "R$ 49,90",
+    },
+    {
+      name: "errorMessage",
+      description: "Mensagem de erro retornada pelo Asaas/rede na tentativa automatica.",
+      sampleValue: "The payment gateway rejected the request.",
+    },
+    {
+      name: "subscriptionsUrl",
+      description: "Link pra tela de assinaturas no painel do Asaas (sandbox ou producao).",
+      sampleValue: "https://www.asaas.com/subscriptions",
     },
     { name: "logoUrl", description: "URL da logo do Pricify3D.", sampleValue: "/logo_full.webp" },
   ],

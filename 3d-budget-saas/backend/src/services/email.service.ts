@@ -37,6 +37,16 @@ const triggerLabels: Record<"EXPORTED" | "APPROVED", Record<SupportedLanguage, s
   EXPORTED: { "pt-BR": "exportado", en: "exported" },
 };
 
+// Best-effort deep link, not a verified exact route — same public host the
+// checkout page already uses (see asaas-client.ts/asaas.service.ts), just
+// pointed at the subscriptions list instead of a specific record. Good
+// enough to get an admin to the right screen to search by
+// asaasSubscriptionId; never presented as more precise than that.
+const asaasSubscriptionsDashboardUrl = (): string =>
+  env.asaasEnv === "production"
+    ? "https://www.asaas.com/subscriptions"
+    : "https://sandbox.asaas.com/subscriptions";
+
 const escapeHtml = (value: string): string =>
   value
     .replace(/&/g, "&amp;")
@@ -482,6 +492,54 @@ export class EmailService {
       itemsHtml,
       triggerLabel: triggerLabels[trigger][language],
     });
+  }
+
+  // Fired from asaas.service.ts#revertSubscriptionToFullPrice's catch block
+  // when the automatic call to push a ONE_TIME coupon's subscription back
+  // to full price fails — this is a real revenue leak until an admin fixes
+  // it by hand in the Asaas dashboard, so every active admin gets notified,
+  // always in pt-BR (admin screens/alerts stay Portuguese-only regardless
+  // of who's on call — see Contextos/Decisoes.md). dedupeKey is per
+  // admin+payment so a retried/redelivered webhook (which itself never
+  // re-enters this path — see webhook.controller.ts's isFirstActivation
+  // guard) can never double-send even if this were ever called twice.
+  async sendCouponRevertFailed(input: {
+    companyName: string;
+    couponCode: string;
+    asaasSubscriptionId: string;
+    fullPrice: number;
+    errorMessage: string;
+    paymentId: string;
+  }): Promise<void> {
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN", isActive: true },
+      select: { email: true },
+    });
+
+    if (admins.length === 0) {
+      logger.error(
+        { ...input },
+        "No active admin user to notify about a failed coupon price revert — fix this subscription manually in the Asaas dashboard",
+      );
+      return;
+    }
+
+    const variables = {
+      accountName: input.companyName,
+      couponCode: input.couponCode,
+      asaasSubscriptionId: input.asaasSubscriptionId,
+      fullPrice: toMoney(input.fullPrice, "pt-BR"),
+      errorMessage: input.errorMessage,
+      subscriptionsUrl: asaasSubscriptionsDashboardUrl(),
+    };
+
+    await Promise.all(
+      admins.map((admin) =>
+        this.send("COUPON_REVERT_FAILED", "pt-BR", admin.email, variables, {
+          dedupeKey: `COUPON_REVERT_FAILED:${input.paymentId}:${admin.email}`,
+        }),
+      ),
+    );
   }
 }
 

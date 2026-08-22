@@ -816,7 +816,12 @@ export type EmailTemplateKey =
   | "SUBSCRIPTION_RENEWED"
   | "SUBSCRIPTION_EXPIRING"
   | "PAYMENT_OVERDUE"
-  | "QUOTE_SUMMARY";
+  | "QUOTE_SUMMARY"
+  // Internal ops alert, not a customer-facing email — sent to every active
+  // ADMIN user, always in pt-BR regardless of who triggered the failure
+  // (Admin screens stay Portuguese-only, see Contextos/Decisoes.md). Only
+  // one language row exists for this key on purpose.
+  | "COUPON_REVERT_FAILED";
 
 export interface EmailTemplateVariable {
   name: string;

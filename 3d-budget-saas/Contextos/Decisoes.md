@@ -2343,3 +2343,94 @@ existentes do banco de dev. Não repeti o clique em "Assinar" até o
 fim - já sabia, da verificação anterior no mesmo dia, que isso esbarra
 na limitação de `localhost` no Asaas, não relacionada a este tipo de
 cupom. Dados de teste apagados depois.
+
+## 2026-08-22 (mesmo dia) - Alerta por e-mail quando a reversão de preço do cupom `ONE_TIME` falha
+
+Seguimento direto da entrada anterior: o Yuri pediu um e-mail pro admin
+quando `revertSubscriptionToFullPrice` falhar, indicando o cliente, o
+valor que precisa ser corrigido no Asaas, e o caminho no painel se
+possível - o item que já estava registrado como pendência no
+`Notas/TODO.md`.
+
+### Pra quem manda: todo admin ativo, não um endereço fixo
+
+Não existe nenhuma configuração de "e-mail do admin"/"e-mail de
+operações" neste sistema. Em vez de inventar uma variável de ambiente
+nova só pra isso, `emailService.sendCouponRevertFailed` busca
+`prisma.user.findMany({ where: { role: "ADMIN", isActive: true } })`
+e manda pra cada um via `Promise.all` - garante que todo admin ativo
+saiba, não só quem estiver de plantão numa caixa fixa. Cada envio tem
+seu próprio `dedupeKey` (`COUPON_REVERT_FAILED:{paymentId}:
+{admin.email}`) pra nenhum admin ser notificado duas vezes se o mesmo
+evento for reprocessado, mas todos ainda serem alcançados.
+
+Achado ao implementar (não é bug novo, é acúmulo de dados de teste):
+o banco de dev tem **902 usuários `ADMIN` ativos** hoje, resultado de
+`promoteToAdmin()` chamado em vários testes desta sessão inteira sem
+nenhuma limpeza depois. Isso não travou nada (suíte inteira ainda roda
+em segundos), mas é a primeira feature que realmente *age* sobre "todo
+admin" em escala - registrado em `Contextos/Conhecimento.md`. Não apaguei
+esses registros (decisão de mexer em massa no banco de dev é do Yuri,
+fora do que foi pedido aqui).
+
+### `revertSubscriptionToFullPrice` virou parâmetro objeto
+
+Precisava de mais contexto (nome da empresa, código do cupom, id do
+`Payment`) só pra montar o e-mail, sem mudar a lógica de reversão em
+si - trocar os 2 parâmetros posicionais por um objeto único evita uma
+assinatura de 5 argumentos posicionais confusa. O client de baixo
+nível (`asaasClient.updateSubscriptionValue`) manteve a assinatura
+original, só o método de serviço mudou.
+
+### Template só em pt-BR (quebra deliberada do padrão bilíngue)
+
+Todo template de e-mail até hoje tinha sempre um par pt-BR/en. Este é
+o primeiro só pt-BR - decisão deliberada, não esquecimento: é um alerta
+interno de operação, não algo que um cliente final vê, e "painel Admin
+fica só em português" já é convenção documentada no projeto (ver
+entrada de 2026-08-17 acima). Conferido que a tela
+`/admin/email-templates` não assume estruturalmente que todo `key` tem
+as duas linhas (é só uma lista plana com badge PT/EN por linha) - não
+quebra nada.
+
+### Link do painel Asaas: melhor esforço, não um deep-link confirmado
+
+`subscriptionsUrl` aponta pra lista de assinaturas
+(`asaas.com/subscriptions` ou `sandbox.asaas.com/subscriptions`
+conforme `ASAAS_ENV`), não pro registro específico - não existe
+confirmação do formato exato de deep-link pra uma assinatura
+individual no Asaas, e apresentar um link não verificado como se fosse
+preciso, num alerta financeiro real, seria pior que não ter link
+nenhum. O e-mail instrui explicitamente a pesquisar pelo
+`asaasSubscriptionId` (mostrado na própria mensagem) depois de abrir a
+tela. Comentário no código deixa essa limitação explícita.
+
+### Verificação
+
+2 testes em `coupon.routes.test.ts` (mesmo arquivo da entrada
+anterior, total continua 15): o caminho de sucesso confirma que
+nenhum alerta é disparado; o caminho de falha (reversão mockada
+rejeitando) confirma que o alerta é chamado exatamente uma vez com os
+dados certos (empresa, cupom, id da assinatura, preço cheio, mensagem
+de erro) e que chega em um segundo admin não relacionado ao teste -
+usando `toEmail` específico do teste em vez de `dedupeKey`/"últimas
+linhas", justamente por causa do achado dos 902 admins acima (ver
+`Contextos/Conhecimento.md`).
+
+Suíte completa: 148/148 (18 arquivos) - mas desta vez precisou ser
+dividida em lotes menores de 4-5 arquivos (em vez dos lotes de 9 que
+vinham funcionando) pra evitar o crash nativo do Vitest no Windows já
+documentado nesta sessão; registrado em `Contextos/Conhecimento.md`
+como achado à parte, ainda não confirmado se é causado pela carga
+extra do fan-out de e-mail ou só variação normal do problema
+pré-existente. `tsc`/`lint`/`build` limpos em shared/backend.
+
+Verificado ao vivo: usei a função já existente "Testar e-mail" da
+tela `/admin/email-templates` (em vez de forçar uma falha real do
+Asaas) e conferi o `EmailLog.bodyHtml` gravado - cabeçalho vermelho,
+as 6 variáveis substituídas corretamente com os dados de exemplo,
+botão "Abrir assinaturas no Asaas" e rodapé corretos. Dados de teste
+apagados depois.
+
+Migração nova precisa ser aplicada em produção
+(`20260822200000_add_coupon_revert_failed_template`).

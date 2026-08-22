@@ -2,6 +2,7 @@ import type { Plan } from "@prisma/client";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { asaasClient } from "./asaas-client";
+import { emailService } from "./email.service";
 
 const CHECKOUT_EXPIRY_MINUTES = 60;
 
@@ -97,21 +98,37 @@ export class AsaasService {
   // recurring value back to the plan's full price for every cycle after.
   // Unlike cancelSubscription's best-effort shrug, a failure here is a
   // real revenue leak (the customer would keep being charged the
-  // discounted value indefinitely), so it's logged at error level with
-  // everything needed to fix it manually in the Asaas dashboard — but it
-  // still never throws: the webhook handler must always ack Asaas with
-  // 2xx regardless of what this call does.
-  async revertSubscriptionToFullPrice(
-    asaasSubscriptionId: string,
-    fullPrice: number,
-  ): Promise<void> {
+  // discounted value indefinitely) — logged at error level AND emailed to
+  // every active admin (emailService.sendCouponRevertFailed) with what to
+  // fix by hand in the Asaas dashboard. Still never throws: the webhook
+  // handler must always ack Asaas with 2xx regardless of what this does.
+  async revertSubscriptionToFullPrice(input: {
+    asaasSubscriptionId: string;
+    fullPrice: number;
+    companyName: string;
+    couponCode: string;
+    paymentId: string;
+  }): Promise<void> {
+    const { asaasSubscriptionId, fullPrice } = input;
+
     try {
       await asaasClient.updateSubscriptionValue(asaasSubscriptionId, fullPrice);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
       logger.error(
-        { err: error, asaasSubscriptionId, fullPrice },
+        { err: error, asaasSubscriptionId, fullPrice, companyName: input.companyName },
         "Failed to revert a ONE_TIME coupon subscription to full price after its first cycle — the customer may keep being charged the discounted value until this is fixed manually in the Asaas dashboard",
       );
+
+      void emailService.sendCouponRevertFailed({
+        companyName: input.companyName,
+        couponCode: input.couponCode,
+        asaasSubscriptionId,
+        fullPrice,
+        errorMessage,
+        paymentId: input.paymentId,
+      });
     }
   }
 }

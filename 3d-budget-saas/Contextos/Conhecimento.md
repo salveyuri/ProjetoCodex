@@ -450,3 +450,36 @@ verdade, precisa ser num ambiente com `APP_BASE_URL` público (staging/prod)
 - localmente, validar via `vi.spyOn(asaasClient, "createCheckout")` mockado
 (padrão já usado em `coupon.routes.test.ts`) é o único jeito de exercitar
 esse fluxo sem essa barreira.
+
+## Banco de dev acumulou ~900 usuários ADMIN de teste — cuidado com features que iteram "todo admin"
+
+Descoberto em 2026-08-22 implementando o alerta de e-mail por falha de
+cupom (`emailService.sendCouponRevertFailed`, que envia pra
+`prisma.user.findMany({ where: { role: "ADMIN", isActive: true } })`):
+o banco de dev local tem **902 usuários com `role: ADMIN`** hoje. Causa:
+o helper `promoteToAdmin` usado em vários arquivos de teste
+(`system-formula.routes.test.ts`, `coupon.routes.test.ts`, etc.) promove
+o usuário de teste registrado direto no banco real de dev - e nunca
+reverte/limpa depois. Cada rodada da suíte completa soma mais usuários
+promovidos, sem nenhuma limpeza automática (diferente do
+`email-log-cleanup.job.ts`, que só cuida de `EmailLog` marcado
+`isTest`).
+
+Efeito prático já observado: uma feature nova que itere "todo admin
+ativo" (como o alerta de cupom) dispara centenas de envios de teste toda
+vez que a suíte roda - não trava os testes (medido: suíte inteira roda
+em ~7s mesmo com o fan-out), mas polui `email_logs` ainda mais rápido e
+deixa qualquer asserção baseada em "as últimas N linhas" não-confiável
+(um teste precisou ser reescrito pra filtrar por `toEmail`/`dedupeKey`
+específico em vez de contar/pegar as últimas linhas). Se uma futura
+feature também iterar "todo admin", escrever o teste already pensando
+nisso (filtrar pelo dado específico daquele teste, nunca por contagem
+ou "top N recente").
+
+Não foi feita nenhuma limpeza dos 902 registros - são dados de teste
+plausivelmente inofensivos (nenhum standing pra produção depende
+deles), mas apagá-los em massa é uma decisão do Yuri, não algo pra
+fazer sem perguntar. Se isso virar um problema de verdade (suíte lenta,
+banco de dev pesado), vale considerar: (a) um helper de teste que
+desfaça `promoteToAdmin` no `afterEach`, ou (b) um script de limpeza
+manual sob demanda.

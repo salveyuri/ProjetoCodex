@@ -2429,3 +2429,43 @@ confirmou.
   apagados depois.
 - Migracao nova precisa ser aplicada em producao
   (`20260822180000_add_coupon_type`).
+
+## 2026-08-22 (mesmo dia) - Alerta por e-mail quando a reversao de preco do cupom ONE_TIME falha
+
+O Yuri pediu um e-mail pro admin quando a chamada de reversao falhar,
+indicando o cliente e o valor a corrigir no Asaas, com o caminho se
+possivel - item que ja estava anotado como pendencia no TODO.
+
+- Nao existe "e-mail do admin" configuravel no sistema - o alerta
+  busca todo `role: ADMIN, isActive: true` e manda pra cada um
+  (`Promise.all`, dedupeKey por admin+pagamento pra nao duplicar em
+  reentrega).
+- `revertSubscriptionToFullPrice` virou parametro objeto (precisava de
+  mais contexto - empresa, cupom, id do Payment - pra montar o
+  e-mail).
+- Template novo (`COUPON_REVERT_FAILED`) e o primeiro so em pt-BR, de
+  proposito - alerta interno, nao e-mail de cliente, mesma logica do
+  "Admin fica so em portugues" ja documentado.
+- Link do painel Asaas no e-mail e melhor esforco (aponta pra lista de
+  assinaturas, nao um deep-link confirmado pro registro especifico) -
+  instrui a pesquisar pelo ID da assinatura mostrado na propria
+  mensagem.
+- Achado ao implementar: banco de dev tem 902 usuarios ADMIN ativos
+  acumulados de `promoteToAdmin()` em testes desta sessao inteira, sem
+  limpeza - inofensivo ate agora, mas essa e a primeira feature que
+  realmente age sobre "todo admin". Nao apaguei os registros (fora do
+  pedido, decisao do Yuri). Registrado em Conhecimento.md.
+- 2 testes novos em coupon.routes.test.ts (total 15): sucesso nao
+  dispara alerta; falha dispara o alerta certo pra 2 admins
+  diferentes (filtro por e-mail especifico do teste, nao por
+  dedupeKey/ultimas linhas, por causa do achado acima).
+- Suite completa: 148/148 (18 arquivos) - mas precisou de lotes
+  menores (4-5 arquivos, antes eram 9) pra nao dar crash nativo do
+  Vitest no Windows; ainda nao confirmado se e por causa da carga
+  extra do fan-out de e-mail ou variacao normal do problema ja
+  documentado. `tsc`/`lint`/`build` limpos.
+- Verificado ao vivo via "Testar e-mail" em /admin/email-templates +
+  inspecao do EmailLog.bodyHtml gravado - variaveis, botao e rodape
+  corretos. Dados de teste apagados depois.
+- Migracao nova precisa ser aplicada em producao
+  (`20260822200000_add_coupon_revert_failed_template`).

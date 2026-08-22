@@ -18,3 +18,7 @@ billingRoutes.post("/cancel", (request, response, next) =>
 billingRoutes.get("/payments", (request, response, next) =>
   billingController.payments(request, response, next),
 );
+
+billingRoutes.get("/coupons/:code", (request, response, next) =>
+  billingController.couponPreview(request, response, next),
+);

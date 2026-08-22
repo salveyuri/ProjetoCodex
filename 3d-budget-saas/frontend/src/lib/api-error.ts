@@ -46,6 +46,9 @@ const KNOWN_ERROR_MESSAGES: Record<SupportedLanguage, Record<string, string>> = 
     SYSTEM_FORMULA_NOT_FOUND: "Esta formula do sistema nao foi encontrada.",
     SYSTEM_FORMULA_DEFAULT_DELETE_BLOCKED:
       "A formula padrao nao pode ser excluida. Torne outra formula padrao primeiro.",
+    COUPON_INVALID: "Cupom invalido ou inativo.",
+    COUPON_NOT_FOUND: "Cupom nao encontrado.",
+    COUPON_CODE_TAKEN: "Ja existe um cupom com esse codigo.",
   },
   en: {
     INVALID_CREDENTIALS: "Invalid email or password.",
@@ -75,6 +78,9 @@ const KNOWN_ERROR_MESSAGES: Record<SupportedLanguage, Record<string, string>> = 
     SYSTEM_FORMULA_NOT_FOUND: "This system formula was not found.",
     SYSTEM_FORMULA_DEFAULT_DELETE_BLOCKED:
       "The default formula can't be deleted. Make another formula the default first.",
+    COUPON_INVALID: "Invalid or inactive coupon.",
+    COUPON_NOT_FOUND: "Coupon not found.",
+    COUPON_CODE_TAKEN: "A coupon with this code already exists.",
   },
 };
 

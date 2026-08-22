@@ -90,6 +90,33 @@ export interface PlanPayload {
   displayOrder?: number;
 }
 
+export interface CouponResource {
+  id: string;
+  code: string;
+  discountPercent: number;
+  isActive: boolean;
+  // How many companies currently have this coupon attached to their
+  // subscription (Company.couponId) — admin-facing usage signal only.
+  usageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CouponPayload {
+  code: string;
+  discountPercent: number;
+  isActive?: boolean;
+}
+
+// GET /billing/coupons/:code — lets the checkout screen show the discount
+// before the person commits to subscribing, without yet creating a
+// Checkout row. The real, authoritative validation still happens again
+// inside POST /billing/checkout.
+export interface CouponPreviewResponse {
+  code: string;
+  discountPercent: number;
+}
+
 export interface UsageMetric {
   used: number;
   limit: number | null;
@@ -196,10 +223,17 @@ export interface BillingOverview {
   asaasCustomerId: string | null;
   usage: BillingUsage;
   entitlements: PlanEntitlements;
+  // The coupon currently discounting this subscription's recurring charge
+  // (set once the checkout that used it gets confirmed), or null if the
+  // current subscription has none. Display only.
+  coupon: { code: string; discountPercent: number } | null;
 }
 
 export interface CheckoutRequest {
   planId: string;
+  // Validated server-side regardless of what the /billing/coupons/:code
+  // preview check said client-side — see CouponPreviewResponse.
+  couponCode?: string;
 }
 
 export interface CheckoutResponse {

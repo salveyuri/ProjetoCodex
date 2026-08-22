@@ -3,6 +3,7 @@
 import type {
   BillingOverview,
   CheckoutResponse,
+  CouponPreviewResponse,
   PaymentResource,
   PlanResource,
   UsageMetric,
@@ -17,6 +18,7 @@ import {
   Printer,
   ShieldCheck,
   Sparkles,
+  Tag,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
@@ -77,6 +79,10 @@ function BillingContent() {
   const [checkoutNotice, setCheckoutNotice] = useState<
     { tone: NoticeTone; textKey: TranslationKey } | null
   >(null);
+  const [couponCodeInput, setCouponCodeInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponPreviewResponse | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [isCheckingCoupon, setIsCheckingCoupon] = useState(false);
 
   const cycleLabel = useCallback(
     (cycle: PlanResource["billingCycle"]): string =>
@@ -154,6 +160,47 @@ function BillingContent() {
       ? formatMoney(plan.priceUsd, "USD")
       : formatMoney(plan.price, plan.currency);
 
+  // discountPercent only ever applies to the BRL price actually charged by
+  // Asaas — the USD figure is a display-only reference (see
+  // planPriceDisplay/formatMoney above), so a discounted price is only
+  // shown for plans billed in BRL.
+  const discountedPriceDisplay = (plan: PlanResource): string | null =>
+    appliedCoupon && !showUsd
+      ? formatMoney(
+          plan.price * (1 - appliedCoupon.discountPercent / 100),
+          plan.currency,
+        )
+      : null;
+
+  const applyCoupon = async () => {
+    const code = couponCodeInput.trim();
+
+    if (!code) {
+      return;
+    }
+
+    setIsCheckingCoupon(true);
+    setCouponError(null);
+
+    try {
+      const { data } = await api.get<CouponPreviewResponse>(
+        `/billing/coupons/${encodeURIComponent(code)}`,
+      );
+      setAppliedCoupon(data);
+    } catch (error) {
+      setAppliedCoupon(null);
+      setCouponError(getApiErrorMessage(error, t("billing.couponInvalid")));
+    } finally {
+      setIsCheckingCoupon(false);
+    }
+  };
+
+  const clearCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCodeInput("");
+    setCouponError(null);
+  };
+
   const subscribeToPlan = async (plan: PlanResource) => {
     setSubmittingPlanId(plan.id);
     setErrorMessage(null);
@@ -162,6 +209,7 @@ function BillingContent() {
     try {
       const { data } = await api.post<CheckoutResponse>("/billing/checkout", {
         planId: plan.id,
+        couponCode: appliedCoupon?.code,
       });
 
       if (data.checkoutUrl) {
@@ -258,6 +306,15 @@ function BillingContent() {
                     <p className="mt-2 text-sm text-muted">
                       {billing.companyName} - {t(statusLabelKeys[billing.subscriptionStatus])}
                     </p>
+                    {billing.coupon ? (
+                      <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-secondary">
+                        <Tag className="h-3.5 w-3.5" />
+                        {t("billing.couponApplied", {
+                          code: billing.coupon.code,
+                          percent: billing.coupon.discountPercent,
+                        })}
+                      </p>
+                    ) : null}
                   </div>
                   <StatusBadge
                     tone={billing.subscriptionStatus === "ACTIVE" ? "success" : "warning"}
@@ -338,6 +395,55 @@ function BillingContent() {
               </Card>
             </section>
 
+            <Card className="p-5">
+              <div className="flex items-center gap-3">
+                <Tag className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">
+                  {t("billing.couponTitle")}
+                </h2>
+              </div>
+              <p className="mt-2 text-sm text-muted">{t("billing.couponSubtitle")}</p>
+
+              {appliedCoupon ? (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-secondary/40 bg-secondary/10 px-4 py-3">
+                  <p className="text-sm font-semibold text-secondary">
+                    {t("billing.couponApplied", {
+                      code: appliedCoupon.code,
+                      percent: appliedCoupon.discountPercent,
+                    })}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={clearCoupon}
+                    className="text-xs font-semibold text-secondary underline-offset-2 hover:underline"
+                  >
+                    {t("billing.couponRemove")}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={couponCodeInput}
+                    onChange={(event) => setCouponCodeInput(event.target.value.toUpperCase())}
+                    placeholder={t("billing.couponPlaceholder")}
+                    className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 font-mono text-sm outline-none focus:border-primary sm:max-w-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void applyCoupon()}
+                    disabled={isCheckingCoupon || !couponCodeInput.trim()}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-primary transition hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isCheckingCoupon ? t("billing.couponChecking") : t("billing.couponApply")}
+                  </button>
+                </div>
+              )}
+              {couponError ? (
+                <p className="mt-2 text-xs font-medium text-danger">{couponError}</p>
+              ) : null}
+            </Card>
+
             <section>
               <div className="mb-4 flex items-center gap-3">
                 <Sparkles className="h-5 w-5 text-primary" />
@@ -354,11 +460,19 @@ function BillingContent() {
                 {plans.map((plan) => {
                   const isCurrentPlan = billing.plan.id === plan.id;
 
+                  const discountedPrice =
+                    plan.price > 0 ? discountedPriceDisplay(plan) : null;
+
                   return (
                     <Card key={plan.id} className="flex flex-col p-5">
                       <h3 className="text-lg font-semibold text-foreground">{plan.name}</h3>
-                      <p className="mt-2 text-3xl font-semibold text-foreground">
-                        {planPriceDisplay(plan)}
+                      {discountedPrice ? (
+                        <p className="mt-2 text-sm text-muted line-through">
+                          {planPriceDisplay(plan)}
+                        </p>
+                      ) : null}
+                      <p className="mt-1 text-3xl font-semibold text-foreground">
+                        {discountedPrice ?? planPriceDisplay(plan)}
                         <span className="text-sm font-normal text-muted">
                           {plan.price > 0 ? cycleLabel(plan.billingCycle) : ""}
                         </span>

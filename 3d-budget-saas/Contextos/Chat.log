@@ -2338,3 +2338,53 @@ acrescido.
   Dados de teste apagados depois.
 - Migracao nova precisa ser aplicada em producao
   (`20260821140000_add_quote_card_payment`).
+
+## 2026-08-22 - Cupons de desconto para assinaturas
+
+Pedido: cupons de desconto pra assinatura - tela admin com codigo,
+percentual e status; quem assinar com um cupom paga o valor com
+desconto, e esse desconto continua valendo em toda cobranca futura da
+assinatura.
+
+- Achado-chave antes de implementar: o checkout de assinatura (Checkout
+  Asaas, RECURRENT) ja manda um valor fixo por item - o Asaas cria uma
+  assinatura de verdade que cobra esse MESMO valor em todo ciclo
+  futuro sozinho, sem o backend reenviar nada a cada renovacao. Entao
+  "a recorrencia roda sempre com o valor descontado" ja vem de graca -
+  so precisei calcular o valor com desconto uma unica vez, no momento
+  do checkout.
+- Tabela nova `Coupon` (codigo, discountPercent, isActive). Colunas
+  novas `Checkout.couponId` (qual cupom foi usado nesse checkout
+  especifico) e `Company.couponId` (setado so quando o webhook confirma
+  o primeiro pagamento, mesmo momento que planId - so pra exibicao,
+  nunca entra em calculo). `applyPlan`/`updateSubscription` (plano
+  gratis, cancelamento, override de admin) sempre limpam couponId - um
+  cupom antigo nao deveria sobrar fora do fluxo de checkout com cupom.
+- `GET /billing/coupons/:code`: preview do desconto sem gravar nada
+  (mostra preco riscado + com desconto nos cards de plano antes de
+  assinar). `POST /billing/checkout` sempre revalida o codigo de novo
+  do zero, nunca confia no preview.
+- Admin: `/admin/coupons`, mesmo padrao estrutural de `/admin/plans`
+  (tabela + modal), so os 3 campos pedidos + contador de "em uso". Sem
+  endpoint de exclusao de proposito - desativar em vez de apagar, mesmo
+  raciocinio ja usado em Plan/SystemFormula.
+- Testes novos `coupon.routes.test.ts` (11 testes): CRUD admin, preview
+  do cupom, checkout com cupom (Asaas mockado via vi.spyOn - confirma
+  que o valor enviado ja vem com desconto), checkout sem cupom cobra
+  cheio, codigo invalido rejeitado antes de chamar o Asaas, fluxo
+  completo via webhook (couponId aparece em GET /billing depois de
+  confirmado, some depois de cancelar). Suite completa: 144/144 (18
+  arquivos, 2 lotes). `tsc`/`lint`/`build` limpos em
+  shared/backend/frontend.
+- Testado ao vivo na UI: criei cupom de 15% em /admin/coupons de
+  verdade, apliquei em /dashboard/billing - preco riscado + com
+  desconto apareceram certos nos cards (Pro R$49,90 -> R$42,42).
+  Cliquei "Assinar" - o payload chegou certo ate o Asaas sandbox (valor
+  ja descontado, confirmado no log), mas foi rejeitado por causa de
+  successUrl/cancelUrl/expiredUrl apontarem pra localhost (Asaas exige
+  URL publica) - limitacao conhecida de testar checkout clicando
+  localmente, nao um bug do cupom (documentado em Conhecimento.md;
+  aconteceria igual em qualquer plano, com ou sem cupom). Dados de
+  teste apagados depois.
+- Migracao nova precisa ser aplicada em producao
+  (`20260822120000_add_coupons`).

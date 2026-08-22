@@ -137,6 +137,13 @@ model Company {
   subscriptionStatus    SubscriptionStatus @default(ACTIVE) @map("subscription_status")
   asaasCustomerId       String?            @map("asaas_customer_id")
   asaasSubscriptionId   String?            @map("asaas_subscription_id")
+  // The coupon (if any) currently discounting this subscription's recurring
+  // charge — set once the webhook confirms the checkout that used it (same
+  // moment planId itself is committed), cleared/replaced by a later
+  // checkout with a different coupon or none. Display only: the discount
+  // is already baked into what Asaas actually charges every cycle, this
+  // column doesn't drive any calculation on our side.
+  couponId              String?            @map("coupon_id") @db.Uuid
   currentQuotesCount    Int                @default(0) @map("current_quotes_count")
   quoteUsagePeriodStart DateTime           @default(now()) @map("quote_usage_period_start")
   createdAt             DateTime           @default(now()) @map("created_at")
@@ -144,6 +151,7 @@ model Company {
 
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan            Plan             @relation(fields: [planId], references: [id], onDelete: Restrict)
+  coupon          Coupon?          @relation(fields: [couponId], references: [id], onDelete: SetNull)
   machines        Machine[]
   materials       Material[]
   pricingSettings PricingSettings?
@@ -191,6 +199,10 @@ model Checkout {
   id              String         @id @default(uuid()) @db.Uuid
   companyId       String         @map("company_id") @db.Uuid
   planId          String         @map("plan_id") @db.Uuid
+  // Which coupon (if any) discounted this checkout's recurring value —
+  // propagated to Company.couponId once the webhook confirms the first
+  // payment (see webhook.controller.ts), same moment planId is committed.
+  couponId        String?        @map("coupon_id") @db.Uuid
   asaasCheckoutId String?        @unique @map("asaas_checkout_id")
   status          CheckoutStatus @default(PENDING)
   createdAt       DateTime       @default(now()) @map("created_at")
@@ -198,10 +210,32 @@ model Checkout {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   plan    Plan    @relation(fields: [planId], references: [id], onDelete: Restrict)
+  coupon  Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([status])
   @@map("checkouts")
+}
+
+// Admin-managed discount codes for subscription checkout (/admin/coupons).
+// discountPercent is only ever read at checkout time to compute the item
+// value Asaas charges — see asaas.service.ts. Once a subscription is
+// created with that discounted value, Asaas itself keeps charging the same
+// fixed amount every renewal cycle (no per-cycle reapplication needed);
+// Company.couponId just records which coupon is currently attached, for
+// display. Ver Contextos/Decisoes.md (2026-08-22).
+model Coupon {
+  id              String   @id @default(uuid()) @db.Uuid
+  code            String   @unique
+  discountPercent Decimal  @map("discount_percent") @db.Decimal(5, 2)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  checkouts Checkout[]
+  companies Company[]
+
+  @@map("coupons")
 }
 
 model Payment {

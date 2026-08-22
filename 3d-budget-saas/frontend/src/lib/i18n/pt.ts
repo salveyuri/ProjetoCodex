@@ -484,6 +484,15 @@ export const pt = {
   "billing.errorCancel": "Nao foi possivel cancelar o plano.",
   "billing.planChangedMsg": "Plano alterado para {planName}.",
   "billing.planCanceledMsg": "Plano cancelado e limites Free reaplicados.",
+  "billing.couponTitle": "Cupom de desconto",
+  "billing.couponSubtitle":
+    "Tem um codigo de desconto? Aplique antes de assinar - o valor com desconto vale pra sempre nesta assinatura.",
+  "billing.couponPlaceholder": "CODIGO",
+  "billing.couponApply": "Aplicar",
+  "billing.couponChecking": "Verificando...",
+  "billing.couponRemove": "Remover",
+  "billing.couponApplied": "Cupom {code} aplicado: -{percent}%",
+  "billing.couponInvalid": "Cupom invalido ou inativo.",
 
   "auth.login.heading": "Entrar",
   "auth.login.email": "Email",

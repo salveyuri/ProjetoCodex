@@ -26,6 +26,7 @@ interface CompanyWithPlan {
   currentQuotesCount: number;
   quoteUsagePeriodStart: Date;
   plan: Plan;
+  coupon: { code: string; discountPercent: Prisma.Decimal } | null;
 }
 
 const toUsageMetric = (used: number, limit: number | null): UsageMetric => ({
@@ -58,6 +59,12 @@ export class BillingService {
       asaasCustomerId: company.asaasCustomerId,
       usage,
       entitlements: plan.features,
+      coupon: company.coupon
+        ? {
+            code: company.coupon.code,
+            discountPercent: company.coupon.discountPercent.toNumber(),
+          }
+        : null,
     };
   }
 
@@ -121,8 +128,14 @@ export class BillingService {
   }
 
   // Single place that changes a company's plan — used by the free-plan
-  // checkout path, by cancellation (back to Free), by the Asaas webhook
-  // once a payment confirms, and by admin overrides on /admin/users.
+  // checkout path, by cancellation (back to Free), and by admin overrides
+  // on /admin/users (the paid-checkout webhook sets planId/couponId
+  // directly instead — see webhook.controller.ts — since it also needs to
+  // touch subscriptionStatus/asaasSubscriptionId together atomically).
+  // Always clears couponId: every caller here represents a plan change
+  // outside the coupon-aware checkout flow (free plan, cancellation, or a
+  // manual admin override), so a coupon from a previous paid subscription
+  // should never linger.
   async applyPlan(
     companyId: string,
     planId: string,
@@ -130,7 +143,7 @@ export class BillingService {
   ): Promise<BillingOverview> {
     await prisma.company.update({
       where: { id: companyId },
-      data: { planId, subscriptionStatus },
+      data: { planId, subscriptionStatus, couponId: null },
     });
 
     return this.getOverview(companyId);
@@ -148,6 +161,12 @@ export class BillingService {
       data: {
         planId: input.planId,
         subscriptionStatus: input.subscriptionStatus,
+        // A manual admin plan change (this is the only caller of this
+        // method) isn't going through the coupon-aware checkout flow, so
+        // any coupon from a previous paid subscription shouldn't linger.
+        // Left untouched when only subscriptionStatus changes (e.g.
+        // reactivating a PAST_DUE company on the same plan).
+        couponId: input.planId !== undefined ? null : undefined,
       },
     });
 
@@ -194,7 +213,10 @@ export class BillingService {
   ): Promise<CompanyWithPlan> {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      include: { plan: true },
+      include: {
+        plan: true,
+        coupon: { select: { code: true, discountPercent: true } },
+      },
     });
 
     if (!company) {

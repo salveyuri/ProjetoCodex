@@ -198,6 +198,17 @@ Passo") em 2026-08-12.
       definir, direto em `/admin/users` (mesmo seletor de plano que já
       existia) — atribuir não gera nenhuma cobrança nem chamada ao
       Asaas. Ver `Contextos/Decisoes.md` (2026-08-20).
+- [x] **Cupons de desconto — implementado em 2026-08-22.** Tela
+      `/admin/coupons` (código, percentual, ativo/inativo). Campo de
+      cupom em `/dashboard/billing` antes de assinar; o desconto vira o
+      valor fixo cobrado pelo Asaas em toda cobrança futura da
+      assinatura (mecanismo nativo do Checkout Asaas — nenhuma
+      reaplicação por ciclo foi necessária). Ver `Contextos/Decisoes.md`.
+- [ ] Checkout pago não pode ser testado clicando de ponta a ponta em
+      dev local — o Asaas rejeita `successUrl`/`cancelUrl`/`expiredUrl`
+      apontando pra `localhost` (exige URL pública). Descoberto
+      2026-08-22 testando cupons; não é um bug de nenhuma feature
+      específica. Ver `Contextos/Conhecimento.md`.
 
 ## Catálogo de impressoras (implementado em 2026-08-14)
 

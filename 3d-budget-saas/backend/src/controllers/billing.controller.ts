@@ -1,6 +1,7 @@
 import type {
   BillingOverview,
   CheckoutResponse,
+  CouponPreviewResponse,
   PaymentResource,
 } from "@3d-budget/shared";
 import { SubscriptionStatus } from "@prisma/client";
@@ -11,9 +12,13 @@ import { AppError } from "../middlewares/error-handler";
 import { asaasService } from "../services/asaas.service";
 import { auditLogService } from "../services/audit-log.service";
 import { billingService } from "../services/billing.service";
+import { couponService } from "../services/coupon.service";
 import { planService } from "../services/plan.service";
 import { getAuthenticatedCompanyId } from "../utils/request-auth";
-import { checkoutRequestSchema } from "../validators/billing.validator";
+import {
+  checkoutRequestSchema,
+  couponCodeParamSchema,
+} from "../validators/billing.validator";
 
 const toValidationError = (error: ZodError): AppError =>
   new AppError("Invalid request payload.", 400, "VALIDATION_ERROR", {
@@ -110,14 +115,26 @@ export class BillingController {
         return;
       }
 
+      // Re-validated here even if the frontend already called the preview
+      // endpoint (GET /billing/coupons/:code) — a code accepted a moment
+      // ago could have been deactivated since, and this is the value that
+      // actually gets charged, every renewal, from now on.
+      const coupon = input.couponCode
+        ? await couponService.validateActiveByCode(input.couponCode)
+        : null;
+      const overridePrice = coupon
+        ? couponService.discountedPrice(plan.price, coupon).toNumber()
+        : undefined;
+
       const checkout = await prisma.checkout.create({
-        data: { companyId, planId: plan.id },
+        data: { companyId, planId: plan.id, couponId: coupon?.id },
       });
 
       const { checkoutUrl, asaasCheckoutId } =
         await asaasService.createSubscriptionCheckout({
           checkoutId: checkout.id,
           plan,
+          overridePrice,
         });
 
       await prisma.checkout.update({
@@ -191,6 +208,25 @@ export class BillingController {
       response.status(200).json(payments.map(toPaymentResource));
     } catch (error) {
       next(error);
+    }
+  }
+
+  // Lets the checkout screen show the discount before the person commits —
+  // does not touch the database or Asaas at all. See CouponPreviewResponse.
+  async couponPreview(
+    request: Request,
+    response: Response<CouponPreviewResponse>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { code } = couponCodeParamSchema.parse(request.params);
+      const coupon = await couponService.validateActiveByCode(code);
+      response.status(200).json({
+        code: coupon.code,
+        discountPercent: coupon.discountPercent.toNumber(),
+      });
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
     }
   }
 }

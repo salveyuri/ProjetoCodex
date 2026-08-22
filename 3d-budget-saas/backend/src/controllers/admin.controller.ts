@@ -1,5 +1,6 @@
 import type {
   AdminUserResource,
+  CouponResource,
   EmailLogDetailResource,
   EmailTemplateKey,
   EmailTemplateResource,
@@ -17,6 +18,7 @@ import { ZodError } from "zod";
 import { AppError } from "../middlewares/error-handler";
 import { adminService } from "../services/admin.service";
 import { auditLogService } from "../services/audit-log.service";
+import { couponService, toCouponResource } from "../services/coupon.service";
 import { emailLogService } from "../services/email-log.service";
 import { emailService } from "../services/email.service";
 import {
@@ -31,6 +33,7 @@ import {
 } from "../services/system-formula.service";
 import { idParamSchema } from "../validators/common.validator";
 import { adminUserUpdateSchema } from "../validators/admin.validator";
+import { couponCreateSchema, couponUpdateSchema } from "../validators/coupon.validator";
 import {
   emailLogListQuerySchema,
   emailTemplateTestSchema,
@@ -170,6 +173,66 @@ export class AdminController {
         metadata: { code: before.code },
       });
       response.status(204).send();
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async coupons(
+    _request: Request,
+    response: Response<CouponResource[]>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const coupons = await couponService.listAll();
+      response.status(200).json(coupons);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createCoupon(
+    request: Request,
+    response: Response<CouponResource>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const input = couponCreateSchema.parse(request.body);
+      const coupon = await couponService.create(input);
+      await auditLogService.record({
+        action: "ADMIN_COUPON_CREATED",
+        entityType: "Coupon",
+        entityId: coupon.id,
+        actorUserId: request.auth?.userId,
+        after: toAuditJson(coupon),
+        metadata: { code: coupon.code },
+      });
+      response.status(201).json(coupon);
+    } catch (error) {
+      next(error instanceof ZodError ? toValidationError(error) : error);
+    }
+  }
+
+  async updateCoupon(
+    request: Request,
+    response: Response<CouponResource>,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { id } = idParamSchema.parse(request.params);
+      const input = couponUpdateSchema.parse(request.body);
+      const before = toCouponResource(await couponService.getById(id));
+      const coupon = await couponService.update(id, input);
+      await auditLogService.record({
+        action: "ADMIN_COUPON_UPDATED",
+        entityType: "Coupon",
+        entityId: id,
+        actorUserId: request.auth?.userId,
+        before: toAuditJson(before),
+        after: toAuditJson(coupon),
+        metadata: { changedFields: Object.keys(input) },
+      });
+      response.status(200).json(coupon);
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);
     }

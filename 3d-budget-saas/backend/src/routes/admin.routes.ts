@@ -33,6 +33,18 @@ adminRoutes.delete("/plans/:id", (request, response, next) =>
   adminController.deletePlan(request, response, next),
 );
 
+adminRoutes.get("/coupons", (request, response, next) =>
+  adminController.coupons(request, response, next),
+);
+
+adminRoutes.post("/coupons", (request, response, next) =>
+  adminController.createCoupon(request, response, next),
+);
+
+adminRoutes.patch("/coupons/:id", (request, response, next) =>
+  adminController.updateCoupon(request, response, next),
+);
+
 adminRoutes.get("/email-templates", (request, response, next) =>
   adminController.emailTemplates(request, response, next),
 );

@@ -195,6 +195,8 @@ export class WebhookController {
               subscriptionStatus: nextStatus,
               planId:
                 isFirstActivation && checkout ? checkout.planId : undefined,
+              couponId:
+                isFirstActivation && checkout ? checkout.couponId : undefined,
               asaasCustomerId: payment.customer ?? company.asaasCustomerId,
               asaasSubscriptionId:
                 payment.subscription ?? company.asaasSubscriptionId,

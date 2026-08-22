@@ -483,6 +483,15 @@ export const en: Record<TranslationKey, string> = {
   "billing.errorCancel": "Could not cancel the plan.",
   "billing.planChangedMsg": "Plan changed to {planName}.",
   "billing.planCanceledMsg": "Plan canceled and Free limits reapplied.",
+  "billing.couponTitle": "Discount coupon",
+  "billing.couponSubtitle":
+    "Got a discount code? Apply it before subscribing - the discounted price stays fixed for this subscription forever.",
+  "billing.couponPlaceholder": "CODE",
+  "billing.couponApply": "Apply",
+  "billing.couponChecking": "Checking...",
+  "billing.couponRemove": "Remove",
+  "billing.couponApplied": "Coupon {code} applied: -{percent}%",
+  "billing.couponInvalid": "Invalid or inactive coupon.",
 
   "auth.login.heading": "Sign in",
   "auth.login.email": "Email",

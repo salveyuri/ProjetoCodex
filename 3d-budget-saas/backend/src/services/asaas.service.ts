@@ -10,6 +10,11 @@ const todayIsoDate = (): string => new Date().toISOString().slice(0, 10);
 export interface CreateSubscriptionCheckoutInput {
   checkoutId: string;
   plan: Plan;
+  // When set (a coupon was applied), this becomes the recurring item value
+  // Asaas charges instead of plan.price — every future renewal keeps using
+  // this same fixed amount automatically, Asaas never re-derives it from
+  // the plan. See coupon.service.ts#discountedPrice.
+  overridePrice?: number;
 }
 
 export interface CreateSubscriptionCheckoutResult {
@@ -46,7 +51,7 @@ export class AsaasService {
           name: input.plan.name,
           description: input.plan.description ?? undefined,
           quantity: 1,
-          value: input.plan.price.toNumber(),
+          value: input.overridePrice ?? input.plan.price.toNumber(),
         },
       ],
       // customerData is deliberately omitted (not just name/email): Asaas

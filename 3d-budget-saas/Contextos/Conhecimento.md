@@ -432,3 +432,21 @@ se repetir se alguém mexer nesse código sem saber.
   raro nas próximas sessões, ignorar esta nota; se continuar frequente,
   vale considerar rodar a suite sempre em lotes por padrão em vez de
   como contorno pontual.
+
+## Checkout Asaas real (clique-a-clique) não funciona em dev local
+
+Testado em 2026-08-22: clicar em "Assinar" de verdade em `/dashboard/billing`
+rodando local (`npm run dev`) sempre falha com `502 ASAAS_API_ERROR`. O corpo
+do erro (logado no backend antes de virar `AppError` genérico) mostra o
+motivo real: `successUrl`/`cancelUrl`/`expiredUrl` inválidos - essas URLs são
+montadas a partir de `env.appBaseUrl` (`http://localhost:3000/...` em dev), e
+o Asaas (sandbox ou produção) exige uma URL pública de verdade pra callback
+de checkout, não aceita `localhost`. Isso **não é um bug** de nenhuma feature
+específica (confirmado ao testar cupons - o payload chega certo até o Asaas,
+com o valor já descontado, e só falha na validação da URL) - é uma limitação
+de ambiente que sempre existiu nesse fluxo, só nunca tinha sido clicado de
+ponta a ponta localmente antes. Pra testar o checkout pago clicando de
+verdade, precisa ser num ambiente com `APP_BASE_URL` público (staging/prod)
+- localmente, validar via `vi.spyOn(asaasClient, "createCheckout")` mockado
+(padrão já usado em `coupon.routes.test.ts`) é o único jeito de exercitar
+esse fluxo sem essa barreira.

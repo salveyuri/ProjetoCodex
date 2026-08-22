@@ -2183,3 +2183,93 @@ pedido. Salvei, reabri pra editar - checkbox e linha continuaram lá,
 `POST /api/calculate` (calculadora) direto por API, mesmo resultado
 (R$ 15,42 sem a marcação, R$ 16,19 com). Dados de teste apagados
 depois (duas empresas de teste).
+
+## 2026-08-22 - Cupons de desconto para assinaturas
+
+Pedido: cupons de desconto pra assinatura - tela admin com código,
+percentual e status (ativo/inativo); quem assinar com um cupom paga o
+valor com desconto, e esse desconto continua valendo em todas as
+cobranças seguintes da assinatura.
+
+### Como a recorrência "roda sempre com o valor descontado" - sem nenhum código novo pra isso
+
+Achado-chave, antes de implementar: o checkout de assinatura (Checkout
+Asaas, `chargeTypes: RECURRENT`) já manda um `value` fixo por item
+(`asaas.service.ts#createSubscriptionCheckout`) - o Asaas cria uma
+assinatura de verdade com esse valor e cobra o **mesmo valor fixo**
+em todo ciclo futuro, sozinho, sem o backend precisar reenviar nada a
+cada renovação (é assim que já funciona hoje pra qualquer plano, com
+ou sem cupom). Ou seja: a exigência "a recorrência vai rolar sempre
+com este valor aplicado" já é satisfeita de graça, só bastando calcular
+o `value` com desconto **uma única vez**, no momento do checkout, em
+vez do preço cheio do plano. Nenhuma lógica de "reaplicar cupom todo
+mês" foi necessária - seria reinventar o que o Asaas já faz.
+
+### Coluna nova em `Checkout`/`Company`, não em `Payment`
+
+`Coupon` (código, `discountPercent`, `isActive`) é uma tabela nova e
+simples, só isso. `Checkout.couponId` grava qual cupom (se algum) foi
+usado ao criar aquele checkout específico. `Company.couponId` só é
+setado quando o webhook confirma o **primeiro pagamento** daquele
+checkout (mesmo momento em que `Company.planId` também é commitado,
+em `webhook.controller.ts`) - é só pra exibição (mostrar "Cupom
+PROMO20 aplicado: -20%" na tela de billing), nunca entra em nenhum
+cálculo daí pra frente. Qualquer novo checkout (trocar de plano,
+reassinar) substitui ou limpa esse valor automaticamente, do mesmo
+jeito que já acontecia com `planId`. `applyPlan`/`updateSubscription`
+(plano grátis, cancelamento, override de admin) sempre limpam
+`couponId` - nenhum desses caminhos passa pelo checkout com cupom, um
+cupom de uma assinatura paga anterior não deveria sobrar depois de
+cancelar ou um admin trocar o plano manualmente.
+
+### `GET /billing/coupons/:code`: preview sem gravar nada, revalidado de verdade no checkout
+
+Pra mostrar o desconto pro usuário antes de clicar "Assinar" (preço
+riscado + preço com desconto nos cards de plano), criei um endpoint de
+preview que só lê o cupom e devolve o percentual - não cria `Checkout`,
+não toca no banco além do `SELECT`. O `POST /billing/checkout` sempre
+revalida o código de novo do zero (não confia no preview) - um cupom
+pode ter sido desativado nos segundos entre o preview e o clique real
+em "Assinar".
+
+### Admin: `/admin/coupons`, mesmo padrão de `/admin/plans`
+
+Tela nova espelhando a estrutura de `/admin/plans` (tabela + modal de
+criar/editar), só com os 3 campos pedidos (código, percentual, status)
+mais um contador de "em uso" (`_count` de `Company` com aquele
+`couponId` - útil pro admin saber se um cupom já tem gente assinada
+antes de mexer nele, mesmo não tendo sido pedido explicitamente).
+Coupon não tem endpoint de exclusão de propósito - mesmo raciocínio já
+usado em Plan/SystemFormula: desativar em vez de apagar, evita quebrar
+o histórico de quem já usou.
+
+### Verificação
+
+Testes novos em `coupon.routes.test.ts` (11 testes): CRUD admin
+(criar/listar/editar, código duplicado rejeitado mesmo com case
+diferente), preview do cupom (válido, inativo, inexistente), checkout
+com cupom (`asaasClient.createCheckout` mockado via `vi.spyOn` - sem
+chamada de rede de verdade - confirma que o `value` enviado é o preço
+do plano já com desconto aplicado, e que o `Checkout.couponId` é
+gravado), checkout sem cupom cobra o preço cheio, código inválido é
+rejeitado **antes** de chamar o Asaas, e o fluxo completo via webhook
+(checkout com cupom → webhook confirma → `Company.couponId` aparece em
+`GET /billing`; cancelar a assinatura limpa esse campo de novo). Suíte
+completa: 144/144 (18 arquivos, 2 lotes de 9). `tsc`/`lint`/`build`
+limpos em shared/backend/frontend.
+
+Verificado ao vivo na UI: criei um cupom de 15% em `/admin/coupons`
+pela tela de verdade, apliquei no campo de cupom em
+`/dashboard/billing` - apareceu "Cupom VERIFICACAO15 aplicado: -15%" e
+os cards de plano passaram a mostrar o preço riscado ao lado do preço
+com desconto (Pro: R$ 49,90 → R$ 42,42; Enterprise: R$ 199,90 →
+R$ 169,92, ambos batendo com a conta manual). Cliquei "Assinar" - a
+chamada chegou até o Asaas sandbox com o payload certo (confirmado no
+log do backend), mas o Asaas rejeitou por causa de
+`successUrl`/`cancelUrl`/`expiredUrl` apontarem pra `localhost` (URL de
+callback pública é exigida) - **limitação de ambiente de dev local, não
+um bug do cupom**, documentada em `Contextos/Conhecimento.md`; o mesmo
+aconteceria clicando "Assinar" em qualquer plano, com ou sem cupom.
+Dados de teste apagados depois (empresa, usuário, cupom criado na
+verificação - os cupons gerados pelos testes automatizados continuam
+no banco de dev, como já é padrão nesta sessão).

@@ -2273,3 +2273,73 @@ aconteceria clicando "Assinar" em qualquer plano, com ou sem cupom.
 Dados de teste apagados depois (empresa, usuário, cupom criado na
 verificação - os cupons gerados pelos testes automatizados continuam
 no banco de dev, como já é padrão nesta sessão).
+
+## 2026-08-22 (mesmo dia) - Dois tipos de cupom: recorrente e uso único (só primeiro mês)
+
+Pergunta do Yuri, logo depois da rodada de cupons acima: dava pra ter
+um cupom que só desconta no primeiro mês, voltando pro preço cheio
+depois? Respondi que sim, com o trade-off de precisar de uma chamada
+extra ao Asaas (explicado antes de implementar) - ele confirmou e
+implementei.
+
+### O mecanismo "de graça" do cupom recorrente não serve pra isso - precisa reverter o valor depois
+
+Cupom recorrente funciona sem nenhum código extra porque o valor
+mandado na criação da assinatura no Asaas vira o valor fixo cobrado
+pra sempre (ver entrada anterior). Pra "só primeiro mês", esse mesmo
+mecanismo já cobra certo a PRIMEIRA cobrança (criada com o valor
+descontado), mas cobraria esse mesmo valor descontado pra sempre se eu
+não fizesse nada a mais - não existe um "desconto de uma cobrança só"
+nativo no Checkout Asaas pra esse fluxo. A solução: assim que o
+webhook confirma essa primeira cobrança, chamar
+`PUT /v3/subscriptions/{id}` (novo `asaasClient.updateSubscriptionValue`)
+pra atualizar o valor da assinatura de volta pro preço cheio do plano -
+como o Asaas só gera a cobrança do próximo ciclo depois que a atual
+liquida (mesmo comportamento já documentado no job de
+`subscription-expiring`), essa atualização acontece a tempo de valer
+pra segunda cobrança em diante.
+
+### `Coupon.type` (`RECURRING` | `ONE_TIME`), reversão é best-effort mas logada como erro, não aviso
+
+`type` novo no cupom, default `RECURRING` (mantém o comportamento
+anterior pra quem não escolher). A chamada de reversão
+(`asaas.service.ts#revertSubscriptionToFullPrice`) segue o mesmo
+padrão *best-effort* de `cancelSubscription` (nunca lança, o webhook
+sempre confirma 2xx pro Asaas independente do resultado) - mas com uma
+diferença deliberada: `logger.error` em vez de `logger.warn`. Falhar
+aqui não é um detalhe cosmético como "assinatura já tinha sido
+cancelada direto no painel" - é a empresa continuando a pagar o valor
+com desconto pra sempre por engano, um vazamento de receita de
+verdade. Ainda não existe alerta automático pra esse log (só fica no
+stdout do backend) - registrado como pendência em `Notas/TODO.md`.
+
+A reversão roda dentro do mesmo bloco de "primeira ativação" que já
+existia (`isFirstActivation && checkout`), então herda de graça a
+mesma garantia de idempotência: reentrega do mesmo webhook ou uma
+renovação de rotina depois não disparam a chamada de novo (o checkout
+já não está mais `PENDING` na segunda vez).
+
+### Verificação
+
+4 testes novos em `coupon.routes.test.ts` (total do arquivo: 15):
+cupom `ONE_TIME` dispara a chamada de reversão com o subscriptionId e
+o preço cheio certos assim que o webhook confirma; uma renovação de
+rotina da mesma assinatura não dispara de novo; se a chamada de
+reversão falhar (mockada rejeitando), o webhook ainda confirma 200 e a
+empresa ainda é ativada normalmente (a falha nunca bloqueia nada);
+cupom `RECURRING` nunca chama a reversão. Suíte completa: 148/148 (18
+arquivos, 2 lotes). `tsc`/`lint`/`build` limpos em
+shared/backend/frontend.
+
+Verificado ao vivo: criei um cupom `ONE_TIME` de 10% via API, apliquei
+em `/dashboard/billing` - a UI mostrou "Cupom VERUNICO10 aplicado:
+-10%" com a nota "Desconto válido só na primeira cobrança..."
+logo abaixo, e os cards de plano mostraram tanto o preço com desconto
+quanto uma segunda linha "Depois volta para R$ 49,90/mes" /
+"R$ 199,90/mes" (batendo com o preço cheio de cada plano). Tela
+`/admin/coupons` mostrando a coluna "Tipo" nova, com "Uso único (1º
+mês)" e "Recorrente (sempre)" corretos pros cupons de teste e pros já
+existentes do banco de dev. Não repeti o clique em "Assinar" até o
+fim - já sabia, da verificação anterior no mesmo dia, que isso esbarra
+na limitação de `localhost` no Asaas, não relacionada a este tipo de
+cupom. Dados de teste apagados depois.

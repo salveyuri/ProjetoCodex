@@ -1,6 +1,6 @@
 "use client";
 
-import type { CouponPayload, CouponResource } from "@3d-budget/shared";
+import type { CouponPayload, CouponResource, CouponType } from "@3d-budget/shared";
 import axios from "axios";
 import {
   Edit3,
@@ -29,6 +29,7 @@ type ModalState =
 interface CouponFormState {
   code: string;
   discountPercent: string;
+  type: CouponType;
   isActive: boolean;
 }
 
@@ -40,20 +41,26 @@ interface ToastState {
 const emptyCouponForm: CouponFormState = {
   code: "",
   discountPercent: "10",
+  type: "RECURRING",
   isActive: true,
 };
 
 const toCouponForm = (coupon: CouponResource): CouponFormState => ({
   code: coupon.code,
   discountPercent: String(coupon.discountPercent),
+  type: coupon.type,
   isActive: coupon.isActive,
 });
 
 const toPayload = (form: CouponFormState): CouponPayload => ({
   code: form.code.trim().toUpperCase(),
   discountPercent: Number(form.discountPercent),
+  type: form.type,
   isActive: form.isActive,
 });
+
+const couponTypeLabel = (type: CouponType): string =>
+  type === "ONE_TIME" ? "Uso unico (1o mes)" : "Recorrente (sempre)";
 
 export default function AdminCouponsPage() {
   const { isLoading: isAuthLoading, token, refreshUser } = useAuth();
@@ -249,6 +256,7 @@ export default function AdminCouponsPage() {
                     <tr>
                       <th className="px-5 py-3">Codigo</th>
                       <th className="px-5 py-3">Desconto</th>
+                      <th className="px-5 py-3">Tipo</th>
                       <th className="px-5 py-3">Em uso</th>
                       <th className="px-5 py-3">Status</th>
                       <th className="px-5 py-3">Acoes</th>
@@ -264,6 +272,9 @@ export default function AdminCouponsPage() {
                         </td>
                         <td className="px-5 py-4 text-muted">
                           -{coupon.discountPercent}%
+                        </td>
+                        <td className="px-5 py-4 text-muted">
+                          {couponTypeLabel(coupon.type)}
                         </td>
                         <td className="px-5 py-4 text-muted">
                           {coupon.usageCount}{" "}
@@ -341,6 +352,28 @@ export default function AdminCouponsPage() {
                 className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
               />
             </label>
+            <label className="grid min-w-0 gap-2 text-sm font-medium">
+              Tipo de desconto
+              <select
+                value={form.type}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    type: event.target.value as CouponType,
+                  }))
+                }
+                className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+              >
+                <option value="RECURRING">Recorrente - vale em toda cobranca</option>
+                <option value="ONE_TIME">Uso unico - so no primeiro mes</option>
+              </select>
+            </label>
+            {form.type === "ONE_TIME" ? (
+              <p className="text-xs text-muted">
+                A partir da segunda cobranca a assinatura volta pro preco cheio
+                do plano automaticamente.
+              </p>
+            ) : null}
             <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 text-sm font-medium">
               <input
                 type="checkbox"

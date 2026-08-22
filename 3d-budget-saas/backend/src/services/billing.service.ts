@@ -4,7 +4,7 @@ import type {
   SubscriptionStatus as SharedSubscriptionStatus,
   UsageMetric,
 } from "@3d-budget/shared";
-import type { Plan, Prisma } from "@prisma/client";
+import type { CouponType, Plan, Prisma } from "@prisma/client";
 import { SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
@@ -26,7 +26,7 @@ interface CompanyWithPlan {
   currentQuotesCount: number;
   quoteUsagePeriodStart: Date;
   plan: Plan;
-  coupon: { code: string; discountPercent: Prisma.Decimal } | null;
+  coupon: { code: string; discountPercent: Prisma.Decimal; type: CouponType } | null;
 }
 
 const toUsageMetric = (used: number, limit: number | null): UsageMetric => ({
@@ -63,6 +63,7 @@ export class BillingService {
         ? {
             code: company.coupon.code,
             discountPercent: company.coupon.discountPercent.toNumber(),
+            type: company.coupon.type,
           }
         : null,
     };
@@ -215,7 +216,7 @@ export class BillingService {
       where: { id: companyId },
       include: {
         plan: true,
-        coupon: { select: { code: true, discountPercent: true } },
+        coupon: { select: { code: true, discountPercent: true, type: true } },
       },
     });
 

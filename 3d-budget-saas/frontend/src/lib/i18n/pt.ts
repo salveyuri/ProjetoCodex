@@ -493,6 +493,10 @@ export const pt = {
   "billing.couponRemove": "Remover",
   "billing.couponApplied": "Cupom {code} aplicado: -{percent}%",
   "billing.couponInvalid": "Cupom invalido ou inativo.",
+  "billing.couponOneTimeShort": "so 1o mes",
+  "billing.couponOneTimeNote":
+    "Desconto valido so na primeira cobranca - a partir da segunda, o valor volta ao preco cheio automaticamente.",
+  "billing.couponOneTimePriceNote": "Depois volta para {price}/mes",
 
   "auth.login.heading": "Entrar",
   "auth.login.email": "Email",

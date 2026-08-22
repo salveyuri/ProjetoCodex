@@ -13,6 +13,7 @@ export const toCouponResource = (coupon: CouponWithUsage): CouponResource => ({
   id: coupon.id,
   code: coupon.code,
   discountPercent: coupon.discountPercent.toNumber(),
+  type: coupon.type,
   isActive: coupon.isActive,
   usageCount: coupon._count.companies,
   createdAt: coupon.createdAt.toISOString(),
@@ -51,6 +52,7 @@ export class CouponService {
         data: {
           code: input.code,
           discountPercent: input.discountPercent,
+          type: input.type ?? "RECURRING",
           isActive: input.isActive ?? true,
         },
         include: { _count: { select: { companies: true } } },
@@ -78,6 +80,7 @@ export class CouponService {
         data: {
           code: input.code,
           discountPercent: input.discountPercent,
+          type: input.type,
           isActive: input.isActive,
         },
         include: { _count: { select: { companies: true } } },

@@ -224,6 +224,7 @@ export class BillingController {
       response.status(200).json({
         code: coupon.code,
         discountPercent: coupon.discountPercent.toNumber(),
+        type: coupon.type,
       });
     } catch (error) {
       next(error instanceof ZodError ? toValidationError(error) : error);

@@ -5,6 +5,7 @@ import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
+import { asaasService } from "../services/asaas.service";
 import { auditLogService } from "../services/audit-log.service";
 import { emailService } from "../services/email.service";
 import {
@@ -29,6 +30,15 @@ export const HANDLED_ASAAS_EVENTS: readonly string[] = [
   ...CONFIRMED_EVENTS,
   ...OVERDUE_EVENTS,
 ];
+
+// coupon/plan are only needed to decide, on first activation, whether a
+// ONE_TIME coupon's first-cycle discount needs to be reverted afterward
+// (see asaasService.revertSubscriptionToFullPrice below).
+const findCheckoutWithCouponAndPlan = (checkoutId: string) =>
+  prisma.checkout.findUnique({
+    where: { id: checkoutId },
+    include: { coupon: true, plan: true },
+  });
 
 // Resend event -> the deliveryStatus value stored on EmailLog. Only events
 // that answer "did it get delivered, or did something go wrong" (per
@@ -110,7 +120,7 @@ export class WebhookController {
       // payment (before that id exists on Company yet) is instead matched
       // by the externalReference we set to our own Checkout.id when
       // creating the hosted checkout session.
-      let checkout: Awaited<ReturnType<typeof prisma.checkout.findUnique>> =
+      let checkout: Awaited<ReturnType<typeof findCheckoutWithCouponAndPlan>> =
         null;
       let company = payment.subscription
         ? await prisma.company.findFirst({
@@ -119,9 +129,7 @@ export class WebhookController {
         : null;
 
       if (!company && payment.externalReference) {
-        checkout = await prisma.checkout.findUnique({
-          where: { id: payment.externalReference },
-        });
+        checkout = await findCheckoutWithCouponAndPlan(payment.externalReference);
 
         if (checkout) {
           company = await prisma.company.findUnique({
@@ -208,6 +216,26 @@ export class WebhookController {
               where: { id: checkout.id },
               data: { status: CheckoutStatus.PAID },
             });
+
+            // ONE_TIME coupon: the discount only ever covered this first
+            // payment (already charged at the discounted value when the
+            // checkout was created) — push the subscription back to the
+            // plan's full price now, before Asaas generates the next
+            // cycle's charge. Guarded to CONFIRMED_EVENTS: an OVERDUE event
+            // should never be the one that "first activates" a checkout in
+            // practice, but if it somehow were, there's no successful
+            // payment yet to revert anything from.
+            const subscriptionId = payment.subscription ?? company.asaasSubscriptionId;
+            if (
+              CONFIRMED_EVENTS.has(event) &&
+              checkout.coupon?.type === "ONE_TIME" &&
+              subscriptionId
+            ) {
+              await asaasService.revertSubscriptionToFullPrice(
+                subscriptionId,
+                checkout.plan.price.toNumber(),
+              );
+            }
           }
 
           await auditLogService.record({

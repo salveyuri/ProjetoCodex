@@ -91,6 +91,29 @@ export class AsaasService {
       );
     }
   }
+
+  // Called once, right after the webhook confirms a ONE_TIME coupon's
+  // first payment (see webhook.controller.ts) — pushes the subscription's
+  // recurring value back to the plan's full price for every cycle after.
+  // Unlike cancelSubscription's best-effort shrug, a failure here is a
+  // real revenue leak (the customer would keep being charged the
+  // discounted value indefinitely), so it's logged at error level with
+  // everything needed to fix it manually in the Asaas dashboard — but it
+  // still never throws: the webhook handler must always ack Asaas with
+  // 2xx regardless of what this call does.
+  async revertSubscriptionToFullPrice(
+    asaasSubscriptionId: string,
+    fullPrice: number,
+  ): Promise<void> {
+    try {
+      await asaasClient.updateSubscriptionValue(asaasSubscriptionId, fullPrice);
+    } catch (error) {
+      logger.error(
+        { err: error, asaasSubscriptionId, fullPrice },
+        "Failed to revert a ONE_TIME coupon subscription to full price after its first cycle — the customer may keep being charged the discounted value until this is fixed manually in the Asaas dashboard",
+      );
+    }
+  }
 }
 
 export const asaasService = new AsaasService();

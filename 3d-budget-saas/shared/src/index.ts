@@ -90,10 +90,18 @@ export interface PlanPayload {
   displayOrder?: number;
 }
 
+// RECURRING: the discounted price is the fixed value Asaas charges every
+// renewal cycle, forever. ONE_TIME: discounted only for the first charge —
+// the subscription's value gets pushed back to the plan's full price right
+// after that first payment confirms (see asaas.service.ts#
+// revertSubscriptionToFullPrice).
+export type CouponType = "RECURRING" | "ONE_TIME";
+
 export interface CouponResource {
   id: string;
   code: string;
   discountPercent: number;
+  type: CouponType;
   isActive: boolean;
   // How many companies currently have this coupon attached to their
   // subscription (Company.couponId) — admin-facing usage signal only.
@@ -105,6 +113,7 @@ export interface CouponResource {
 export interface CouponPayload {
   code: string;
   discountPercent: number;
+  type?: CouponType;
   isActive?: boolean;
 }
 
@@ -115,6 +124,7 @@ export interface CouponPayload {
 export interface CouponPreviewResponse {
   code: string;
   discountPercent: number;
+  type: CouponType;
 }
 
 export interface UsageMetric {
@@ -223,10 +233,11 @@ export interface BillingOverview {
   asaasCustomerId: string | null;
   usage: BillingUsage;
   entitlements: PlanEntitlements;
-  // The coupon currently discounting this subscription's recurring charge
-  // (set once the checkout that used it gets confirmed), or null if the
-  // current subscription has none. Display only.
-  coupon: { code: string; discountPercent: number } | null;
+  // The coupon this subscription's checkout used (set once confirmed), or
+  // null if none. Display only — for a ONE_TIME coupon this stays set even
+  // after the first-cycle discount has already been reverted to full
+  // price, so the screen can still show "applied to your first payment".
+  coupon: { code: string; discountPercent: number; type: CouponType } | null;
 }
 
 export interface CheckoutRequest {

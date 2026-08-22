@@ -48,6 +48,8 @@ describe("Admin coupon CRUD (/api/admin/coupons)", () => {
     // Codes are normalized to uppercase regardless of how the admin typed it.
     expect(createResponse.body.code).toBe(createResponse.body.code.toUpperCase());
     expect(createResponse.body.discountPercent).toBe(20);
+    // Defaults to RECURRING when the admin doesn't pick a type.
+    expect(createResponse.body.type).toBe("RECURRING");
     expect(createResponse.body.isActive).toBe(true);
     expect(createResponse.body.usageCount).toBe(0);
     const couponId = createResponse.body.id as string;
@@ -63,10 +65,11 @@ describe("Admin coupon CRUD (/api/admin/coupons)", () => {
     const updateResponse = await request(app)
       .patch(`/api/admin/coupons/${couponId}`)
       .set(authHeader(company.token))
-      .send({ isActive: false });
+      .send({ isActive: false, type: "ONE_TIME" });
     expect(updateResponse.status).toBe(200);
     expect(updateResponse.body.isActive).toBe(false);
-    // discountPercent untouched by a partial update that only sent isActive.
+    expect(updateResponse.body.type).toBe("ONE_TIME");
+    // discountPercent untouched by a partial update that only sent isActive/type.
     expect(updateResponse.body.discountPercent).toBe(20);
   });
 
@@ -274,7 +277,11 @@ describe("Coupon persists onto Company once the webhook confirms the checkout", 
       .get("/api/billing")
       .set(authHeader(company.token));
     expect(overview.status).toBe(200);
-    expect(overview.body.coupon).toEqual({ code: code.toUpperCase(), discountPercent: 30 });
+    expect(overview.body.coupon).toEqual({
+      code: code.toUpperCase(),
+      discountPercent: 30,
+      type: "RECURRING",
+    });
     expect(overview.body.plan.id).toBe(PRO_PLAN_ID);
   });
 
@@ -320,5 +327,210 @@ describe("Coupon persists onto Company once the webhook confirms the checkout", 
 
     expect(cancelResponse.status).toBe(200);
     expect(cancelResponse.body.coupon).toBeNull();
+  });
+});
+
+describe("ONE_TIME coupon reverts the subscription to full price after the first cycle", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const createOneTimeCoupon = async (company: {
+    token: string;
+    userId: string;
+  }): Promise<string> => {
+    await promoteToAdmin(company.userId);
+    const code = `once-${randomUUID().slice(0, 8)}`;
+    await request(app)
+      .post("/api/admin/coupons")
+      .set(authHeader(company.token))
+      .send({ code, discountPercent: 20, type: "ONE_TIME" });
+    return code;
+  };
+
+  it("calls Asaas to restore full price right after the first payment confirms", async () => {
+    const company = await registerTestCompany(app, "coupon-onetime-revert");
+    const code = await createOneTimeCoupon(company);
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { id: PRO_PLAN_ID } });
+
+    vi.spyOn(asaasClient, "createCheckout").mockResolvedValue({
+      id: `asaas_checkout_${randomUUID()}`,
+      link: "https://sandbox.asaas.com/checkoutSession/fake",
+      status: "PENDING",
+    });
+    const revertSpy = vi
+      .spyOn(asaasClient, "updateSubscriptionValue")
+      .mockResolvedValue(undefined);
+
+    const checkoutResponse = await request(app)
+      .post("/api/billing/checkout")
+      .set(authHeader(company.token))
+      .send({ planId: PRO_PLAN_ID, couponCode: code });
+
+    const subscriptionId = `sub_${randomUUID()}`;
+    const webhookResponse = await request(app)
+      .post("/api/webhooks/asaas")
+      .set(asaasHeader())
+      .send({
+        event: "PAYMENT_CONFIRMED",
+        payment: {
+          id: `pay_${randomUUID()}`,
+          customer: `cus_${randomUUID()}`,
+          subscription: subscriptionId,
+          status: "CONFIRMED",
+          value: 39.92,
+          externalReference: checkoutResponse.body.checkoutId,
+        },
+      });
+
+    expect(webhookResponse.status).toBe(200);
+    expect(revertSpy).toHaveBeenCalledTimes(1);
+    expect(revertSpy).toHaveBeenCalledWith(subscriptionId, plan.price.toNumber());
+
+    // The company is still activated normally regardless — the revert is
+    // a side effect, not a precondition for the subscription to count.
+    const overview = await request(app)
+      .get("/api/billing")
+      .set(authHeader(company.token));
+    expect(overview.body.plan.id).toBe(PRO_PLAN_ID);
+    expect(overview.body.coupon?.type).toBe("ONE_TIME");
+  });
+
+  it("does not call Asaas again on a routine renewal of the same subscription", async () => {
+    const company = await registerTestCompany(app, "coupon-onetime-renewal");
+    const code = await createOneTimeCoupon(company);
+
+    vi.spyOn(asaasClient, "createCheckout").mockResolvedValue({
+      id: `asaas_checkout_${randomUUID()}`,
+      link: "https://sandbox.asaas.com/checkoutSession/fake",
+      status: "PENDING",
+    });
+    const revertSpy = vi
+      .spyOn(asaasClient, "updateSubscriptionValue")
+      .mockResolvedValue(undefined);
+
+    const checkoutResponse = await request(app)
+      .post("/api/billing/checkout")
+      .set(authHeader(company.token))
+      .send({ planId: PRO_PLAN_ID, couponCode: code });
+
+    const subscriptionId = `sub_${randomUUID()}`;
+    await request(app)
+      .post("/api/webhooks/asaas")
+      .set(asaasHeader())
+      .send({
+        event: "PAYMENT_CONFIRMED",
+        payment: {
+          id: `pay_${randomUUID()}`,
+          customer: `cus_${randomUUID()}`,
+          subscription: subscriptionId,
+          status: "CONFIRMED",
+          value: 39.92,
+          externalReference: checkoutResponse.body.checkoutId,
+        },
+      });
+    expect(revertSpy).toHaveBeenCalledTimes(1);
+
+    // Second payment for the same subscription — matched by
+    // asaasSubscriptionId this time, not externalReference (checkout is
+    // already PAID), same as any routine renewal.
+    const renewalResponse = await request(app)
+      .post("/api/webhooks/asaas")
+      .set(asaasHeader())
+      .send({
+        event: "PAYMENT_CONFIRMED",
+        payment: {
+          id: `pay_${randomUUID()}`,
+          customer: `cus_${randomUUID()}`,
+          subscription: subscriptionId,
+          status: "CONFIRMED",
+          value: 49.9,
+        },
+      });
+
+    expect(renewalResponse.status).toBe(200);
+    expect(revertSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("still activates the company even if reverting to full price fails", async () => {
+    const company = await registerTestCompany(app, "coupon-onetime-revert-fails");
+    const code = await createOneTimeCoupon(company);
+
+    vi.spyOn(asaasClient, "createCheckout").mockResolvedValue({
+      id: `asaas_checkout_${randomUUID()}`,
+      link: "https://sandbox.asaas.com/checkoutSession/fake",
+      status: "PENDING",
+    });
+    vi.spyOn(asaasClient, "updateSubscriptionValue").mockRejectedValue(
+      new Error("Asaas is down"),
+    );
+
+    const checkoutResponse = await request(app)
+      .post("/api/billing/checkout")
+      .set(authHeader(company.token))
+      .send({ planId: PRO_PLAN_ID, couponCode: code });
+
+    const webhookResponse = await request(app)
+      .post("/api/webhooks/asaas")
+      .set(asaasHeader())
+      .send({
+        event: "PAYMENT_CONFIRMED",
+        payment: {
+          id: `pay_${randomUUID()}`,
+          customer: `cus_${randomUUID()}`,
+          subscription: `sub_${randomUUID()}`,
+          status: "CONFIRMED",
+          value: 39.92,
+          externalReference: checkoutResponse.body.checkoutId,
+        },
+      });
+
+    // The webhook still acks 2xx and the company still activates — the
+    // revert failing (logged server-side) never blocks either.
+    expect(webhookResponse.status).toBe(200);
+    const overview = await request(app)
+      .get("/api/billing")
+      .set(authHeader(company.token));
+    expect(overview.body.plan.id).toBe(PRO_PLAN_ID);
+    expect(overview.body.subscriptionStatus).toBe("ACTIVE");
+  });
+
+  it("never calls Asaas to revert a RECURRING coupon", async () => {
+    const company = await registerTestCompany(app, "coupon-recurring-no-revert");
+    await promoteToAdmin(company.userId);
+    const code = `rec-${randomUUID().slice(0, 8)}`;
+    await request(app)
+      .post("/api/admin/coupons")
+      .set(authHeader(company.token))
+      .send({ code, discountPercent: 20, type: "RECURRING" });
+
+    vi.spyOn(asaasClient, "createCheckout").mockResolvedValue({
+      id: `asaas_checkout_${randomUUID()}`,
+      link: "https://sandbox.asaas.com/checkoutSession/fake",
+      status: "PENDING",
+    });
+    const revertSpy = vi.spyOn(asaasClient, "updateSubscriptionValue");
+
+    const checkoutResponse = await request(app)
+      .post("/api/billing/checkout")
+      .set(authHeader(company.token))
+      .send({ planId: PRO_PLAN_ID, couponCode: code });
+
+    await request(app)
+      .post("/api/webhooks/asaas")
+      .set(asaasHeader())
+      .send({
+        event: "PAYMENT_CONFIRMED",
+        payment: {
+          id: `pay_${randomUUID()}`,
+          customer: `cus_${randomUUID()}`,
+          subscription: `sub_${randomUUID()}`,
+          status: "CONFIRMED",
+          value: 39.92,
+          externalReference: checkoutResponse.body.checkoutId,
+        },
+      });
+
+    expect(revertSpy).not.toHaveBeenCalled();
   });
 });

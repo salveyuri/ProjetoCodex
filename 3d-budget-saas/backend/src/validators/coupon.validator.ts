@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const couponTypeSchema = z.enum(["RECURRING", "ONE_TIME"]);
+
 export const couponCreateSchema = z
   .object({
     code: z
@@ -10,6 +12,7 @@ export const couponCreateSchema = z
       .regex(/^[A-Za-z0-9-]+$/, "Use only letters, numbers and hyphens.")
       .transform((value) => value.toUpperCase()),
     discountPercent: z.number().gt(0).max(100),
+    type: couponTypeSchema.optional(),
     isActive: z.boolean().optional(),
   })
   .strict();

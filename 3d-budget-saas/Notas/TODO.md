@@ -204,6 +204,19 @@ Passo") em 2026-08-12.
       valor fixo cobrado pelo Asaas em toda cobrança futura da
       assinatura (mecanismo nativo do Checkout Asaas — nenhuma
       reaplicação por ciclo foi necessária). Ver `Contextos/Decisoes.md`.
+- [x] **Dois tipos de cupom — implementado em 2026-08-22 (mesmo dia).**
+      `Coupon.type`: `RECURRING` (padrão, comportamento acima) ou
+      `ONE_TIME` (desconto só na primeira cobrança — assim que o
+      webhook confirma, o valor da assinatura no Asaas é revertido pro
+      preço cheio do plano via `PUT /v3/subscriptions/{id}`). Ver
+      `Contextos/Decisoes.md`.
+- [ ] A reversão de preço de um cupom `ONE_TIME` (`asaas.service.ts#
+      revertSubscriptionToFullPrice`) é best-effort — se a chamada ao
+      Asaas falhar, só fica logado como `error` no backend, sem nenhum
+      alerta automático (e-mail, Slack, etc.). Se falhar de verdade,
+      a empresa continua pagando o valor com desconto até alguém notar
+      o log e corrigir manualmente no painel do Asaas. Vale considerar
+      um alerta (e-mail pro admin?) se isso virar recorrente na prática.
 - [ ] Checkout pago não pode ser testado clicando de ponta a ponta em
       dev local — o Asaas rejeita `successUrl`/`cancelUrl`/`expiredUrl`
       apontando pra `localhost` (exige URL pública). Descoberto

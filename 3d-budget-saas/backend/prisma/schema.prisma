@@ -30,6 +30,17 @@ enum CheckoutStatus {
   CANCELED
 }
 
+// RECURRING: the discounted value stays the Asaas subscription's fixed
+// recurring charge forever (today's default — see Coupon model comment).
+// ONE_TIME: discounted only for the first billing cycle — once the webhook
+// confirms that first payment, the subscription's value is pushed back to
+// the plan's full price for every cycle after (see webhook.controller.ts /
+// asaas.service.ts#revertSubscriptionToFullPrice).
+enum CouponType {
+  RECURRING
+  ONE_TIME
+}
+
 enum MachineType {
   FDM
   RESIN
@@ -219,18 +230,21 @@ model Checkout {
 
 // Admin-managed discount codes for subscription checkout (/admin/coupons).
 // discountPercent is only ever read at checkout time to compute the item
-// value Asaas charges — see asaas.service.ts. Once a subscription is
-// created with that discounted value, Asaas itself keeps charging the same
-// fixed amount every renewal cycle (no per-cycle reapplication needed);
-// Company.couponId just records which coupon is currently attached, for
-// display. Ver Contextos/Decisoes.md (2026-08-22).
+// value Asaas charges — see asaas.service.ts. For a RECURRING coupon, once
+// a subscription is created with that discounted value, Asaas itself keeps
+// charging the same fixed amount every renewal cycle (no per-cycle
+// reapplication needed). For a ONE_TIME coupon, the discount only covers
+// that first charge — see CouponType. Company.couponId just records which
+// coupon is currently attached, for display. Ver Contextos/Decisoes.md
+// (2026-08-22, atualizado 2026-08-22 com o tipo ONE_TIME).
 model Coupon {
-  id              String   @id @default(uuid()) @db.Uuid
-  code            String   @unique
-  discountPercent Decimal  @map("discount_percent") @db.Decimal(5, 2)
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id              String     @id @default(uuid()) @db.Uuid
+  code            String     @unique
+  discountPercent Decimal    @map("discount_percent") @db.Decimal(5, 2)
+  type            CouponType @default(RECURRING)
+  isActive        Boolean    @default(true) @map("is_active")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
 
   checkouts Checkout[]
   companies Company[]

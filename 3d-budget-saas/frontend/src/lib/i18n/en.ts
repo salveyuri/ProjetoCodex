@@ -492,6 +492,10 @@ export const en: Record<TranslationKey, string> = {
   "billing.couponRemove": "Remove",
   "billing.couponApplied": "Coupon {code} applied: -{percent}%",
   "billing.couponInvalid": "Invalid or inactive coupon.",
+  "billing.couponOneTimeShort": "1st month only",
+  "billing.couponOneTimeNote":
+    "Discount applies only to the first charge - from the second cycle on, the price goes back to full automatically.",
+  "billing.couponOneTimePriceNote": "Then back to {price}/mo",
 
   "auth.login.heading": "Sign in",
   "auth.login.email": "Email",

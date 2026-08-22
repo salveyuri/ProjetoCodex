@@ -313,6 +313,9 @@ function BillingContent() {
                           code: billing.coupon.code,
                           percent: billing.coupon.discountPercent,
                         })}
+                        {billing.coupon.type === "ONE_TIME"
+                          ? ` (${t("billing.couponOneTimeShort")})`
+                          : ""}
                       </p>
                     ) : null}
                   </div>
@@ -406,12 +409,19 @@ function BillingContent() {
 
               {appliedCoupon ? (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-secondary/40 bg-secondary/10 px-4 py-3">
-                  <p className="text-sm font-semibold text-secondary">
-                    {t("billing.couponApplied", {
-                      code: appliedCoupon.code,
-                      percent: appliedCoupon.discountPercent,
-                    })}
-                  </p>
+                  <div>
+                    <p className="text-sm font-semibold text-secondary">
+                      {t("billing.couponApplied", {
+                        code: appliedCoupon.code,
+                        percent: appliedCoupon.discountPercent,
+                      })}
+                    </p>
+                    {appliedCoupon.type === "ONE_TIME" ? (
+                      <p className="mt-1 text-xs text-secondary/80">
+                        {t("billing.couponOneTimeNote")}
+                      </p>
+                    ) : null}
+                  </div>
                   <button
                     type="button"
                     onClick={clearCoupon}
@@ -477,6 +487,13 @@ function BillingContent() {
                           {plan.price > 0 ? cycleLabel(plan.billingCycle) : ""}
                         </span>
                       </p>
+                      {discountedPrice && appliedCoupon?.type === "ONE_TIME" ? (
+                        <p className="mt-1 text-xs text-muted">
+                          {t("billing.couponOneTimePriceNote", {
+                            price: planPriceDisplay(plan),
+                          })}
+                        </p>
+                      ) : null}
                       {plan.description ? (
                         <p className="mt-2 text-sm text-muted">{plan.description}</p>
                       ) : null}

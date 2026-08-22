@@ -149,6 +149,21 @@ export const asaasClient = {
     });
   },
 
+  // Used to push a subscription's recurring charge back to the plan's full
+  // price after a ONE_TIME coupon's first cycle (see asaas.service.ts#
+  // revertSubscriptionToFullPrice) — a partial update, same shape Asaas
+  // accepts for adjusting an existing subscription's value going forward
+  // without touching its cycle/billing type/next due date.
+  updateSubscriptionValue: async (
+    subscriptionId: string,
+    value: number,
+  ): Promise<void> => {
+    await request<unknown>(`/subscriptions/${subscriptionId}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    });
+  },
+
   // Asaas generates the next cycle's payment ahead of its due date (as
   // soon as the previous one settles) — this lets the subscription-
   // expiring cron job (backend/src/jobs/subscription-expiring.job.ts)

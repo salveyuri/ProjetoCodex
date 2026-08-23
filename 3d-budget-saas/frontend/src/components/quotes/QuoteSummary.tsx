@@ -35,6 +35,7 @@ interface QuoteSummaryProps {
   savedQuote: QuoteResource | null;
   isSaving: boolean;
   canSave: boolean;
+  canExportPdf: boolean;
   onPreviewPdf: () => void;
   cardPayment: boolean;
   onChangeCardPayment: (value: boolean) => void;
@@ -48,6 +49,7 @@ export const QuoteSummary = ({
   savedQuote,
   isSaving,
   canSave,
+  canExportPdf,
   onPreviewPdf,
   cardPayment,
   onChangeCardPayment,
@@ -126,7 +128,7 @@ export const QuoteSummary = ({
       {isSaving ? t("quotes.saving") : quoteId ? t("quotes.saveQuote") : t("quotes.createQuote")}
     </button>
 
-    {savedQuote ? (
+    {savedQuote && canExportPdf ? (
       <button
         type="button"
         onClick={onPreviewPdf}

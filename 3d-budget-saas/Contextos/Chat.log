@@ -2469,3 +2469,28 @@ possivel - item que ja estava anotado como pendencia no TODO.
   corretos. Dados de teste apagados depois.
 - Migracao nova precisa ser aplicada em producao
   (`20260822200000_add_coupon_revert_failed_template`).
+
+## 2026-08-22 (mesmo dia) - Esconder botao de exportar PDF e campos de perfil pro plano Free
+
+O Yuri pediu pra esconder o botao de exportar PDF e os campos de
+perfil so usados pelo PDF (CNPJ/telefone/endereco/termos
+customizados) de quem esta no plano Free, ja que o backend ja
+bloqueia a chamada (`ensureFeature("PDF_EXPORT")`) mas a UI ainda
+mostrava os dois pra todo mundo.
+
+- Novo campo `AuthCompany.pdfExport` (shared) populado no login/
+  refresh a partir da mesma `toEntitlements()` que o backend usa pra
+  aplicar a regra de verdade - evitei checar `planCode === "FREE"`
+  direto porque a entitlement e editavel por plano em /admin/plans e
+  outros planos sem custo (Cortesia) tambem tem PDF liberado.
+- Escondido em 3 lugares: icone de download na listagem de
+  orcamentos, botao "Gerar PDF" em QuoteSummary (novo/editar
+  orcamento), e o bloco inteiro "Dados para o PDF de orcamento" na
+  aba Perfil das configuracoes.
+- Mudanca e so cosmetica/condicional de renderizacao - sem teste
+  automatizado novo (o gate real ja era testado no backend antes).
+  `tsc`/`lint`/`build` limpos em shared/backend/frontend.
+- Verificado ao vivo ponta a ponta: conta nova (Free por padrao) sem
+  o botao/secao em nenhum dos 3 lugares; promovi a mesma empresa pro
+  plano Pro direto no banco (teste) e os 3 reapareceram depois de
+  logar de novo. Conta e dados de teste apagados depois.

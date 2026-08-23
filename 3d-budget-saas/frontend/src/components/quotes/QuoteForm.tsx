@@ -7,6 +7,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ToastViewport } from "@/components/ui/toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PostProcessingCard } from "./PostProcessingCard";
 import { PrintItemCard } from "./PrintItemCard";
@@ -22,6 +23,8 @@ interface QuoteFormProps {
 
 export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const canExportPdf = user?.company?.pdfExport ?? false;
   const {
     form,
     machines,
@@ -207,6 +210,7 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
             savedQuote={savedQuote}
             isSaving={isSaving}
             canSave={canSave}
+            canExportPdf={canExportPdf}
             onPreviewPdf={openPdfPreview}
             cardPayment={form.cardPayment}
             onChangeCardPayment={(value) => updateField("cardPayment", value)}

@@ -9,7 +9,7 @@ import { env } from "../config/env";
 import { prisma } from "../config/prisma";
 import { AppError } from "../middlewares/error-handler";
 import { emailService, PASSWORD_RESET_TOKEN_TTL_MINUTES } from "./email.service";
-import { planService } from "./plan.service";
+import { planService, toEntitlements } from "./plan.service";
 import type {
   ChangePasswordInput,
   ForgotPasswordInput,
@@ -47,7 +47,7 @@ const companySelect = {
   address: true,
   customTerms: true,
   customTermsEn: true,
-  plan: { select: { code: true, name: true } },
+  plan: { select: { code: true, name: true, features: true } },
 } as const;
 
 const toAuthUser = (user: {
@@ -71,7 +71,7 @@ const toAuthUser = (user: {
     address: string | null;
     customTerms: string | null;
     customTermsEn: string | null;
-    plan: { code: string; name: string };
+    plan: { code: string; name: string; features: Prisma.JsonValue };
   } | null;
 }): AuthUser => ({
   id: user.id,
@@ -93,6 +93,7 @@ const toAuthUser = (user: {
         defaultCurrency: user.company.defaultCurrency,
         planCode: user.company.plan.code,
         planName: user.company.plan.name,
+        pdfExport: toEntitlements(user.company.plan.features).pdfExport,
         subscriptionStatus: user.company.subscriptionStatus,
         taxId: user.company.taxId,
         phone: user.company.phone,

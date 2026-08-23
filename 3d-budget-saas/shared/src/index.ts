@@ -148,6 +148,11 @@ export interface AuthCompany {
   planCode: string;
   planName: string;
   subscriptionStatus: SubscriptionStatus;
+  // Mirrors the plan's PDF_EXPORT entitlement (see billing.service.ts#
+  // ensureFeature, the backend's actual enforcement) — lets the frontend
+  // hide the PDF export button/settings for plans without it, purely
+  // cosmetic, never the source of truth.
+  pdfExport: boolean;
   // Business info shown on the quote PDF header — all optional.
   taxId: string | null;
   phone: string | null;

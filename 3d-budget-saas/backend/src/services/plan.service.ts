@@ -16,7 +16,7 @@ interface PlanFeaturesJson {
 // Plan.features is JSONB so the admin screen can add more feature flags
 // later without a migration (same pattern as PricingSettings.extraFees).
 // Only the two flags the rest of the app actually gates on are read here.
-const toEntitlements = (value: Prisma.JsonValue): PlanEntitlements => {
+export const toEntitlements = (value: Prisma.JsonValue): PlanEntitlements => {
   const json = (value ?? {}) as PlanFeaturesJson;
   return {
     customFormulas: Boolean(json.customFormulas),

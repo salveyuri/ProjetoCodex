@@ -39,7 +39,8 @@ import {
 } from "@/components/quotes/quote-ui";
 
 export default function QuotesPage() {
-  const { isLoading: isAuthLoading, token } = useAuth();
+  const { isLoading: isAuthLoading, token, user } = useAuth();
+  const canExportPdf = user?.company?.pdfExport ?? false;
   const { t, formatMoney, formatDate } = useLanguage();
   const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [status, setStatus] = useState<QuoteStatus | "ALL">("ALL");
@@ -324,17 +325,19 @@ export default function QuotesPage() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPdfPreviewQuote({ id: quote.id, customerName: quote.customerName })
-                          }
-                          className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
-                          title={t("quotes.list.generatePdf")}
-                          aria-label={t("quotes.list.generatePdf")}
-                        >
-                          <Download className="h-4 w-4" />
-                        </button>
+                        {canExportPdf ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPdfPreviewQuote({ id: quote.id, customerName: quote.customerName })
+                            }
+                            className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"
+                            title={t("quotes.list.generatePdf")}
+                            aria-label={t("quotes.list.generatePdf")}
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                        ) : null}
                         <Link
                           href={`/dashboard/quotes/${quote.id}`}
                           className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted transition hover:border-primary hover:text-primary"

@@ -2434,3 +2434,63 @@ apagados depois.
 
 Migração nova precisa ser aplicada em produção
 (`20260822200000_add_coupon_revert_failed_template`).
+
+## 2026-08-22 (mesmo dia) - Ocultar exportação de PDF e campos de perfil para o plano Free
+
+O Yuri pediu pra esconder o botão de exportar PDF e os campos de
+perfil usados só pelo PDF (CNPJ/telefone/endereço/termos
+customizados) de quem está no plano Free - já que
+`billing.service.ts#ensureFeature("PDF_EXPORT")` já bloqueia a
+chamada no backend (`requirePlanFeature("PDF_EXPORT")` em
+`quote.routes.ts`), mas a UI continuava mostrando os dois pra todo
+mundo, resultando num botão que sempre falhava com 403 pra quem
+estava no Free.
+
+### Fonte da verdade: a entitlement do plano, não o código do plano
+
+Cogitei checar `company.planCode === "FREE"` direto no frontend, mas
+isso ficaria dessincronizado do que o backend realmente aplica -
+`Plan.features` é editável pelo admin em `/admin/plans` (JSONB, sem
+migração pra mudar), e outros planos sem custo (ex. o Cortesia, ver
+entrada de 2026-08-20) têm `pdfExport: true` mesmo não sendo "Free".
+Em vez disso, `AuthCompany.pdfExport` (novo campo em `shared/src/
+index.ts`) é populado em `auth.service.ts#toAuthUser` a partir da
+mesma função `toEntitlements()` que `plan.service.ts` já usa pra
+calcular a entitlement de verdade (exportada de lá pra reuso) - o
+frontend só lê esse boolean, nunca reimplementa a regra. Efeito
+colateral aceito: como `AuthUser` vem no JWT/sessão, uma mudança de
+plano só reflete na UI no próximo login/refresh de sessão - aceitável
+porque isso é só cosmético (esconder um botão que falharia mesmo);
+o backend continua sendo a autoridade em toda chamada real.
+
+### Onde foi escondido
+
+- `frontend/src/app/dashboard/quotes/page.tsx` - ícone de download por
+  linha na listagem.
+- `frontend/src/components/quotes/QuoteSummary.tsx` (usado por
+  `QuoteForm.tsx`, tanto criar quanto editar orçamento) - botão
+  "Gerar PDF" que aparece depois de salvar, agora só quando
+  `canExportPdf` também é `true`.
+- `frontend/src/app/dashboard/settings/page.tsx` - bloco inteiro
+  "Dados para o PDF de orçamento" (CNPJ/telefone/endereço + os dois
+  campos de termos customizados PT/EN) na aba Perfil. Os campos
+  continuam existindo no estado do formulário mesmo escondidos (só a
+  UI some) - salvar o perfil sem essa seção reenvia os valores já
+  carregados sem alterá-los, não apaga nada.
+
+### Verificação
+
+`tsc`/`lint`/`build` limpos em shared/backend/frontend. Suíte
+completa do backend: 147/147 (17 arquivos, 4 lotes menores - ver
+achado de crash nativo na entrada anterior). Nenhum teste automatizado
+novo (mudança é só condicional de renderização no frontend, sem lógica
+nova pra testar - o gate de verdade já era testado no backend antes
+desta sessão).
+
+Verificado ao vivo, ponta a ponta: criei uma conta nova (plano Free
+por padrão), confirmei que a seção de PDF sumiu do Perfil, cadastrei
+uma máquina/material e criei um orçamento - nem a listagem nem a tela
+de editar mostraram o botão de PDF. Promovi a mesma empresa pro plano
+Pro direto no banco (mudança de teste, revertida junto com a limpeza)
+e logei de novo - a seção do Perfil e os dois botões de PDF
+reapareceram. Conta e dados de teste apagados depois.

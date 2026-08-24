@@ -139,8 +139,18 @@ export class WebhookController {
       }
 
       if (!company) {
+        // Temporary extra detail (externalReference/subscription as Asaas
+        // actually sent them) while tracking down a real "no matching
+        // company" miss on a fresh first-payment webhook — see
+        // Contextos/Conhecimento.md. Safe to trim back down once resolved.
         logger.warn(
-          { event, asaasPaymentId: payment.id },
+          {
+            event,
+            asaasPaymentId: payment.id,
+            externalReference: payment.externalReference,
+            subscription: payment.subscription,
+            foundCheckout: checkout !== null,
+          },
           "Asaas webhook: no matching company for this payment",
         );
         response.status(200).json({ received: true });

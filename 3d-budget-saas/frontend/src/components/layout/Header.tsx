@@ -1,9 +1,10 @@
 "use client";
 
-import { LogOut, Menu, Search } from "lucide-react";
+import { Download, LogOut, Menu, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -13,6 +14,7 @@ export const Header = ({ onToggleSidebar }: HeaderProps) => {
   const router = useRouter();
   const { logout } = useAuth();
   const { t } = useLanguage();
+  const { canInstall, promptInstall } = useInstallPrompt();
 
   const handleLogout = () => {
     logout();
@@ -42,6 +44,18 @@ export const Header = ({ onToggleSidebar }: HeaderProps) => {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          {canInstall ? (
+            <button
+              type="button"
+              title={t("header.installApp")}
+              aria-label={t("header.installApp")}
+              onClick={promptInstall}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-muted transition hover:border-primary hover:text-primary"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">{t("header.installApp")}</span>
+            </button>
+          ) : null}
           <button
             type="button"
             title={t("header.logout")}

@@ -2842,3 +2842,110 @@ esta sessão era mesmo só do browser automatizado da ferramenta, não do
 código - descartada como preocupação (já tinha sido descartado bug de
 Turbopack/dev-mode e de CORS/protocolo/secure-context antes disso; só
 faltava a confirmação num Chrome de verdade).
+
+## 2026-08-24 (mesmo dia) - Botão "Instalar app" dentro da UI
+
+O Yuri confirmou que a instalação funciona (item acima), mas reportou
+que o banner automático de instalação do Chrome não apareceu no
+primeiro acesso. Expliquei que isso é esperado: o menu manual "Instalar
+app" do Chrome já fica disponível assim que os critérios base (manifest
++ service worker + ícones + HTTPS) são satisfeitos, mas o banner
+automático (mini-infobar) exige adicionalmente uma heurística de
+engajamento por origem, acumulada ao longo de visitas àquele navegador -
+não é bug, só não tinha disparado ainda. Ele aprovou adicionar um botão
+próprio como alternativa, pra não depender do usuário achar o menu do
+Chrome sozinho.
+
+Implementado via o evento `beforeinstallprompt` do Chromium:
+`frontend/src/hooks/useInstallPrompt.ts` (novo) escuta esse evento (com
+`preventDefault()`, guardando a referência pra disparar depois sob
+demanda) e `appinstalled` (pra sumir o botão assim que o app for
+instalado por qualquer via - inclusive o menu nativo). `Header.tsx`
+mostra um botão "Instalar app" (`Download` do lucide-react) só quando
+`canInstall` é true - nunca aparece em navegadores sem suporte ao
+evento (Safari/iOS, Firefox) nem quando o app já está instalado. Visível
+tanto no mobile quanto no desktop (ícone só no mobile, ícone+texto a
+partir de `sm:`), diferente do botão de logout que já era
+`hidden sm:inline-flex` - decisão deliberada, já que instalar é
+justamente mais relevante no celular.
+
+Não dá pra testar o disparo real do evento no browser desta ferramenta
+(mesma limitação de tooling já documentada pro service worker acima -
+`beforeinstallprompt` também não disparou aqui). Verificado que o botão
+fica corretamente ausente quando o evento não dispara (comportamento
+default seguro) - falta confirmação do Yuri num Chrome de Android de
+verdade pra fechar o ciclo.
+
+## 2026-08-24 (mesmo dia) - Bug: campo numérico "grudava" no 0 e não aceitava vírgula decimal
+
+O Yuri reportou, testando principalmente pelo celular: campos numéricos
+da tela de Configurações sempre mostravam "0", e digitar por cima não
+substituía - "12" virava "012". Também pediu pra aceitar "," além de "."
+como separador decimal nesses campos.
+
+### Causa
+
+Os campos numéricos de Configurações (`frontend/src/app/dashboard/
+settings/page.tsx`) usavam `<input type="number">` de duas formas:
+
+- `NumberField` (aba Custos Fixos) ligava o `value` do input direto a um
+  `number` do estado React, sempre iniciando em `0` (`defaultSettings`) -
+  então todo campo ainda não configurado mostrava literalmente "0".
+- `TextField` com `type="number"` (abas Impressoras/Materiais) ligava a
+  uma string guardada no form (`"120"`, `"3000"` etc., ou `String(...)`
+  do valor de um item existente ao editar).
+
+`<input type="number">` nativo tem dois problemas conhecidos e sem
+solução dentro do próprio tipo: (1) só aceita "." como separador
+decimal, "," é rejeitado pelo navegador; (2) em teclados numéricos
+mobile (sobretudo Android), o cursor nem sempre fica posicionado no fim
+do valor já existente ao focar o campo - digitar sobre um valor
+existente insere em vez de substituir, o que com um "0" já exibido
+produz exatamente o sintoma relatado.
+
+### Correção
+
+Os dois campos (`TextField` em modo numérico e `NumberField`) passaram
+a usar `type="text"` com `inputMode="decimal"` (mantém o teclado
+numérico mobile, mas sem as limitações do tipo nativo) e:
+
+- `onFocus` seleciona todo o conteúdo do campo (`event.target.select()`)
+  - resolve o "grudar no 0" independente do mecanismo exato do teclado:
+    a primeira tecla digitada sempre substitui o valor inteiro, nunca
+    insere no meio.
+- Validação via regex (`DECIMAL_INPUT_PATTERN = /^\d*[.,]?\d*$/`) aceita
+  dígitos e no máximo um separador (`.` ou `,`), rejeitando qualquer
+  outro caractere.
+- `,` é normalizado pra `.` antes de virar o valor real usado pelo
+  resto do código (`Number(...)` no submit dos formulários de
+  máquina/material, ou o `number` passado pro `onChange` do
+  `NumberField`) - o campo aceita os dois, mas o dado gravado é sempre
+  com ponto.
+
+`NumberField` precisou de um cuidado a mais por ser controlado por um
+`number` (não uma string, como o `TextField`): guarda o texto exibido
+num `useState` próprio (não deriva mais diretamente do `number` a cada
+render, senão perderia a `,` ou o `.` que o usuário acabou de digitar
+antes da parte decimal), e usa um `useRef` (`lastEmitted`) pra
+diferenciar "o valor mudou porque este campo mesmo emitiu" (não
+resincroniza - senão apagaria o separador digitado) de "o valor mudou
+de fora" (troca de aba, dado recarregado da API - aí sim resincroniza o
+texto exibido a partir do número).
+
+### Verificação
+
+`tsc`/lint/build limpos. Testado ao vivo (dev local, formulário real):
+digitar "12" sobre um campo com "0" (Custos Fixos) produz "12", não
+"012"; digitar "7,5" é aceito e convertido corretamente; salvo via
+`PUT /api/settings` confirmado no payload real da rede
+(`{"paintingHourRate":12,"finishingHourRate":7.5,...}`); recarregada a
+página, os valores voltam formatados com "." (`7.5`), confirmando que a
+gravação e a exibição pós-reload estão certas. Mesmo teste repetido no
+formulário de Nova Máquina (`TextField` numérico): "3000" selecionado
+inteiro ao focar, substituído por "1999,90" digitado, normalizado pra
+"1999.90". Não foi possível reproduzir o comportamento exato do teclado
+touch do Android nesta ferramenta (mesma limitação de tooling já
+documentada nesta sessão) - a correção ataca a causa estrutural
+(seleção ao focar + tipo de input) que é independente do navegador/
+dispositivo, então deve valer lá também, mas fica pendente confirmação
+do Yuri no celular de verdade.

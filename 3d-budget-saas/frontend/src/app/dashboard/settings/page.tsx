@@ -26,6 +26,7 @@ import {
   Zap,
 } from "lucide-react";
 import {
+  ChangeEvent,
   FormEvent,
   useCallback,
   useEffect,
@@ -1380,6 +1381,11 @@ const MachineNameAutocomplete = ({
   );
 };
 
+// Aceita dígitos e no máximo um separador decimal (. ou ,) — usado tanto
+// pra validar o que o usuário digitou quanto pra permitir campo vazio
+// enquanto ele ainda está digitando (ex.: "12," antes do dígito seguinte).
+const DECIMAL_INPUT_PATTERN = /^\d*[.,]?\d*$/;
+
 const TextField = ({
   label,
   value,
@@ -1392,19 +1398,43 @@ const TextField = ({
   onChange: (value: string) => void;
   type?: "text" | "number";
   step?: string;
-}) => (
-  <label className="grid min-w-0 gap-2 text-sm font-medium">
-    {label}
-    <input
-      type={type}
-      step={step}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      required
-      className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
-    />
-  </label>
-);
+}) => {
+  const isNumber = type === "number";
+
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const raw = event.target.value;
+    if (!isNumber) {
+      onChange(raw);
+      return;
+    }
+    // input type="text" aqui (não "number") de propósito: o <input
+    // type="number"> nativo não aceita "," como separador decimal e, no
+    // teclado numérico do Android, o cursor às vezes não fica no fim do
+    // valor existente — digitar sobre um campo com "0" vira "012" em vez
+    // de substituir. Selecionar tudo no foco (abaixo) resolve isso.
+    if (!DECIMAL_INPUT_PATTERN.test(raw)) return;
+    onChange(raw.replace(",", "."));
+  };
+
+  return (
+    <label className="grid min-w-0 gap-2 text-sm font-medium">
+      {label}
+      <input
+        type={isNumber ? "text" : type}
+        inputMode={isNumber ? "decimal" : undefined}
+        step={step}
+        value={value}
+        onChange={handleChange}
+        onFocus={isNumber ? (event) => event.target.select() : undefined}
+        required
+        className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+      />
+    </label>
+  );
+};
+
+const formatNumberForInput = (value: number): string =>
+  String(Number.isFinite(value) ? value : 0);
 
 const NumberField = ({
   label,
@@ -1415,20 +1445,46 @@ const NumberField = ({
   value: number;
   onChange: (value: number) => void;
 }) => {
-  const safeValue = Number.isFinite(value) ? value : 0;
+  const [text, setText] = useState(() => formatNumberForInput(value));
+  // Guarda o último número que ESTE campo emitiu, pra distinguir "o valor
+  // mudou porque eu mesmo chamei onChange" (não reformatar, senão apaga o
+  // "," que o usuário acabou de digitar) de "o valor mudou de fora" (ex.:
+  // troca de aba, dados recarregados da API — aí sim precisa ressincronizar).
+  const lastEmitted = useRef(value);
+
+  useEffect(() => {
+    if (value !== lastEmitted.current) {
+      lastEmitted.current = value;
+      setText(formatNumberForInput(value));
+    }
+  }, [value]);
+
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const raw = event.target.value;
+    if (!DECIMAL_INPUT_PATTERN.test(raw)) return;
+    setText(raw);
+    const normalized = raw.replace(",", ".");
+    const parsed = normalized === "" ? 0 : Number(normalized);
+    if (Number.isFinite(parsed)) {
+      lastEmitted.current = parsed;
+      onChange(parsed);
+    }
+  };
+
+  const handleBlur = () => {
+    setText(formatNumberForInput(lastEmitted.current));
+  };
 
   return (
     <label className="grid min-w-0 gap-2 text-sm font-medium">
       {label}
       <input
-        type="number"
-        step="0.01"
-        min="0"
-        value={safeValue}
-        onChange={(event) => {
-          const nextValue = Number(event.target.value);
-          onChange(Number.isFinite(nextValue) ? nextValue : 0);
-        }}
+        type="text"
+        inputMode="decimal"
+        value={text}
+        onChange={handleChange}
+        onFocus={(event) => event.target.select()}
+        onBlur={handleBlur}
         required
         className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
       />

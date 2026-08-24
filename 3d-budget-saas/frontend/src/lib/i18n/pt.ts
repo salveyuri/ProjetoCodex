@@ -29,6 +29,7 @@ export const pt = {
   "nav.closeMenu": "Fechar menu",
 
   "header.search": "Buscar orcamentos, materiais, clientes",
+  "header.installApp": "Instalar app",
   "header.logout": "Sair",
 
   "quote.status.draft": "Rascunho",

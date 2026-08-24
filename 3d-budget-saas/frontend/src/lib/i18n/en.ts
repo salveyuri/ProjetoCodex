@@ -31,6 +31,7 @@ export const en: Record<TranslationKey, string> = {
   "nav.closeMenu": "Close menu",
 
   "header.search": "Search quotes, materials, customers",
+  "header.installApp": "Install app",
   "header.logout": "Log out",
 
   "quote.status.draft": "Draft",

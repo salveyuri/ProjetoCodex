@@ -493,14 +493,28 @@ Passo") em 2026-08-12.
       apareceu na primeira visita — esperado, depende do score de
       engajamento do Chrome com o site, não é bug. Ver
       `Contextos/Decisoes.md` (2026-08-24).
-- [ ] Botão "Instalar app" dentro da própria interface (escuta
-      `beforeinstallprompt`, mostra um botão quando o Chrome sinaliza que
-      está instalável) — deixaria menos dependente do usuário achar a
-      opção no menu do Chrome. Melhoria opcional, não implementada ainda;
-      Yuri avisado, decide se quer.
+- [x] Botão "Instalar app" dentro da própria interface — implementado em
+      2026-08-24 (mesmo dia) via `useInstallPrompt` (escuta
+      `beforeinstallprompt`/`appinstalled`), botão no `Header`. Não foi
+      possível confirmar o disparo real do evento no browser desta
+      ferramenta (mesma limitação de tooling do `sw.js`) — falta o Yuri
+      confirmar num Android de verdade. Ver `Contextos/Decisoes.md`
+      (2026-08-24).
 - [ ] Publicar na Play Store (TWA) — deliberadamente fora desta rodada
       (decisão do Yuri). Exigiria conta Google Play Developer paga dele
       + Digital Asset Links + Bubblewrap. Revisitar se ele quiser.
+
+## Bug corrigido: campos numéricos de Configurações (2026-08-24, mesmo dia)
+
+- [x] Campo "grudava" no "0" ao digitar por cima (sobretudo no celular,
+      "12" virava "012") e decimal não aceitava "," — só ".". Corrigido
+      trocando `<input type="number">` por `type="text"` +
+      `inputMode="decimal"` com seleção total no foco e normalização de
+      "," para "." nos campos de Custos Fixos/Impressoras/Materiais
+      (`frontend/src/app/dashboard/settings/page.tsx`). Testado ao vivo
+      contra a API real (dev local); falta o Yuri confirmar no celular
+      de verdade que o sintoma sumiu. Ver `Contextos/Decisoes.md`
+      (2026-08-24).
 
 ## Próximo passo geral
 

@@ -39,6 +39,9 @@ services:
       ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:?set ASAAS_WEBHOOK_TOKEN in .env, gere com openssl rand -hex 32}
       RESEND_API_KEY: ${RESEND_API_KEY:?set RESEND_API_KEY in .env — chave do Resend}
       EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-Pricify3D <system@pricify3d.com>}
+      # Opcional — vazio em produção de propósito. Só o ambiente de dev/
+      # staging preenche isso (ver docker-compose.dev.yml).
+      EMAIL_SUBJECT_PREFIX: ${EMAIL_SUBJECT_PREFIX:-}
       # Opcional — ver .env.example. Preenche depois de rodar `docker
       # compose exec backend npm run resend:register-webhook`.
       RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET:-}

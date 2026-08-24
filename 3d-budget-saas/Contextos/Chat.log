@@ -2621,3 +2621,24 @@ testaram contra o formato real do Asaas).
 - Ainda falta: testar assinatura completa de novo no dev com a correcao
   aplicada, e decidir com o Yuri quando subir essa correcao em producao
   (urgente).
+
+## 2026-08-24 (mesmo dia) - Prefixo [DESENVOLVIMENTO] nos e-mails do ambiente de dev
+
+Pedido do Yuri: todo e-mail enviado pelo ambiente de dev sair com
+"[DESENVOLVIMENTO]" antes do assunto, pra nunca confundir com um e-mail
+real (ainda mais relevante ja que o dev reusa a mesma RESEND_API_KEY de
+producao).
+
+- Nova variavel opcional EMAIL_SUBJECT_PREFIX (env.ts) - NODE_ENV nao
+  serve pra diferenciar dev/producao aqui (os dois ja sao "production"
+  de proposito). Vazia em producao, "[DESENVOLVIMENTO]" no
+  .env.dev.example. Aplicada num unico lugar em email.service.ts#send,
+  logo depois de renderizar o assunto - cobre todo envio real e o
+  "Testar e-mail" do admin de graca.
+- Precisou passar a variavel tambem nos dois docker-compose (nao basta
+  botar no .env, o compose so repassa o que esta explicito no
+  environment:). De quebra, corrigi RESEND_API_KEY no
+  docker-compose.dev.yml pra `:?` obrigatorio (era `:-` opcional,
+  desatualizado desde o achado de mais cedo hoje).
+- tsc/lint limpos, suite de e-mail (22 testes) sem alteracao de
+  comportamento (ambiente de teste nao define a variavel).

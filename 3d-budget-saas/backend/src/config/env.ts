@@ -126,6 +126,12 @@ const resolveResendApiKey = (): string => {
 const resolveEmailFromAddress = (): string =>
   process.env.EMAIL_FROM_ADDRESS ?? "Pricify3D <system@pricify3d.com>";
 
+// Optional — prepended to every outgoing email subject when set (e.g.
+// "[DESENVOLVIMENTO]" in the dev/staging environment, so nobody mistakes
+// a test send for a real one in their inbox). Empty in production.
+const resolveEmailSubjectPrefix = (): string =>
+  process.env.EMAIL_SUBJECT_PREFIX?.trim() ?? "";
+
 // Signing secret Resend generates when the webhook endpoint is created
 // (see backend/scripts/register-resend-webhook.ts) — verified via the
 // `svix` package against the svix-id/svix-timestamp/svix-signature headers
@@ -161,5 +167,6 @@ export const env = {
   asaasWebhookToken: resolveAsaasWebhookToken(),
   resendApiKey: resolveResendApiKey(),
   emailFromAddress: resolveEmailFromAddress(),
+  emailSubjectPrefix: resolveEmailSubjectPrefix(),
   resendWebhookSecret: resolveResendWebhookSecret(),
 };

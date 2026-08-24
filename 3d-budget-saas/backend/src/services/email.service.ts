@@ -188,7 +188,13 @@ export class EmailService {
         logoUrl: `${env.appBaseUrl}/logo_full.webp`,
         ...variables,
       };
-      const subject = substituteSubject(template.subject, allVariables);
+      const renderedSubject = substituteSubject(template.subject, allVariables);
+      // EMAIL_SUBJECT_PREFIX is only set in dev/staging (e.g.
+      // "[DESENVOLVIMENTO]") — empty string in production, so this is a
+      // no-op there.
+      const subject = env.emailSubjectPrefix
+        ? `${env.emailSubjectPrefix} ${renderedSubject}`
+        : renderedSubject;
       const html = substituteHtml(template.bodyHtml, allVariables);
       const result = await resendClient.send({ to, subject, html });
 

@@ -54,11 +54,17 @@ services:
       ASAAS_ENV: ${ASAAS_ENV:-sandbox}
       ASAAS_API_KEY: ${ASAAS_API_KEY:?set ASAAS_API_KEY in .env — chave SANDBOX do Asaas}
       ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:?set ASAAS_WEBHOOK_TOKEN in .env, gere com openssl rand -hex 32}
-      # Opcional aqui de propósito — sem chave, resend-client.ts só loga e
-      # não manda nada (mesmo comportamento do dev local hoje). Preencha
-      # se quiser testar envio de e-mail de verdade neste ambiente.
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      # Obrigatória mesmo neste ambiente: NODE_ENV=production (acima) faz
+      # resolveResendApiKey() em env.ts travar o boot sem ela, sem olhar
+      # pro ASAAS_ENV — achado real em 2026-08-24 (backend em crash loop),
+      # ver Contextos/Decisoes.md. Pode reusar a mesma chave de produção
+      # (Resend não tem modo sandbox).
+      RESEND_API_KEY: ${RESEND_API_KEY:?set RESEND_API_KEY in .env — obrigatoria mesmo em dev, ver Contextos/Decisoes.md 2026-08-24}
       EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-Pricify3D <system@pricify3d.com>}
+      # Opcional — só em dev/staging de propósito. Prepende ex.
+      # "[DESENVOLVIMENTO]" no assunto de todo e-mail enviado, pra nunca
+      # confundir um envio de teste com um real na caixa de entrada.
+      EMAIL_SUBJECT_PREFIX: ${EMAIL_SUBJECT_PREFIX:-}
       RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET:-}
     ports:
       - "127.0.0.1:3011:3001"

@@ -242,6 +242,7 @@ pendentes).
 | `ASAAS_API_KEY` | Chave de API do Asaas (header `access_token` em toda chamada). Obrigatória em produção (boot falha se ausente). Adicionado em 2026-08-13. |
 | `ASAAS_WEBHOOK_TOKEN` | Segredo que escolhemos e cadastramos também no lado do Asaas ao criar o webhook — verificado contra o header `asaas-access-token` de cada chamada recebida em `POST /api/webhooks/asaas`. Obrigatório em produção. Adicionado em 2026-08-13. |
 | `RESEND_WEBHOOK_SECRET` | Segredo que o **Resend** gera (não escolhemos) ao criar o webhook via `npm run resend:register-webhook` — verificado via `svix` nos headers `svix-id/svix-timestamp/svix-signature` de `POST /api/webhooks/resend`. **Opcional mesmo em produção** (diferente do `ASAAS_WEBHOOK_TOKEN`): sem ela, a rota só confirma recebimento sem processar — só deixa de preencher a coluna "Entrega" em `/admin/email-templates`, nunca trava o boot nem o envio de e-mail. Adicionado em 2026-08-19. |
+| `EMAIL_SUBJECT_PREFIX` | Opcional — quando definida, prepende esse texto (mais um espaço) no assunto de todo e-mail enviado (`email.service.ts#send`), incluindo os de teste. Vazia em produção; o `.env.dev.example` já vem com `"[DESENVOLVIMENTO]"` pra nunca confundir um e-mail de teste com um real na caixa de entrada. Adicionado em 2026-08-24. |
 
 ### Limitação conhecida: testar o checkout do Asaas localmente
 

@@ -2750,3 +2750,33 @@ exatamente a causa. Falta confirmar com um novo teste de assinatura
 completo no dev, agora com a correção aplicada, que o plano ativa de
 verdade - e decidir com o Yuri quando aplicar essa mesma correção em
 produção (urgente, dado o impacto).
+
+## 2026-08-24 (mesmo dia) - Prefixo "[DESENVOLVIMENTO]" no assunto dos e-mails do ambiente de dev
+
+O Yuri pediu pra todo e-mail enviado pelo ambiente de dev sair com
+`[DESENVOLVIMENTO]` antes do assunto - pra nunca confundir um e-mail de
+teste com um real na caixa de entrada (mais relevante ainda depois da
+decisão de reusar a mesma `RESEND_API_KEY` de produção nesse ambiente,
+ver entrada de 2026-08-24 acima sobre `RESEND_API_KEY`).
+
+### Por que uma variável de ambiente, não uma checagem de `NODE_ENV`
+
+`NODE_ENV` já é `production` nos dois ambientes de propósito (cookies
+seguros, erro/health discretos - ver decisão do `RESEND_API_KEY`
+obrigatório), então não dá pra usá-lo aqui pra diferenciar dev de
+produção. Nova variável opcional `EMAIL_SUBJECT_PREFIX` (`env.ts`) -
+vazia por padrão (produção nunca define), `docker-compose.dev.yml`
+passa `"[DESENVOLVIMENTO]"` via `.env.dev.example`. Aplicado num único
+lugar (`email.service.ts#send`, logo após renderizar o assunto do
+template) - todo envio passa por ali, incluindo `sendTest()`
+("Testar e-mail" no admin), então nada precisa saber sobre o prefixo
+individualmente. `EmailLog.subject` grava o assunto já com o prefixo
+(reflete o que foi realmente enviado).
+
+### Verificação
+
+`tsc`/lint limpos. Suíte de e-mail (22 testes) passou sem alteração -
+ambiente de teste não define `EMAIL_SUBJECT_PREFIX`, então o
+comportamento observado é idêntico a antes (confirma que produção não é
+afetada por padrão). Falta o Yuri fazer o deploy no ambiente de dev e
+conferir um e-mail de teste chegando com o prefixo.

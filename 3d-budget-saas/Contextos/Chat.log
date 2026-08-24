@@ -2694,3 +2694,28 @@ rodada (sem TWA/Play Store, isso fica pra depois se ele quiser).
   nao dispara no browser automatizado desta ferramenta (mesma limitacao
   ja vista pro service worker) - falta confirmacao do Yuri no Android
   de verdade pros dois itens.
+- 2026-08-24 (mesmo dia): Yuri mandou video do celular de verdade
+  mostrando que o bug do "0 grudado" continuava ("012" ao digitar "12")
+  e reportou que digitar "." apagava o conteudo do campo. Extrai frames
+  do video com ffmpeg (instalado via imageio-ffmpeg so pra isso) pra
+  diagnosticar sem conseguir reproduzir teclado touch real na
+  ferramenta. Achado: o "," sendo aceito confirmou que o fix anterior
+  ESTAVA deployado (nao era codigo antigo); o problema real era
+  `event.target.select()` no foco nao sobrevivendo ao posicionamento
+  assincrono do cursor pelo teclado Android (cursor ficava ANTES do
+  "0"), e pior, quando o select() funcionava (desktop), ele causava o
+  bug do "." apagando tudo (substituia o valor inteiro selecionado em
+  vez de inserir o "." no meio). Corrigido removendo o select() de vez
+  e atacando a causa: enquanto o valor for exatamente 0, o campo mostra
+  vazio (placeholder "0") em vez do caractere - sem "0" no DOM pra
+  brigar com o proximo digito, o bug fica estruturalmente impossivel,
+  independente do teclado/navegador. `TextField` numerico ganhou o
+  mesmo buffer local que o `NumberField` ja tinha (senao um "0" digitado
+  explicitamente sumiria sozinho no proximo render). tsc/lint/build
+  limpos; verificado simulando digitacao real via JS (setter nativo +
+  dispatchEvent('input'), aciona o onChange de verdade do React) no dev
+  local: "1"+"2" a partir de vazio da "12" (nunca "012"); "," e "5" dao
+  "12,5" sem reformatar no meio, vira "12.5" ao perder o foco; digitar
+  "." no MEIO de um valor ja preenchido ("12") insere normal ("1.52"),
+  nao apaga mais nada; PUT confirmado com os numeros certos no payload.
+  Falta o Yuri confirmar no Android de verdade.

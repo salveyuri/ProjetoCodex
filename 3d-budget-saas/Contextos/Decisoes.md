@@ -2949,3 +2949,92 @@ documentada nesta sessão) - a correção ataca a causa estrutural
 (seleção ao focar + tipo de input) que é independente do navegador/
 dispositivo, então deve valer lá também, mas fica pendente confirmação
 do Yuri no celular de verdade.
+
+## 2026-08-24 (mesmo dia) - Correção: `select()` no foco resolvia o "0 grudado" mas causava outro bug pior
+
+O Yuri mandou um vídeo do celular de verdade (Android/Chrome, contra
+`dev.pricify3d.com`) mostrando que o bug persistia: campo "Hora pintura"
+foi de "0" pra "012" digitando "1" e "2" (exatamente o sintoma original),
+e reportou que digitar "." também apagava o conteúdo do campo.
+
+### Investigação
+
+Extraí frames do vídeo (`ffmpeg` via `imageio-ffmpeg`, instalado
+temporariamente com `py -m pip install imageio-ffmpeg` só pra esse
+diagnóstico) pra ver exatamente o que a tela mostrava quadro a quadro,
+já que não dava pra reproduzir o teclado touch real do Android na
+ferramenta de automação. Dois achados:
+
+1. O campo aceitava "," normalmente (`"012,5"` aparecia certinho,
+   crescendo caractere por caractere) - isso só é possível com
+   `type="text"`, então a correção da rodada anterior **estava
+   deployada e rodando**, não era código antigo.
+2. Ao focar um campo com "0", o vídeo mostra o cursor (alça de toque do
+   Android) posicionado **antes** do "0", não uma seleção destacada
+   cobrindo o caractere - ou seja, o `event.target.select()` no
+   `onFocus` **não estava sobrevivendo** ao posicionamento assíncrono do
+   cursor que o teclado virtual do Android faz depois do evento de foco.
+   Digitar por cima continuava inserindo em vez de substituir.
+
+Mais grave: o próprio `select()`, quando ele SOBREVIVE (funciona em
+navegador desktop, por exemplo), tem um efeito colateral que bate direto
+com a segunda queixa do Yuri. Se o campo já tinha um valor de verdade
+(ex.: "35") e o usuário focava pra completar um decimal (ex.: digitar
+"." no meio pra virar "3.5"), a seleção-tudo-no-foco fazia o "." digitado
+**substituir o campo inteiro**, sobrando só "." sozinho - exatamente
+"apaga o conteúdo".
+
+### Correção de verdade
+
+`event.target.select()` foi **removido** dos dois campos
+(`TextField` numérico e `NumberField`, em
+`frontend/src/app/dashboard/settings/page.tsx`). Em vez de tentar
+selecionar/substituir de forma confiável (o que se mostrou não dar pra
+garantir em teclado touch real, e ainda ser prejudicial pra edição
+normal), a correção ataca a causa de um jeito que não depende de nenhuma
+API de seleção: **enquanto o valor commitado for exatamente zero, o
+campo mostra vazio** (com `placeholder="0"`) em vez do caractere "0" -
+não existe nenhum "0" no DOM pra "brigar" com o primeiro dígito digitado,
+então o problema não pode acontecer estruturalmente, independente de
+como o navegador/teclado posiciona o cursor.
+
+- `NumberField`: `zeroNumberAsEmpty(value)` substitui
+  `formatNumberForInput` como formatação padrão (mantém o helper
+  original, só adiciona o "vira vazio se for 0" por cima).
+- `TextField` (modo numérico): ganhou o mesmo tratamento
+  (`zeroStringAsEmpty`), incluindo o mesmo padrão de buffer local
+  (`numericText` + `lastEmitted` + resync só quando o valor muda de
+  fora) que o `NumberField` já usava - precisa pra não apagar o "," que
+  o usuário acabou de digitar a cada re-render. Antes esse campo não
+  precisava de buffer (o valor exibido era direto a prop `value`, sem
+  passar por `Number()`), mas digitar um "0" explícito, sem buffer,
+  faria o campo sumir imediatamente no próprio keystroke seguinte -
+  então unificou com o mesmo padrão do `NumberField`.
+- `required` foi removido dos dois: campo vazio agora é um estado válido
+  (significa 0), não incompleto - manter `required` bloquearia o submit
+  nativo do formulário nesse caso.
+
+### Verificação
+
+`tsc`/lint/build limpos de novo. Como a ferramenta de automação não
+reproduz o teclado touch real (mesma limitação já documentada), verifiquei
+a lógica simulando digitação caractere-a-caractere via JS (setter nativo
+de `<input>` + `dispatchEvent(new Event('input'))`, que aciona o
+`onChange` de verdade do React, igual um teclado real dispararia) direto
+no `dev` local:
+
+- Campo zerado, `value=""`/`placeholder="0"` confirmado no DOM.
+- Digitar "1" depois "2" caractere a caractere a partir do vazio produz
+  `"1"` → `"12"` (nunca "012" - não tem "0" pra inserir ao lado).
+- Digitar "," seguido de "5" produz `"12,"` → `"12,5"`, sem reformatar
+  no meio do processo; ao perder o foco vira `"12.5"`.
+- Posicionar o cursor NO MEIO de um valor já preenchido ("12") e digitar
+  "." depois "5" produz `"1.52"` (inserção normal, nada apagado) -
+  confirma que o bug do "." apagando o campo não pode mais acontecer,
+  já que não seleciona mais nada no foco.
+- `PUT /api/settings` confirmado com os valores certos no payload:
+  `{"paintingHourRate":1.52,...,"cardFeePercent":12.5,...}`.
+
+Fica pendente o Yuri confirmar no Android de verdade que sumiu de vez -
+a simulação via JS é fiel ao `onChange` do React, mas não reproduz 100%
+as particularidades de um teclado touch físico.

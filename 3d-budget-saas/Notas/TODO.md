@@ -504,17 +504,21 @@ Passo") em 2026-08-12.
       (decisão do Yuri). Exigiria conta Google Play Developer paga dele
       + Digital Asset Links + Bubblewrap. Revisitar se ele quiser.
 
-## Bug corrigido: campos numéricos de Configurações (2026-08-24, mesmo dia)
+## Bug em correção: campos numéricos de Configurações (2026-08-24, mesmo dia)
 
-- [x] Campo "grudava" no "0" ao digitar por cima (sobretudo no celular,
-      "12" virava "012") e decimal não aceitava "," — só ".". Corrigido
-      trocando `<input type="number">` por `type="text"` +
-      `inputMode="decimal"` com seleção total no foco e normalização de
-      "," para "." nos campos de Custos Fixos/Impressoras/Materiais
-      (`frontend/src/app/dashboard/settings/page.tsx`). Testado ao vivo
-      contra a API real (dev local); falta o Yuri confirmar no celular
-      de verdade que o sintoma sumiu. Ver `Contextos/Decisoes.md`
-      (2026-08-24).
+- [ ] Campo "grudava" no "0" ao digitar por cima (sobretudo no celular,
+      "12" virava "012") e decimal não aceitava "," — só ".". Primeira
+      correção (seleção total no foco) não resolveu — Yuri mandou vídeo
+      do Android real mostrando o mesmo sintoma, e ainda revelou que
+      digitar "." apagava o campo inteiro (efeito colateral do
+      select()). Segunda correção: removido o `select()`; agora, se o
+      valor for exatamente 0, o campo mostra vazio (placeholder "0") em
+      vez do caractere — sem "0" no DOM pra atrapalhar o próximo dígito
+      (`frontend/src/app/dashboard/settings/page.tsx`, Custos
+      Fixos/Impressoras/Materiais). Verificado simulando digitação real
+      via JS no dev local (não dá pra reproduzir teclado touch na
+      ferramenta) — falta o Yuri confirmar no Android de verdade. Ver
+      `Contextos/Decisoes.md` (2026-08-24).
 
 ## Próximo passo geral
 

@@ -1386,6 +1386,22 @@ const MachineNameAutocomplete = ({
 // enquanto ele ainda está digitando (ex.: "12," antes do dígito seguinte).
 const DECIMAL_INPUT_PATTERN = /^\d*[.,]?\d*$/;
 
+// NÃO usar onFocus + .select() aqui: testado ao vivo num Android real e
+// além de não sobreviver de forma confiável ao posicionamento assíncrono
+// do cursor pelo teclado virtual (o "0" continuava sendo prefixado), selecionar
+// tudo tem um efeito colateral pior — digitar "." pra completar um decimal
+// num valor já preenchido (ex.: "35" -> "35.5") troca o campo inteiro por
+// "." sozinho, porque o "." digitado substitui a seleção inteira. A
+// correção de verdade é nunca deixar um "0" sozinho no campo pra começar:
+// enquanto o valor commitado for exatamente zero, mostra vazio (com
+// placeholder "0") em vez do caractere - não tem "0" ali pra "brigar" com
+// o primeiro dígito digitado.
+const zeroStringAsEmpty = (value: string): string => (value === "0" ? "" : value);
+const formatNumberForInput = (value: number): string =>
+  String(Number.isFinite(value) ? value : 0);
+const zeroNumberAsEmpty = (value: number): string =>
+  value === 0 ? "" : formatNumberForInput(value);
+
 const TextField = ({
   label,
   value,
@@ -1400,6 +1416,15 @@ const TextField = ({
   step?: string;
 }) => {
   const isNumber = type === "number";
+  const [numericText, setNumericText] = useState(() => zeroStringAsEmpty(value));
+  const lastEmitted = useRef(value);
+
+  useEffect(() => {
+    if (isNumber && value !== lastEmitted.current) {
+      lastEmitted.current = value;
+      setNumericText(zeroStringAsEmpty(value));
+    }
+  }, [isNumber, value]);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const raw = event.target.value;
@@ -1408,12 +1433,18 @@ const TextField = ({
       return;
     }
     // input type="text" aqui (não "number") de propósito: o <input
-    // type="number"> nativo não aceita "," como separador decimal e, no
-    // teclado numérico do Android, o cursor às vezes não fica no fim do
-    // valor existente — digitar sobre um campo com "0" vira "012" em vez
-    // de substituir. Selecionar tudo no foco (abaixo) resolve isso.
+    // type="number"> nativo não aceita "," como separador decimal.
     if (!DECIMAL_INPUT_PATTERN.test(raw)) return;
-    onChange(raw.replace(",", "."));
+    setNumericText(raw);
+    const normalized = raw.replace(",", ".");
+    lastEmitted.current = normalized;
+    onChange(normalized);
+  };
+
+  const handleBlur = () => {
+    if (isNumber) {
+      setNumericText(zeroStringAsEmpty(lastEmitted.current));
+    }
   };
 
   return (
@@ -1422,19 +1453,17 @@ const TextField = ({
       <input
         type={isNumber ? "text" : type}
         inputMode={isNumber ? "decimal" : undefined}
+        placeholder={isNumber ? "0" : undefined}
         step={step}
-        value={value}
+        value={isNumber ? numericText : value}
         onChange={handleChange}
-        onFocus={isNumber ? (event) => event.target.select() : undefined}
-        required
+        onBlur={isNumber ? handleBlur : undefined}
+        required={!isNumber}
         className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
       />
     </label>
   );
 };
-
-const formatNumberForInput = (value: number): string =>
-  String(Number.isFinite(value) ? value : 0);
 
 const NumberField = ({
   label,
@@ -1445,7 +1474,7 @@ const NumberField = ({
   value: number;
   onChange: (value: number) => void;
 }) => {
-  const [text, setText] = useState(() => formatNumberForInput(value));
+  const [text, setText] = useState(() => zeroNumberAsEmpty(value));
   // Guarda o último número que ESTE campo emitiu, pra distinguir "o valor
   // mudou porque eu mesmo chamei onChange" (não reformatar, senão apaga o
   // "," que o usuário acabou de digitar) de "o valor mudou de fora" (ex.:
@@ -1455,7 +1484,7 @@ const NumberField = ({
   useEffect(() => {
     if (value !== lastEmitted.current) {
       lastEmitted.current = value;
-      setText(formatNumberForInput(value));
+      setText(zeroNumberAsEmpty(value));
     }
   }, [value]);
 
@@ -1472,7 +1501,7 @@ const NumberField = ({
   };
 
   const handleBlur = () => {
-    setText(formatNumberForInput(lastEmitted.current));
+    setText(zeroNumberAsEmpty(lastEmitted.current));
   };
 
   return (
@@ -1481,11 +1510,10 @@ const NumberField = ({
       <input
         type="text"
         inputMode="decimal"
+        placeholder="0"
         value={text}
         onChange={handleChange}
-        onFocus={(event) => event.target.select()}
         onBlur={handleBlur}
-        required
         className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
       />
     </label>

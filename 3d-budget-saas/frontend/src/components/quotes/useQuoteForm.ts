@@ -56,6 +56,8 @@ const createEmptyForm = (): QuoteFormState => ({
   paintingHours: "",
   finishingHours: "",
   cardPayment: false,
+  adjustmentType: "",
+  adjustmentPercent: "",
   tables: [createPrintTable()],
 });
 
@@ -83,6 +85,8 @@ const toFormState = (quote: QuoteResource): QuoteFormState => ({
   paintingHours: String(quote.paintingHours),
   finishingHours: String(quote.finishingHours),
   cardPayment: quote.cardPayment,
+  adjustmentType: quote.adjustmentType ?? "",
+  adjustmentPercent: quote.adjustmentPercent ? String(quote.adjustmentPercent) : "",
   tables:
     quote.items.length > 0
       ? quote.items.map((item) =>
@@ -171,6 +175,7 @@ export const useQuoteForm = (quoteId?: string) => {
     const finishingHours = numberFromInput(form.finishingHours) || 0;
     const totalAmount = preview?.response.breakdown.finalPrice ?? 0;
     const cardFeeAmount = preview?.response.breakdown.cardFeeAmount ?? 0;
+    const adjustmentAmount = preview?.response.breakdown.adjustmentAmount ?? 0;
 
     return {
       totalWeightGrams,
@@ -179,6 +184,7 @@ export const useQuoteForm = (quoteId?: string) => {
       finishingHours,
       totalAmount,
       cardFeeAmount,
+      adjustmentAmount,
     };
   }, [form.finishingHours, form.paintingHours, form.tables, preview]);
 
@@ -275,6 +281,10 @@ export const useQuoteForm = (quoteId?: string) => {
         paintingHours: numberFromInput(form.paintingHours) || 0,
         finishingHours: numberFromInput(form.finishingHours) || 0,
         cardPayment: form.cardPayment,
+        adjustmentType: form.adjustmentType || null,
+        adjustmentPercent: form.adjustmentType
+          ? numberFromInput(form.adjustmentPercent)
+          : 0,
       };
       const response = await api.post<QuotePreviewResponse>(
         "/quotes/preview",
@@ -292,6 +302,8 @@ export const useQuoteForm = (quoteId?: string) => {
     }
   }, [
     canCalculate,
+    form.adjustmentPercent,
+    form.adjustmentType,
     form.cardPayment,
     form.finishingHours,
     form.formulaId,
@@ -363,6 +375,10 @@ export const useQuoteForm = (quoteId?: string) => {
       paintingHours: numberFromInput(form.paintingHours) || 0,
       finishingHours: numberFromInput(form.finishingHours) || 0,
       cardPayment: form.cardPayment,
+      adjustmentType: form.adjustmentType || null,
+      adjustmentPercent: form.adjustmentType
+        ? numberFromInput(form.adjustmentPercent)
+        : 0,
       items: form.tables.map((table) => ({
         modelName: table.modelName,
         weightGrams: numberFromInput(table.weightGrams),

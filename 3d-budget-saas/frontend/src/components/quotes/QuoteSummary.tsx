@@ -8,6 +8,7 @@ import {
   Download,
   Layers3,
   Paintbrush,
+  Percent,
   Save,
   Scale,
   Send,
@@ -16,6 +17,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/cn";
+import type { QuoteAdjustmentFormValue } from "./quote-form-types";
 import { SummaryLine } from "./QuoteFormFields";
 
 interface QuoteAggregate {
@@ -25,6 +27,7 @@ interface QuoteAggregate {
   finishingHours: number;
   totalAmount: number;
   cardFeeAmount: number;
+  adjustmentAmount: number;
 }
 
 interface QuoteSummaryProps {
@@ -39,6 +42,10 @@ interface QuoteSummaryProps {
   onPreviewPdf: () => void;
   cardPayment: boolean;
   onChangeCardPayment: (value: boolean) => void;
+  adjustmentType: QuoteAdjustmentFormValue;
+  onChangeAdjustmentType: (value: QuoteAdjustmentFormValue) => void;
+  adjustmentPercent: string;
+  onChangeAdjustmentPercent: (value: string) => void;
 }
 
 export const QuoteSummary = ({
@@ -53,6 +60,10 @@ export const QuoteSummary = ({
   onPreviewPdf,
   cardPayment,
   onChangeCardPayment,
+  adjustmentType,
+  onChangeAdjustmentType,
+  adjustmentPercent,
+  onChangeAdjustmentPercent,
 }: QuoteSummaryProps) => {
   const { t, formatMoney } = useLanguage();
 
@@ -82,6 +93,38 @@ export const QuoteSummary = ({
         {t("quotes.cardPayment")}
       </label>
 
+      <div className="mt-3 grid gap-3">
+        <label className="grid min-w-0 gap-2 text-sm font-medium">
+          {t("quotes.adjustmentType")}
+          <select
+            value={adjustmentType}
+            onChange={(event) =>
+              onChangeAdjustmentType(event.target.value as QuoteAdjustmentFormValue)
+            }
+            className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+          >
+            <option value="">{t("quotes.adjustmentNone")}</option>
+            <option value="DISCOUNT">{t("quotes.adjustmentDiscount")}</option>
+            <option value="SURCHARGE">{t("quotes.adjustmentSurcharge")}</option>
+          </select>
+        </label>
+
+        {adjustmentType ? (
+          <label className="grid min-w-0 gap-2 text-sm font-medium">
+            {t("quotes.adjustmentPercent")}
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              value={adjustmentPercent}
+              onChange={(event) => onChangeAdjustmentPercent(event.target.value)}
+              className="h-11 w-full min-w-0 rounded-lg border border-border bg-surface-muted px-3 outline-none focus:border-primary"
+            />
+          </label>
+        ) : null}
+      </div>
+
       <div className="mt-5 grid gap-3">
         <SummaryLine label={t("quotes.tablesCount")} value={String(tablesCount)} icon={Layers3} />
         <SummaryLine
@@ -109,6 +152,13 @@ export const QuoteSummary = ({
             label={t("quotes.cardFeeAmount")}
             value={formatMoney(aggregate.cardFeeAmount)}
             icon={CreditCard}
+          />
+        ) : null}
+        {adjustmentType ? (
+          <SummaryLine
+            label={t("quotes.adjustmentAmount")}
+            value={formatMoney(aggregate.adjustmentAmount)}
+            icon={Percent}
           />
         ) : null}
         <SummaryLine

@@ -376,6 +376,19 @@ Passo") em 2026-08-12.
       propósito ao usar uma fórmula do sistema. Nova coluna
       `Quote.systemFormulaId` guarda esse caso. Ver
       `Contextos/Decisoes.md`.
+- [x] **"Desconto/Acréscimo" por orçamento — implementado em
+      2026-08-22 (mesmo dia).** Campo novo abaixo de "Pagamento
+      Cartão": ao escolher Desconto ou Acréscimo, um percentual
+      aparece e é aplicado por cima do valor final (formula + taxa de
+      cartão) — mesmo padrão real (não estimativa) de
+      `cardPayment`/`cardFeeAmount`. `Quote.adjustmentType`/
+      `adjustmentPercent`/`adjustmentAmount`. A calculadora standalone
+      (`/dashboard/calculator`) **não** ganhou esse campo nesta rodada
+      (fora do pedido). PDF ganhou de brinde: a linha "Descontos" que
+      já existia no financial summary estava hardcoded em R$0,00 desde
+      sempre (não havia mecanismo real) — agora mostra o valor de
+      verdade, com rótulo "Acréscimo" quando for o caso. Ver
+      `Contextos/Decisoes.md`.
 
 ## Traducao do sistema (implementado em 2026-08-17)
 

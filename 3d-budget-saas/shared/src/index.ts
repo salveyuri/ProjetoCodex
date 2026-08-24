@@ -509,6 +509,10 @@ export interface ProductionSettings {
   customVariables: CustomVariableMap;
 }
 
+// "Desconto/Acréscimo" on a quote's final price — null/absent means
+// neither is applied.
+export type QuoteAdjustmentType = "DISCOUNT" | "SURCHARGE";
+
 export interface CalculationRequest {
   weightGrams: number;
   printTimeHours: number;
@@ -547,6 +551,11 @@ export interface CalculationMoneyBreakdown {
   cardFeeAmount: number;
   administrativeFeeAmount: number;
   feesTotal: number;
+  // Real amount added on top of (formula price + cardFeeAmount) when a
+  // "Desconto/Acréscimo" is set — negative for DISCOUNT, positive for
+  // SURCHARGE, 0 when neither is applied. Not an estimate, same spirit as
+  // cardFeeAmount above. Already folded into finalPrice below.
+  adjustmentAmount: number;
   finalPrice: number;
 }
 
@@ -630,6 +639,11 @@ export interface QuotePayload {
   // "Pagamento Cartão" — when true, Settings.cardFeePercent is added on
   // top of the price the formula computed. See QuoteResource.cardFeeAmount.
   cardPayment?: boolean;
+  // "Desconto/Acréscimo" — null/undefined means neither is applied.
+  // adjustmentPercent is only meaningful when adjustmentType is set. See
+  // QuoteResource.adjustmentAmount.
+  adjustmentType?: QuoteAdjustmentType | null;
+  adjustmentPercent?: number;
   items: QuoteItemPayload[];
 }
 
@@ -639,6 +653,8 @@ export interface QuotePreviewRequest {
   paintingHours?: number;
   finishingHours?: number;
   cardPayment?: boolean;
+  adjustmentType?: QuoteAdjustmentType | null;
+  adjustmentPercent?: number;
 }
 
 // Live, unsaved preview of a whole quote-in-progress — the SAME
@@ -667,6 +683,8 @@ export interface QuoteUpdatePayload {
   paintingHours?: number;
   finishingHours?: number;
   cardPayment?: boolean;
+  adjustmentType?: QuoteAdjustmentType | null;
+  adjustmentPercent?: number;
   items?: QuoteItemPayload[];
 }
 
@@ -776,6 +794,13 @@ export interface QuoteResource {
   // snapshot — not recomputed if Settings.cardFeePercent changes later).
   // 0 when cardPayment is false or the rate is 0.
   cardFeeAmount: number;
+  // "Desconto/Acréscimo" — null when neither is applied.
+  adjustmentType: QuoteAdjustmentType | null;
+  adjustmentPercent: number;
+  // The real amount adjustmentType/adjustmentPercent added to totalAmount
+  // at save time (a snapshot, signed: negative for DISCOUNT, positive for
+  // SURCHARGE). 0 when adjustmentType is null.
+  adjustmentAmount: number;
   validUntil: string;
   createdAt: string;
   updatedAt: string;

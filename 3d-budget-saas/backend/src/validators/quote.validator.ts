@@ -10,6 +10,10 @@ export const quoteStatusSchema = z.enum([
 const uuid = z.string().trim().uuid();
 const positiveNumber = z.number().finite().positive();
 const nonNegativeNumber = z.number().finite().min(0);
+const percent = z.number().finite().min(0).max(100);
+
+// "Desconto/Acréscimo" — null/undefined means neither is applied.
+const adjustmentTypeSchema = z.enum(["DISCOUNT", "SURCHARGE"]).nullable();
 
 const quoteItemSchema = z
   .object({
@@ -40,6 +44,8 @@ export const quoteCreateSchema = z
     finishingHours: nonNegativeNumber.optional(),
     horas_acabamento: nonNegativeNumber.optional(),
     cardPayment: z.boolean().optional(),
+    adjustmentType: adjustmentTypeSchema.optional(),
+    adjustmentPercent: percent.optional(),
     item: quoteItemSchema.optional(),
     items: quoteItemsSchema.optional(),
     printItems: quoteItemsSchema.optional(),
@@ -69,6 +75,8 @@ export const quoteCreateSchema = z
       paintingHours: value.paintingHours ?? value.horas_pintura ?? 0,
       finishingHours: value.finishingHours ?? value.horas_acabamento ?? 0,
       cardPayment: value.cardPayment ?? false,
+      adjustmentType: value.adjustmentType ?? null,
+      adjustmentPercent: value.adjustmentPercent ?? 0,
       items: items ?? [],
     };
   });
@@ -84,6 +92,8 @@ export const quoteUpdateSchema = z
     finishingHours: nonNegativeNumber.optional(),
     horas_acabamento: nonNegativeNumber.optional(),
     cardPayment: z.boolean().optional(),
+    adjustmentType: adjustmentTypeSchema.optional(),
+    adjustmentPercent: percent.optional(),
     item: quoteItemSchema.optional(),
     items: quoteItemsSchema.optional(),
     printItems: quoteItemsSchema.optional(),
@@ -101,6 +111,8 @@ export const quoteUpdateSchema = z
     paintingHours: value.paintingHours ?? value.horas_pintura,
     finishingHours: value.finishingHours ?? value.horas_acabamento,
     cardPayment: value.cardPayment,
+    adjustmentType: value.adjustmentType,
+    adjustmentPercent: value.adjustmentPercent,
     items:
       value.items ??
       value.printItems ??
@@ -137,6 +149,8 @@ export const quotePreviewSchema = z
     finishingHours: nonNegativeNumber.optional(),
     horas_acabamento: nonNegativeNumber.optional(),
     cardPayment: z.boolean().optional(),
+    adjustmentType: adjustmentTypeSchema.optional(),
+    adjustmentPercent: percent.optional(),
     item: quoteItemSchema.optional(),
     items: quoteItemsSchema.optional(),
     printItems: quoteItemsSchema.optional(),
@@ -163,6 +177,8 @@ export const quotePreviewSchema = z
       paintingHours: value.paintingHours ?? value.horas_pintura ?? 0,
       finishingHours: value.finishingHours ?? value.horas_acabamento ?? 0,
       cardPayment: value.cardPayment ?? false,
+      adjustmentType: value.adjustmentType ?? null,
+      adjustmentPercent: value.adjustmentPercent ?? 0,
       items: items ?? [],
     };
   });

@@ -2494,3 +2494,74 @@ de editar mostraram o botão de PDF. Promovi a mesma empresa pro plano
 Pro direto no banco (mudança de teste, revertida junto com a limpeza)
 e logei de novo - a seção do Perfil e os dois botões de PDF
 reapareceram. Conta e dados de teste apagados depois.
+
+## 2026-08-22 (mesmo dia) - Desconto/Acréscimo no orçamento
+
+O Yuri pediu um campo de "Desconto/Acréscimo" no bloco de valor
+acumulado (criação/edição de orçamento), logo abaixo de "Pagamento
+Cartão": ao escolher um dos dois, um campo de percentual aparece, e
+esse percentual é aplicado em cima do valor final do orçamento.
+
+### Onde entra no pipeline de cálculo
+
+Segue exatamente o mesmo padrão de `cardPayment`/`cardFeeAmount`
+(entrada de 2026-08-21): aplicado por último, depois de tudo (fórmula
++ taxa de cartão), como um percentual sobre esse valor - não é uma
+estimativa de exibição como `administrativeFeeAmount`/`marginAmount`,
+é o valor real, com sinal (negativo pra `DISCOUNT`, positivo pra
+`SURCHARGE`) já somado em `finalPrice`/`totalAmount`. `Quote.
+adjustmentType` (`DISCOUNT`/`SURCHARGE`/nulo - nulo é "Nenhum"),
+`adjustmentPercent` (o que o usuário digitou) e `adjustmentAmount`
+(snapshot em R$, não recalculado se o orçamento for reaberto sem
+mudar nada) - mesmo trio de campos que `cardPayment`/`cardFeeAmount`
+já usava, só que com um terceiro estado (nenhum/desconto/acréscimo)
+em vez de um boolean.
+
+`calculateAggregate` ganhou `adjustmentType`/`adjustmentPercent`
+como parâmetros **opcionais** (default `null`/`0`) - a calculadora
+standalone (`calculateQuoteBreakdown`, `/dashboard/calculator`) não
+ganhou essa feature nesta rodada (fora do que foi pedido, é uma tela
+de cálculo avulso, não de orçamento salvo) e continua chamando a
+função sem informar nada, caindo no default de "sem ajuste" de graça.
+
+### PDF: um placeholder de "Descontos" que já existia, sempre R$0,00
+
+Achado ao implementar: o financial summary do PDF
+(`quote-pdf.service.ts#drawFinancialSummary`) já tinha uma linha
+"Descontos" - mas hardcoded em `formatMoney(0, ...)`, porque não
+existia nenhum mecanismo de desconto de verdade até agora. Agora essa
+linha usa `quote.adjustmentAmount` de verdade, com o rótulo trocando
+pra "Acrescimo"/"Surcharge" quando `adjustmentType === "SURCHARGE"`
+(string nova `strings.surcharge`). `subtotal` (a linha de cima) virou
+`totalAmount - adjustmentAmount`, já que `totalAmount` gravado já
+inclui o ajuste - antes `subtotal` e `total` eram sempre o mesmo
+número. O modo SUMMARY do PDF (`drawFinancialSummarySimple`, cliente
+não vê o detalhamento) continua mostrando só o total final, sem
+mudança de comportamento, só o comentário que citava "não existe
+desconto de verdade" foi corrigido por estar desatualizado.
+
+### Verificação
+
+`tsc`/`lint`/`build` limpos em shared/backend/frontend. Suíte
+completa do backend: 147/147 (17 arquivos, 5 lotes menores por causa
+do crash nativo já documentado - `CalculationService.test.ts`
+especificamente rodou limpo em lote próprio, 48/48, sem nenhuma
+asserção existente quebrar mesmo com os campos novos no breakdown).
+Nenhum teste automatizado novo (as asserções existentes já cobrem
+`calculateAggregate` com o comportamento padrão preservado quando
+`adjustmentType` não é informado).
+
+Verificado ao vivo, ponta a ponta: criei conta nova, promovida pro
+plano Pro (só pra também conferir o PDF), cadastrei máquina/material,
+criei orçamento sem ajuste (Valor acumulado R$ 12,27) - selecionei
+"Desconto" 10% e o valor caiu pra R$ 11,04 com a linha "Desconto/
+Acréscimo aplicado: -R$ 1,23"; troquei pra "Acréscimo" mantendo os
+10% e o valor subiu pra R$ 13,50 com "+R$ 1,23" (percentual não reseta
+ao trocar de tipo). Salvei com Acréscimo 10%, reabri pra editar - tipo
+e percentual persistiram corretos. Gerei o PDF e conferi o conteúdo
+real (via download direto da API): "Subtotal R$ 12,27 / Acrescimo
+R$ 1,23 / Valor total R$ 13,50", batendo exatamente com o esperado.
+Conta e dados de teste apagados depois.
+
+Migração nova precisa ser aplicada em produção
+(`20260822210000_add_quote_price_adjustment`).

@@ -5,6 +5,7 @@ import type {
   MachineType,
   MaterialType,
   ProductionSettings,
+  QuoteAdjustmentType,
   QuoteItemCostPreview,
 } from "@3d-budget/shared";
 import { Prisma } from "@prisma/client";
@@ -161,6 +162,12 @@ export interface AggregateCalculationInput {
   customVariables: ProductionSettings["customVariables"];
   // Quote.cardPayment — see calculateAggregate's doc comment.
   cardPayment: boolean;
+  // Quote.adjustmentType/adjustmentPercent ("Desconto/Acréscimo") — optional
+  // so callers that don't offer this (the standalone calculator, via
+  // calculateQuoteBreakdown) can omit both. null/undefined type means no
+  // adjustment.
+  adjustmentType?: QuoteAdjustmentType | null;
+  adjustmentPercent?: number;
 }
 
 export interface AggregateCalculationResult {
@@ -177,6 +184,7 @@ export interface AggregateCalculationResult {
     cardFeeAmount: number;
     administrativeFeeAmount: number;
     feesTotal: number;
+    adjustmentAmount: number;
     finalPrice: number;
   };
   formula: {
@@ -215,6 +223,10 @@ export interface AggregateCalculationResult {
  *      (Quote.cardPayment, driven by the "Pagamento Cartão" checkbox on
  *      the quote form). Zero when unchecked or when cardFeePercent is 0.
  *      See Contextos/Decisoes.md (2026-08-21).
+ *   8. adjustmentAmount ("Desconto/Acréscimo") is also NOT an estimate —
+ *      applied last, as a percent of (formula price + cardFeeAmount),
+ *      signed negative for DISCOUNT / positive for SURCHARGE. Zero when
+ *      adjustmentType is null. See Contextos/Decisoes.md (2026-08-22).
  */
 export const calculateAggregate = ({
   rawCosts,
@@ -228,6 +240,8 @@ export const calculateAggregate = ({
   totalPowerConsumptionKw,
   customVariables,
   cardPayment,
+  adjustmentType = null,
+  adjustmentPercent = 0,
 }: AggregateCalculationInput): AggregateCalculationResult => {
   const materialCost = rawCosts.reduce(
     (total, item) => total.add(item.materialCost),
@@ -325,7 +339,17 @@ export const calculateAggregate = ({
   // cardFeePercent is 0, regardless of cardPayment.
   const cardFeeAmount = cardPayment ? formulaPrice.mul(cardFeeRate) : decimal(0);
   const feesTotal = cardFeeAmount.add(administrativeFeeAmount);
-  const finalPrice = formulaPrice.add(cardFeeAmount);
+  const priceBeforeAdjustment = formulaPrice.add(cardFeeAmount);
+
+  // Real amount (not an estimate) — applied last, as a percent of
+  // priceBeforeAdjustment (formula price + card fee), matching "em cima do
+  // valor acumulado/final do orçamento". Signed so it can be added
+  // straight into finalPrice below.
+  const adjustmentRate = percentToRate(adjustmentPercent);
+  const adjustmentAmount = !adjustmentType
+    ? decimal(0)
+    : priceBeforeAdjustment.mul(adjustmentRate).mul(adjustmentType === "DISCOUNT" ? -1 : 1);
+  const finalPrice = priceBeforeAdjustment.add(adjustmentAmount);
 
   return {
     breakdown: {
@@ -341,6 +365,7 @@ export const calculateAggregate = ({
       cardFeeAmount: toCurrencyNumber(cardFeeAmount),
       administrativeFeeAmount: toCurrencyNumber(administrativeFeeAmount),
       feesTotal: toCurrencyNumber(feesTotal),
+      adjustmentAmount: toCurrencyNumber(adjustmentAmount),
       finalPrice: toCurrencyNumber(finalPrice),
     },
     formula: {
@@ -446,6 +471,8 @@ export interface QuoteCalculationInput {
   paintingHours?: number;
   finishingHours?: number;
   cardPayment?: boolean;
+  adjustmentType?: QuoteAdjustmentType | null;
+  adjustmentPercent?: number;
 }
 
 export interface QuoteCalculationResult {
@@ -590,6 +617,8 @@ export class CalculationService {
       totalPowerConsumptionKw,
       customVariables: settings.customVariables,
       cardPayment: input.cardPayment ?? false,
+      adjustmentType: input.adjustmentType ?? null,
+      adjustmentPercent: input.adjustmentPercent ?? 0,
     });
 
     const items: QuoteItemCostPreview[] = resolvedItems.map((item) => ({

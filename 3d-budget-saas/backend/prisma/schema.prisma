@@ -59,6 +59,12 @@ enum QuoteStatus {
   REJECTED
 }
 
+// Null means no adjustment (the default) — see Quote.adjustmentType.
+enum QuoteAdjustmentType {
+  DISCOUNT
+  SURCHARGE
+}
+
 model User {
   id                    String   @id @default(uuid()) @db.Uuid
   email                 String   @unique
@@ -420,6 +426,14 @@ model Quote {
   // Contextos/Decisoes.md (2026-08-21).
   cardPayment      Boolean     @default(false) @map("card_payment")
   cardFeeAmount    Decimal     @default(0) @map("card_fee_amount") @db.Decimal(12, 2)
+  // "Desconto/Acréscimo" — null means neither is applied. Percent is what
+  // the user typed; amount is the real snapshot (signed: negative for
+  // DISCOUNT, positive for SURCHARGE) applied on top of totalAmount at
+  // save time, same pattern as cardPayment/cardFeeAmount above. Ver
+  // Contextos/Decisoes.md (2026-08-22).
+  adjustmentType    QuoteAdjustmentType? @map("adjustment_type")
+  adjustmentPercent Decimal              @default(0) @map("adjustment_percent") @db.Decimal(5, 2)
+  adjustmentAmount  Decimal              @default(0) @map("adjustment_amount") @db.Decimal(12, 2)
   validUntil       DateTime    @map("valid_until")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")

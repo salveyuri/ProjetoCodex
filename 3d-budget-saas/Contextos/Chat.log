@@ -2494,3 +2494,38 @@ mostrava os dois pra todo mundo.
   o botao/secao em nenhum dos 3 lugares; promovi a mesma empresa pro
   plano Pro direto no banco (teste) e os 3 reapareceram depois de
   logar de novo. Conta e dados de teste apagados depois.
+
+## 2026-08-22 (mesmo dia) - Desconto/Acrescimo no orcamento
+
+O Yuri pediu um campo "Desconto/Acrescimo" no bloco de valor acumulado
+(criacao/edicao de orcamento), abaixo de "Pagamento Cartao": ao
+escolher um dos dois, aparece um campo de percentual, aplicado em cima
+do valor final do orcamento.
+
+- Mesmo padrao de cardPayment/cardFeeAmount (2026-08-21): aplicado por
+  ultimo (depois da formula + taxa de cartao), valor real com sinal
+  (negativo pra DISCOUNT, positivo pra SURCHARGE), nao estimativa de
+  exibicao. Quote.adjustmentType (DISCOUNT/SURCHARGE/nulo) +
+  adjustmentPercent + adjustmentAmount (snapshot).
+  calculateAggregate ganhou os dois parametros como opcionais - a
+  calculadora standalone nao ganhou a feature (fora do pedido, cai no
+  default "sem ajuste" de graca).
+- Achado ao implementar: o PDF ja tinha uma linha "Descontos"
+  hardcoded em R$0,00 (nunca existia mecanismo de desconto de
+  verdade). Agora usa quote.adjustmentAmount real, com rotulo
+  trocando pra "Acrescimo" quando for o caso; subtotal virou
+  totalAmount - adjustmentAmount (antes subtotal e total eram sempre
+  iguais).
+- Suite completa: 147/147 (17 arquivos, 5 lotes menores por causa do
+  crash nativo ja documentado - CalculationService.test.ts rodou
+  limpo em lote proprio, 48/48). Nenhum teste automatizado novo (as
+  asserções existentes ja cobrem o comportamento padrao preservado).
+  `tsc`/`lint`/`build` limpos em shared/backend/frontend.
+- Verificado ao vivo: orcamento sem ajuste R$12,27 -> Desconto 10% =
+  R$11,04 (-R$1,23) -> trocando pra Acrescimo mantendo 10% = R$13,50
+  (+R$1,23, percentual nao reseta ao trocar tipo). Persistiu certo ao
+  reabrir pra editar. PDF baixado via API confirmou "Subtotal R$12,27
+  / Acrescimo R$1,23 / Valor total R$13,50". Conta e dados de teste
+  apagados depois.
+- Migracao nova precisa ser aplicada em producao
+  (`20260822210000_add_quote_price_adjustment`).

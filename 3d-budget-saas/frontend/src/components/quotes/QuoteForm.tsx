@@ -214,6 +214,10 @@ export const QuoteForm = ({ quoteId }: QuoteFormProps) => {
             onPreviewPdf={openPdfPreview}
             cardPayment={form.cardPayment}
             onChangeCardPayment={(value) => updateField("cardPayment", value)}
+            adjustmentType={form.adjustmentType}
+            onChangeAdjustmentType={(value) => updateField("adjustmentType", value)}
+            adjustmentPercent={form.adjustmentPercent}
+            onChangeAdjustmentPercent={(value) => updateField("adjustmentPercent", value)}
           />
         </form>
       </div>

@@ -64,6 +64,7 @@ const pdfStrings = {
     },
     subtotal: "Subtotal",
     discounts: "Descontos",
+    surcharge: "Acrescimo",
     total: "Valor total",
     formulaApplied: "Formula aplicada:",
     defaultFormulaName: "Formula Padrao do Sistema",
@@ -107,6 +108,7 @@ const pdfStrings = {
     },
     subtotal: "Subtotal",
     discounts: "Discounts",
+    surcharge: "Surcharge",
     total: "Total amount",
     formulaApplied: "Formula applied:",
     defaultFormulaName: "System Default Formula",
@@ -487,15 +489,20 @@ const drawFinancialSummary = (
   const margin = 48;
   const boxWidth = 220;
   const x = doc.page.width - margin - boxWidth;
-  const subtotal = quote.totalAmount;
+  // totalAmount already has adjustmentAmount folded in (see
+  // CalculationService#calculateAggregate) — subtotal is what it was
+  // before "Desconto/Acréscimo" was applied.
+  const subtotal = quote.totalAmount.sub(quote.adjustmentAmount);
+  const adjustmentLabel =
+    quote.adjustmentType === "SURCHARGE" ? strings.surcharge : strings.discounts;
 
   const currentY = ensurePageSpace(doc, y, 126);
   doc.roundedRect(x, currentY, boxWidth, 126, 10).fill(colors.soft);
 
   const rows = [
     [strings.subtotal, formatMoney(subtotal, strings)],
-    [strings.discounts, formatMoney(0, strings)],
-    [strings.total, formatMoney(subtotal, strings)],
+    [adjustmentLabel, formatMoney(quote.adjustmentAmount, strings)],
+    [strings.total, formatMoney(quote.totalAmount, strings)],
   ] as const;
 
   rows.forEach(([label, value], index) => {
@@ -544,9 +551,9 @@ const drawFinancialSummary = (
 };
 
 // SUMMARY mode's version of drawFinancialSummary — no subtotal/discounts
-// rows (both always equal the total today anyway, since there's no real
-// discount mechanism), no formula/weight/time side notes. Just the total,
-// for a client who shouldn't see the cost breakdown.
+// rows and no formula/weight/time side notes, by design (a client who
+// shouldn't see the cost breakdown, only the bottom line). totalAmount
+// already has any "Desconto/Acréscimo" folded in either way.
 const drawFinancialSummarySimple = (
   doc: PDFKit.PDFDocument,
   quote: QuotePdfRecord,

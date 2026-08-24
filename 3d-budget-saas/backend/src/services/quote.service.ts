@@ -119,6 +119,9 @@ const toQuoteResource = (quote: QuoteWithItems): QuoteResource => ({
   finishingHours: toNumber(quote.finishingHours),
   cardPayment: quote.cardPayment,
   cardFeeAmount: toNumber(quote.cardFeeAmount),
+  adjustmentType: quote.adjustmentType,
+  adjustmentPercent: toNumber(quote.adjustmentPercent),
+  adjustmentAmount: toNumber(quote.adjustmentAmount),
   validUntil: quote.validUntil.toISOString(),
   createdAt: quote.createdAt.toISOString(),
   updatedAt: quote.updatedAt.toISOString(),
@@ -233,6 +236,8 @@ export class QuoteService {
       paintingHours: input.paintingHours,
       finishingHours: input.finishingHours,
       cardPayment: input.cardPayment,
+      adjustmentType: input.adjustmentType,
+      adjustmentPercent: input.adjustmentPercent,
     });
     const totalWeightGrams = sumDecimal(input.items.map((item) => item.weightGrams));
     const totalPrintHours = sumDecimal(input.items.map((item) => item.printTimeHours));
@@ -245,6 +250,9 @@ export class QuoteService {
           systemFormulaId: result.formula.isSystem ? result.formula.id : null,
           cardPayment: input.cardPayment,
           cardFeeAmount: result.breakdown.cardFeeAmount,
+          adjustmentType: input.adjustmentType,
+          adjustmentPercent: input.adjustmentPercent,
+          adjustmentAmount: result.breakdown.adjustmentAmount,
           customerName: input.customerName,
           status: input.status as QuoteStatus,
           totalAmount: result.breakdown.finalPrice,
@@ -288,13 +296,19 @@ export class QuoteService {
       input.formulaId !== undefined ||
       input.paintingHours !== undefined ||
       input.finishingHours !== undefined ||
-      input.cardPayment !== undefined;
+      input.cardPayment !== undefined ||
+      input.adjustmentType !== undefined ||
+      input.adjustmentPercent !== undefined;
     const itemsForCalculation = input.items ?? existing.printItems.map(toQuoteItemInput);
     const formulaId =
       input.formulaId ?? existing.formulaId ?? existing.systemFormulaId ?? undefined;
     const paintingHours = input.paintingHours ?? toNumber(existing.paintingHours);
     const finishingHours = input.finishingHours ?? toNumber(existing.finishingHours);
     const cardPayment = input.cardPayment ?? existing.cardPayment;
+    const adjustmentType =
+      input.adjustmentType !== undefined ? input.adjustmentType : existing.adjustmentType;
+    const adjustmentPercent =
+      input.adjustmentPercent ?? toNumber(existing.adjustmentPercent);
 
     const result = shouldRecalculate
       ? await calculationService.calculateQuote(companyId, {
@@ -303,6 +317,8 @@ export class QuoteService {
           paintingHours,
           finishingHours,
           cardPayment,
+          adjustmentType,
+          adjustmentPercent,
         })
       : null;
     const totalWeightGrams = result
@@ -323,6 +339,9 @@ export class QuoteService {
           systemFormulaId: result ? (result.formula.isSystem ? result.formula.id : null) : undefined,
           cardPayment: input.cardPayment,
           cardFeeAmount: result?.breakdown.cardFeeAmount,
+          adjustmentType: input.adjustmentType,
+          adjustmentPercent: input.adjustmentPercent,
+          adjustmentAmount: result?.breakdown.adjustmentAmount,
           totalAmount: result?.breakdown.finalPrice,
           totalPrintHours,
           totalWeightGrams,

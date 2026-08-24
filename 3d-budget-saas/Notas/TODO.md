@@ -159,16 +159,20 @@ Passo") em 2026-08-12.
 
 ## Assinaturas via Asaas (implementado em 2026-08-13)
 
-- [ ] **🔴 URGENTE — bug crítico achado e corrigido em 2026-08-24: o
-      primeiro pagamento de uma assinatura nova nunca ativava o plano.**
+- [x] Bug crítico achado e corrigido em 2026-08-24: o primeiro pagamento
+      de uma assinatura nova nunca ativava o plano.
       `webhook.controller.ts` correlacionava via `payment.
       externalReference` (sempre `null` — o Asaas nunca propaga esse
       campo do Checkout pro pagamento, confirmado com um pagamento real
-      no sandbox), em vez de `payment.checkoutSession`. Já corrigido no
-      código (dev) — **falta**: (1) aplicar a mesma correção em
-      produção, (2) auditar produção por `Company`/`Payment` órfãos —
-      qualquer cliente que pagou de verdade no Asaas mas cujo plano
-      nunca ativou. Ver `Contextos/Decisoes.md` (2026-08-24) e
+      no sandbox), em vez de `payment.checkoutSession`. Corrigido no
+      código e **em produção desde 2026-08-24** (commit `2e8d652`,
+      deployado como efeito colateral do rebuild da recuperação do
+      incidente de Docker Compose do mesmo dia — ver
+      `Contextos/Decisoes.md`).
+- [ ] **Falta**: auditar produção por `Company`/`Payment` órfãos de antes
+      dessa correção — qualquer cliente que pagou de verdade no Asaas
+      antes de 2026-08-24 mas cujo plano nunca ativou (o bug existia
+      desde a implementação do checkout, 2026-08-13). Ver
       `Contextos/Conhecimento.md`.
 - [x] Tabela `Plan` administrável (preço, ciclo, limites, features) substitui
       o enum fixo `SubscriptionPlan`; `Company.planId` (FK). Tela
@@ -504,9 +508,9 @@ Passo") em 2026-08-12.
       (decisão do Yuri). Exigiria conta Google Play Developer paga dele
       + Digital Asset Links + Bubblewrap. Revisitar se ele quiser.
 
-## Bug em correção: campos numéricos de Configurações (2026-08-24, mesmo dia)
+## Bug corrigido: campos numéricos de Configurações (2026-08-24, mesmo dia)
 
-- [ ] Campo "grudava" no "0" ao digitar por cima (sobretudo no celular,
+- [x] Campo "grudava" no "0" ao digitar por cima (sobretudo no celular,
       "12" virava "012") e decimal não aceitava "," — só ".". Primeira
       correção (seleção total no foco) não resolveu — Yuri mandou vídeo
       do Android real mostrando o mesmo sintoma, e ainda revelou que
@@ -515,9 +519,8 @@ Passo") em 2026-08-12.
       valor for exatamente 0, o campo mostra vazio (placeholder "0") em
       vez do caractere — sem "0" no DOM pra atrapalhar o próximo dígito
       (`frontend/src/app/dashboard/settings/page.tsx`, Custos
-      Fixos/Impressoras/Materiais). Verificado simulando digitação real
-      via JS no dev local (não dá pra reproduzir teclado touch na
-      ferramenta) — falta o Yuri confirmar no Android de verdade. Ver
+      Fixos/Impressoras/Materiais). **Confirmado pelo Yuri num Android
+      de verdade** e já deployado em produção (2026-08-24). Ver
       `Contextos/Decisoes.md` (2026-08-24).
 
 ## Próximo passo geral

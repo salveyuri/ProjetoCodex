@@ -3106,3 +3106,38 @@ commitada explicitamente na hora (ou pelo menos antes de a sessão
 terminar), com o mesmo rigor de qualquer outra mudança - "documentei que
 fiz" não é o mesmo que "commitei". Ver `Contextos/Conhecimento.md`
 (seção do incidente original) pra o texto corrigido.
+
+## 2026-08-24 (mesmo dia) - Deploy em produção: webhook crítico + correção dos campos numéricos + PWA
+
+Yuri confirmou o teste no celular (campos numéricos corretos) e pediu os
+comandos pra subir tudo em produção. Antes de mandar, chequei o estado
+real: `git log -1` em `~/app/3d-budget-saas` mostrou `HEAD` já em
+`2e8d652` (o commit crítico do webhook) - ou seja, **a correção do
+webhook já estava em produção**, deployada como efeito colateral do
+`docker compose build --no-cache && up -d` rodado durante a recuperação
+do incidente de Docker Compose mais cedo no mesmo dia (aquele rebuild
+partiu desse commit). Faltavam só 7 commits mais recentes: PWA + botão
+"Instalar app", a correção dos campos numéricos, `EMAIL_SUBJECT_PREFIX`
+(no-op em produção, variável vazia por padrão), e documentação -
+conferido via `git diff --stat 2e8d652..129a119`, sem nenhuma migração
+de banco no meio.
+
+```bash
+cd ~/app/3d-budget-saas
+git pull
+docker compose build
+docker compose up -d
+```
+
+Primeiro `curl -I https://pricify3d.com` depois do `up -d` voltou 502 -
+falso alarme, rodado 2 segundos depois do restart, antes do healthcheck
+do backend passar (`health: starting`). Esperou ~15s e confirmou 200.
+Produção está, portanto, com tudo que foi feito nesta sessão: correção
+crítica do webhook do Asaas, PWA instalável, botão de instalação, e a
+correção dos campos numéricos de Configurações.
+
+Atualizei `Notas/TODO.md`: o item do webhook crítico virou `[x]`
+(corrigido e em produção), mas com um item novo `[ ]` separado pra
+auditoria de `Company`/`Payment` órfãos anteriores a 2026-08-24 - ainda
+não feita, e é o único pedaço realmente pendente desse bug (clientes que
+pagaram de verdade antes da correção e cujo plano nunca ativou).

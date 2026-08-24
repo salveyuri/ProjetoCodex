@@ -2642,3 +2642,31 @@ producao).
   desatualizado desde o achado de mais cedo hoje).
 - tsc/lint limpos, suite de e-mail (22 testes) sem alteracao de
   comportamento (ambiente de teste nao define a variavel).
+
+## 2026-08-24 (mesmo dia) - PWA instalavel (Android via Chrome)
+
+O Yuri perguntou se dava pra ter um app mobile Android. Expliquei o
+trade-off PWA (reusa o frontend inteiro, login por cookie continua
+funcionando de graca) vs app nativo (reescrever UI + trocar fluxo de
+auth pra token) - ele confirmou PWA, so instalavel via Chrome nesta
+rodada (sem TWA/Play Store, isso fica pra depois se ele quiser).
+
+- Service worker escrito a mao (nao next-pwa/Workbox) de proposito: app
+  e SaaS sempre-online, cache agressivo de bundle/API e risco real de
+  usuario preso em versao antiga ou ver preco desatualizado offline.
+  So cacheia uma pagina offline estatica pequena.
+- Icones gerados com sharp (ja em node_modules) a partir do
+  logo_icon.webp existente (960x960) - icon-192/512, apple-touch-icon,
+  e um maskable-512 com padding sobre a MESMA cor de fundo amostrada
+  por pixel do proprio logo (sem costura visivel).
+- manifest.ts (convencao nativa do App Router, serve sozinho em
+  /manifest.webmanifest), sw.js, offline.html, componente de registro,
+  layout.tsx com viewport/appleWebApp - tudo em frontend/, zero mudanca
+  de backend/auth/rotas.
+- tsc/lint/build limpos. Confirmado ao vivo: manifest, meta tags,
+  icones e sw.js servindo certo. **Registro do service worker nao
+  confirmou** dentro do browser automatizado desta sessao (erro
+  generico, mesmo com tudo servindo certo) - descartado bug de
+  Turbopack/dev-mode e de CORS/protocolo, tudo aponta pra restricao do
+  proprio ambiente de automacao. Falta o Yuri confirmar "Instalar
+  app" de verdade no Chrome do Android contra dev.pricify3d.com.

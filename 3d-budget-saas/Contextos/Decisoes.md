@@ -2780,3 +2780,73 @@ ambiente de teste não define `EMAIL_SUBJECT_PREFIX`, então o
 comportamento observado é idêntico a antes (confirma que produção não é
 afetada por padrão). Falta o Yuri fazer o deploy no ambiente de dev e
 conferir um e-mail de teste chegando com o prefixo.
+
+## 2026-08-24 (mesmo dia) - PWA instalável (Android via Chrome), sem app nativo
+
+O Yuri perguntou se dava pra ter um app mobile Android que fale com o
+mesmo backend. Expliquei o trade-off (PWA reusa 100% do frontend já
+feito e o login por cookie continua funcionando de graça, porque o
+Chrome instalado ainda é o Chrome por baixo; um app nativo de verdade
+exigiria reescrever a UI numa base separada e trocar o fluxo de auth
+pra token em Keychain/Keystore) e ele confirmou PWA. Escopo combinado:
+só instalável via Chrome nesta rodada, sem preparar TWA/Play Store
+(exigiria conta Google Play Developer paga do próprio Yuri).
+
+### Por que service worker escrito à mão, não uma lib
+
+Cogitei `next-pwa`/`@ducanh2912/next-pwa` (cache automático via
+Workbox), mas esse app é um SaaS sempre-online - o orçamento depende de
+dado vivo do backend. Cachear agressivamente o bundle JS/CSS ou
+respostas de API é o jeito clássico de deixar usuário preso numa versão
+antiga depois de um deploy, ou pior, mostrando um cálculo de preço
+desatualizado offline. `frontend/public/sw.js` só cacheia uma página de
+fallback offline pequena e estática (`offline.html`) + o ícone que ela
+usa; tudo mais (JS, CSS, API, imagens) passa direto pra rede, sem
+interceptar - instalável sem esse risco.
+
+### Ícones gerados da arte já existente
+
+`frontend/public/logo_icon.webp` já existe em 960×960 - nenhuma arte
+nova. Usei `sharp` (já presente em `node_modules`, sem dependência nova)
+num script descartável pra exportar `icon-192.png`/`icon-512.png`
+(`purpose: "any"`), `apple-touch-icon.png` (180×180, suporte de graça
+pro iOS Safari), e `icon-maskable-512.png` - esse último composto sobre
+um canvas com a MESMA cor de fundo que já existe nos cantos do
+`logo_icon.webp` (`#333c57`, amostrada por pixel via `sharp`, não
+inventada), pra não ficar costura visível entre o padding novo (~20%,
+dentro da safe-zone que o Android exige pros ícones adaptativos) e o
+fundo original da arte.
+
+### `start_url`/auth
+
+`start_url: "/dashboard"` no manifest - não existe middleware
+server-side de auth hoje (`frontend/src/contexts/AuthContext.tsx` cuida
+disso client-side), então abrir o app deslogado já cai no redirect pro
+login normalmente, sem lógica nova.
+
+### Verificação
+
+`tsc`/lint/build limpos nos três pacotes. Confirmado ao vivo (dev
+local): `/manifest.webmanifest` serve o JSON certo; `<head>` de
+qualquer página tem `<link rel="manifest">`, `<meta name="theme-color">`
+e `<link rel="apple-touch-icon">` corretos (Next usa `mobile-web-app-
+capable`, não o antigo `apple-mobile-web-app-capable` - mais
+padronizado, funciona nos dois); ícones servem em `/icons/*.png` com o
+tamanho certo; `/sw.js` serve com `Content-Type: application/javascript`
+correto.
+
+**Não verificado nesta sessão**: o registro de verdade do service
+worker (`navigator.serviceWorker.register`) falhou tanto em `next dev`
+quanto em `next start` **especificamente dentro do browser automatizado
+desta ferramenta** (erro genérico "unknown error occurred when fetching
+the script", mesmo com o arquivo servindo certo via `fetch()` direto e
+content-type correto) - descartei bug de Turbopack/dev mode (mesma
+falha nos dois modos) e bug de CORS/protocolo/secure-context (tudo
+confirmado certo via JS: `isSecureContext: true`, top-level, `blob:`
+rejeitado do jeito esperado). Tudo aponta pra uma restrição do próprio
+ambiente de automação do navegador desta sessão (já tinha um precedente
+documentado: arquivo local fora da pasta do projeto também renderiza
+diferente nessa ferramenta). **Precisa confirmar no Chrome de verdade**
+- assim que o Yuri fizer o deploy no ambiente de dev, testar "Instalar
+app"/"Adicionar à tela inicial" no Chrome do próprio Android contra
+`https://dev.pricify3d.com`.

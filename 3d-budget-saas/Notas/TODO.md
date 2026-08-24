@@ -483,6 +483,22 @@ Passo") em 2026-08-12.
       (seção `id="planos"`) também, ou considerar buscar via API pública
       no futuro se isso incomodar.
 
+## App mobile (PWA instalável, implementado em 2026-08-24)
+
+- [ ] **Instalável via Chrome (Android) — implementado, falta confirmar
+      no Chrome de verdade.** `manifest.ts`, ícones, `sw.js` (não-cacheia
+      quase nada de propósito — app é sempre-online), `offline.html`.
+      Verificado localmente que manifest/ícones/meta tags servem certo,
+      mas o registro do service worker não confirmou dentro do browser
+      automatizado desta sessão (suspeita forte de restrição do próprio
+      ambiente de automação, não do código — ver `Contextos/Decisoes.md`
+      2026-08-24). Depois do deploy no ambiente de dev, testar "Instalar
+      app"/"Adicionar à tela inicial" no Chrome do Android de verdade
+      contra `https://dev.pricify3d.com`.
+- [ ] Publicar na Play Store (TWA) — deliberadamente fora desta rodada
+      (decisão do Yuri). Exigiria conta Google Play Developer paga dele
+      + Digital Asset Links + Bubblewrap. Revisitar se ele quiser.
+
 ## Próximo passo geral
 
 Pós-MVP: preparar deploy, seeds, testes automatizados, monitoramento externo

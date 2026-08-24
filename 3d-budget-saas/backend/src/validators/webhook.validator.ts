@@ -18,6 +18,14 @@ export const asaasWebhookSchema = z.object({
       paymentDate: z.string().nullable().optional(),
       invoiceUrl: z.string().nullable().optional(),
       externalReference: z.string().nullable().optional(),
+      // The Asaas Checkout Session id — matches Checkout.asaasCheckoutId
+      // (stored at checkout-creation time). Confirmed against a real
+      // sandbox payment (2026-08-24): this is what actually links a
+      // first-time payment back to the Checkout that created it —
+      // externalReference is NEVER populated by Asaas's Checkout product,
+      // even though we send one when creating the checkout. See
+      // Contextos/Decisoes.md.
+      checkoutSession: z.string().nullable().optional(),
     })
     .passthrough(),
 });

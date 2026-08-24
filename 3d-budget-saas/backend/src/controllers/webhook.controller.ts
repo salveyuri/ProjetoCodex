@@ -34,9 +34,11 @@ export const HANDLED_ASAAS_EVENTS: readonly string[] = [
 // coupon/plan are only needed to decide, on first activation, whether a
 // ONE_TIME coupon's first-cycle discount needs to be reverted afterward
 // (see asaasService.revertSubscriptionToFullPrice below).
-const findCheckoutWithCouponAndPlan = (checkoutId: string) =>
+// Keyed by Checkout.asaasCheckoutId (the Asaas Checkout Session id), not
+// our own Checkout.id — see the call site in `asaas()` below for why.
+const findCheckoutWithCouponAndPlan = (asaasCheckoutId: string) =>
   prisma.checkout.findUnique({
-    where: { id: checkoutId },
+    where: { asaasCheckoutId },
     include: { coupon: true, plan: true },
   });
 
@@ -118,8 +120,13 @@ export class WebhookController {
       // Renewal payments carry the Asaas subscription id, which we stored
       // on Company once the first checkout confirmed. The very first
       // payment (before that id exists on Company yet) is instead matched
-      // by the externalReference we set to our own Checkout.id when
-      // creating the hosted checkout session.
+      // via payment.checkoutSession — the Asaas Checkout Session id we
+      // stored as Checkout.asaasCheckoutId when creating the hosted
+      // checkout. NOT payment.externalReference: confirmed against a real
+      // sandbox checkout completion (2026-08-24) that Asaas's Checkout
+      // product never propagates externalReference down to the resulting
+      // payment (always comes back null), even though we do set one when
+      // creating the checkout. See Contextos/Decisoes.md.
       let checkout: Awaited<ReturnType<typeof findCheckoutWithCouponAndPlan>> =
         null;
       let company = payment.subscription
@@ -128,8 +135,8 @@ export class WebhookController {
           })
         : null;
 
-      if (!company && payment.externalReference) {
-        checkout = await findCheckoutWithCouponAndPlan(payment.externalReference);
+      if (!company && payment.checkoutSession) {
+        checkout = await findCheckoutWithCouponAndPlan(payment.checkoutSession);
 
         if (checkout) {
           company = await prisma.company.findUnique({
@@ -139,17 +146,12 @@ export class WebhookController {
       }
 
       if (!company) {
-        // Temporary extra detail (externalReference/subscription as Asaas
-        // actually sent them) while tracking down a real "no matching
-        // company" miss on a fresh first-payment webhook — see
-        // Contextos/Conhecimento.md. Safe to trim back down once resolved.
         logger.warn(
           {
             event,
             asaasPaymentId: payment.id,
-            externalReference: payment.externalReference,
+            checkoutSession: payment.checkoutSession,
             subscription: payment.subscription,
-            foundCheckout: checkout !== null,
           },
           "Asaas webhook: no matching company for this payment",
         );

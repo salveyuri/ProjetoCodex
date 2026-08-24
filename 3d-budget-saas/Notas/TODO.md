@@ -159,6 +159,17 @@ Passo") em 2026-08-12.
 
 ## Assinaturas via Asaas (implementado em 2026-08-13)
 
+- [ ] **🔴 URGENTE — bug crítico achado e corrigido em 2026-08-24: o
+      primeiro pagamento de uma assinatura nova nunca ativava o plano.**
+      `webhook.controller.ts` correlacionava via `payment.
+      externalReference` (sempre `null` — o Asaas nunca propaga esse
+      campo do Checkout pro pagamento, confirmado com um pagamento real
+      no sandbox), em vez de `payment.checkoutSession`. Já corrigido no
+      código (dev) — **falta**: (1) aplicar a mesma correção em
+      produção, (2) auditar produção por `Company`/`Payment` órfãos —
+      qualquer cliente que pagou de verdade no Asaas mas cujo plano
+      nunca ativou. Ver `Contextos/Decisoes.md` (2026-08-24) e
+      `Contextos/Conhecimento.md`.
 - [x] Tabela `Plan` administrável (preço, ciclo, limites, features) substitui
       o enum fixo `SubscriptionPlan`; `Company.planId` (FK). Tela
       `/admin/plans` (CRUD completo, protegida por `adminMiddleware`).

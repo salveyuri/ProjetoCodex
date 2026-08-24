@@ -2582,3 +2582,42 @@ HTTPS pra SSH, sem configurar chave nova) e indiquei a pasta certa
   atualizados com a orientacao certa + o motivo. Nenhuma mudanca de
   codigo - `env.ts` esta correto como esta, foi so a minha documentacao
   que errou.
+
+## 2026-08-24 (mesmo dia) - Incidente real de producao + bug critico no webhook do Asaas
+
+Dia cheio no ambiente novo de dev. Dois problemas serios em sequencia:
+
+**1. Producao caiu (502) durante o setup do dev.** Causa: `~/app` e
+`~/app-dev` tem o mesmo nome de pasta final (`3d-budget-saas`), entao o
+Docker Compose usou o mesmo nome de projeto pros dois - o `up -d` do dev
+recriou os containers de producao com a config errada (portas erradas,
+Postgres local em vez do Supabase). Resolvido: `down` nos containers
+impostores, `up -d` de novo em producao pra recriar os de verdade,
+`name: pricify3d-dev` adicionado no `docker-compose.dev.yml` pra nunca
+mais colidir. Efeito colateral: o volume do Postgres de dev ficou orfao
+sob o nome de projeto antigo - banco de dev resetado do zero (dado de
+teste, sem problema).
+
+**2. BUG CRITICO achado testando checkout de ponta a ponta pela primeira
+vez de verdade**: pagamento confirmado no Asaas sandbox, plano continuava
+Free. Causa: `webhook.controller.ts` correlacionava o primeiro pagamento
+usando `payment.externalReference` contra `Checkout.id` - mas o Asaas
+**nunca propaga esse campo** pro pagamento (confirmado com um pagamento
+real: vem sempre `null`). O campo certo e `payment.checkoutSession`,
+que bate com `Checkout.asaasCheckoutId` (ja gravado desde a criacao do
+checkout). Corrigido em `webhook.controller.ts`/`webhook.validator.ts` +
+os 6 testes de `coupon.routes.test.ts` que simulavam o webhook com o
+campo errado (reproduziam a suposicao errada do proprio codigo, nunca
+testaram contra o formato real do Asaas).
+
+- **Impacto provavel em producao**: essa e a mesma logica que roda la -
+  bem provavel que todo primeiro pagamento pago em producao ate hoje
+  tenha caido no mesmo silencio (cliente paga de verdade, plano nunca
+  ativa). So foi descoberto agora porque o ambiente de dev com HTTPS de
+  verdade e o unico lugar onde um pagamento real de ponta a ponta ja foi
+  testado. Recomendei ao Yuri auditar Payment/Checkout orfaos direto no
+  Supabase de producao.
+- Suite completa: 147/147 (17 arquivos, 4 lotes). `tsc`/lint limpos.
+- Ainda falta: testar assinatura completa de novo no dev com a correcao
+  aplicada, e decidir com o Yuri quando subir essa correcao em producao
+  (urgente).

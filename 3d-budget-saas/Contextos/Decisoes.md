@@ -2674,3 +2674,79 @@ ambiente é o próprio Yuri, não um cliente real).
 obrigatória, com a explicação do porquê. Nenhuma mudança de código - é
 um ajuste de documentação/orientação, o comportamento do backend
 (`env.ts`) está correto como está.
+
+## 2026-08-24 - BUG CRÍTICO: webhook do Asaas nunca ativava o primeiro pagamento de verdade
+
+Achado testando o checkout de ponta a ponta pela primeira vez de verdade
+(exatamente o que o ambiente de dev existe pra viabilizar - ver entrada de
+2026-08-22 acima): pagamento confirmado no sandbox do Asaas, mas o plano
+continuava Free mesmo depois de recarregar/relogar.
+
+### Causa raiz
+
+`webhook.controller.ts` correlacionava o **primeiro** pagamento de uma
+assinatura nova (antes de `Company.asaasSubscriptionId` existir) usando
+`payment.externalReference`, comparado contra `Checkout.id` - baseado na
+suposição de que o `externalReference` mandado na criação do checkout
+(`asaas.service.ts`, `externalReference: input.checkoutId`) voltaria
+no payload do pagamento gerado. **Essa suposição está errada**: confirmado
+contra um pagamento real do sandbox, o Checkout Asaas nunca propaga
+`externalReference` pro pagamento individual - vem sempre `null`. O
+payload real trouxe, em vez disso, `checkoutSession` (o id da sessão de
+Checkout do próprio Asaas) e `subscription` (o id da assinatura). Como
+`payment.externalReference` era sempre `null`, o bloco de correlação
+inteiro nunca executava, `company` ficava `null`, e o handler só logava
+"no matching company for this payment" e confirmava 200 sem ativar nada -
+silenciosamente, sem nenhum erro visível pro usuário nem pro Asaas.
+
+**Isso nunca foi pego antes porque o único teste de ponta a ponta contra
+o sandbox real usado nesta sessão testava só a criação do checkout e o
+redirecionamento (nunca completou um pagamento de verdade - o
+`localhost` não aceita `successUrl` não-`https`, ver limitação já
+documentada), e os testes automatizados simulavam o webhook manualmente
+com `externalReference: checkoutId` - reproduzindo a suposição errada do
+próprio código em vez de validar contra o formato real do Asaas.** O
+ambiente de dev com HTTPS de verdade (2026-08-22/24) é o que finalmente
+permitiu um pagamento real de ponta a ponta e expôs isso.
+
+**Impacto em produção**: como essa é a mesma lógica que roda em
+produção, é bem provável que **todo primeiro pagamento de assinatura
+paga em produção até hoje tenha caído no mesmo silêncio** - o cliente
+paga de verdade no Asaas, mas o plano nunca vira `ACTIVE` no sistema.
+Renovações (segundo pagamento em diante) não são afetadas - essas usam
+`payment.subscription` contra `Company.asaasSubscriptionId`, que só
+existe depois que a primeira ativação funciona, então esse caminho nunca
+foi exercitado organicamente até agora. **Recomendo ao Yuri auditar
+produção**: qualquer `Company` com `subscriptionStatus = ACTIVE` hoje
+provavelmente foi ativada manualmente (ex. via `/admin/users`, como o
+plano Cortesia), não pelo fluxo de pagamento real - vale checar
+`Payment`/`Checkout` órfãos (pagamento `CONFIRMED` sem `Company`
+correspondente ativada) direto no Supabase de produção.
+
+### Correção
+
+`webhook.controller.ts`: correlação do primeiro pagamento agora usa
+`payment.checkoutSession` contra `Checkout.asaasCheckoutId` (já existia,
+gravado na criação do checkout - `billing.controller.ts`) em vez de
+`payment.externalReference` contra `Checkout.id`. `webhook.validator.ts`
+ganhou o campo `checkoutSession` no schema (com `.passthrough()` o dado
+já chegava, só não estava tipado). O envio de `externalReference` na
+criação do checkout (`asaas.service.ts`) foi mantido - inofensivo, só
+deixou de ser útil pra correlação.
+
+Os 6 testes em `coupon.routes.test.ts` que simulavam o webhook com
+`externalReference: checkoutId` foram todos corrigidos pra capturar o
+`id` mockado de `createCheckout` numa variável e simular
+`checkoutSession` com esse valor - reproduzindo o payload real do Asaas
+em vez da suposição antiga.
+
+### Verificação
+
+`tsc`/lint limpos. Suíte completa: 147/147 (17 arquivos, 4 lotes).
+Verificado ao vivo no ambiente de dev: log de diagnóstico temporário
+(depois revertido pro formato definitivo) confirmou `externalReference:
+null` / `checkoutSession: "d6a5b5de-..."` num pagamento real do sandbox -
+exatamente a causa. Falta confirmar com um novo teste de assinatura
+completo no dev, agora com a correção aplicada, que o plano ativa de
+verdade - e decidir com o Yuri quando aplicar essa mesma correção em
+produção (urgente, dado o impacto).

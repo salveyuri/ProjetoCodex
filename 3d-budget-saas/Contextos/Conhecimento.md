@@ -483,3 +483,51 @@ fazer sem perguntar. Se isso virar um problema de verdade (suíte lenta,
 banco de dev pesado), vale considerar: (a) um helper de teste que
 desfaça `promoteToAdmin` no `afterEach`, ou (b) um script de limpeza
 manual sob demanda.
+
+## Docker Compose: pastas com o mesmo nome final colidem (derrubou produção)
+
+Descoberto em 2026-08-24 no primeiro `docker compose up -d` do ambiente
+de dev: `~/app/3d-budget-saas` (produção) e `~/app-dev/3d-budget-saas`
+(dev) têm o mesmo nome de pasta final. O Docker Compose usa o nome da
+pasta como "nome do projeto" quando nada é configurado explicitamente -
+como os dois eram iguais, o Compose tratou as duas pastas como **o
+mesmo projeto**. O `up -d` do dev recriou os containers `backend`/
+`frontend` que já existiam (os de produção!) com a config errada
+(portas de dev, Postgres local em vez do Supabase) - produção caiu
+(502) até alguém notar.
+
+Reconhecer: `docker compose ps`/`logs` rodado de dentro de uma pasta
+mostrando containers/portas que não batem com o `docker-compose.yml`
+daquela pasta é o sintoma - significa que outro projeto com o mesmo
+nome default já criou containers com esses nomes.
+
+Correção permanente: todo `docker-compose*.yml` de um segundo
+ambiente **precisa** de um `name:` explícito no topo do arquivo (Compose
+Specification), nunca depender do nome do diretório. `docker-compose.dev.yml`
+já tem `name: pricify3d-dev` - se outro ambiente for criado no futuro,
+replicar isso desde o primeiro `up -d`, não depois de um incidente.
+
+## Asaas Checkout nunca propaga `externalReference` pro pagamento gerado
+
+Descoberto em 2026-08-24 testando um pagamento real de ponta a ponta no
+sandbox (só possível depois que o ambiente de dev com HTTPS existiu -
+ver `Contextos/Ambientes.md`). `POST /v3/checkouts` aceita um
+`externalReference` na criação (usado pra tentar linkar o pagamento
+resultante de volta a um registro nosso), mas **esse campo nunca chega
+no payload do webhook do pagamento** - vem sempre `null`, confirmado
+contra uma resposta real do Asaas. Isso quebrava silenciosamente a
+ativação do primeiro pagamento de toda assinatura nova (ver
+`Contextos/Decisoes.md`, 2026-08-24, "BUG CRÍTICO").
+
+O campo que efetivamente correlaciona é `payment.checkoutSession` - o id
+da sessão de Checkout do próprio Asaas, que já gravávamos como
+`Checkout.asaasCheckoutId` desde a criação (`billing.controller.ts`).
+Se algum dia mexer de novo nessa correlação: **nunca confiar em
+`externalReference` de um pagamento vindo do produto Checkout do
+Asaas** - só funciona pra chamadas que criam a cobrança diretamente
+(`POST /v3/payments`/`POST /v3/subscriptions`), não pra quem passa pela
+página hospedada. Testar contra um payload real (sandbox ou produção)
+antes de confiar em qualquer suposição sobre o formato do webhook do
+Asaas - os testes automatizados que simulavam esse payload reproduziam
+a suposição errada do próprio código, não o formato real, e por isso
+nunca pegaram esse bug.

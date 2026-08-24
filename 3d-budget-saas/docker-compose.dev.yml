@@ -1,0 +1,79 @@
+# Docker Compose de DEV/STAGING — roda numa pasta separada da de produção
+# na mesma VPS (ver Contextos/Ambientes.md, "Ambiente de dev/staging").
+# Diferente do docker-compose.yml de produção: usa Postgres LOCAL (serviço
+# `postgres` abaixo), nunca o Supabase de produção — dado de teste nunca
+# encosta em dado real. Portas de host diferentes das de produção
+# (3011/3010 em vez de 3001/3000) pra rodar lado a lado sem conflito.
+#
+#   cp .env.dev.example .env
+#   docker compose -f docker-compose.dev.yml build
+#   docker compose -f docker-compose.dev.yml run --rm backend npx prisma migrate deploy
+#   docker compose -f docker-compose.dev.yml run --rm backend npx prisma db seed   # opcional, promove SEED_ADMIN_EMAIL a ADMIN
+#   docker compose -f docker-compose.dev.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      # Só em 127.0.0.1 — nunca exposto pra internet. Pra usar um cliente
+      # gráfico (DBeaver/pgAdmin) do seu próprio computador, abra um túnel
+      # SSH: ssh -L 5433:127.0.0.1:5433 usuario@vps
+      - "127.0.0.1:5433:5432"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      # Aponta pro serviço `postgres` acima (nome do serviço = hostname
+      # dentro da rede Docker desta pilha) — nunca pro Supabase de produção.
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/postgres
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env — gere um NOVO, nunca reuse o de producao}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-30}
+      CORS_ORIGIN: ${CORS_ORIGIN:?set CORS_ORIGIN in .env — ex. https://dev.pricify3d.com}
+      # 1 hop de proxy (o Nginx do host) na frente do backend — mesmo
+      # raciocínio de produção, ver deploy/nginx-dev.conf.example.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL in .env — ex. https://dev.pricify3d.com}
+      # Sempre sandbox neste ambiente — nunca a chave/env de produção.
+      ASAAS_ENV: ${ASAAS_ENV:-sandbox}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:?set ASAAS_API_KEY in .env — chave SANDBOX do Asaas}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:?set ASAAS_WEBHOOK_TOKEN in .env, gere com openssl rand -hex 32}
+      # Opcional aqui de propósito — sem chave, resend-client.ts só loga e
+      # não manda nada (mesmo comportamento do dev local hoje). Preencha
+      # se quiser testar envio de e-mail de verdade neste ambiente.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-Pricify3D <system@pricify3d.com>}
+      RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET:-}
+    ports:
+      - "127.0.0.1:3011:3001"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env — ex. https://dev.pricify3d.com/api}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:3010:3000"
+
+volumes:
+  postgres_dev_data:

@@ -2529,3 +2529,26 @@ do valor final do orcamento.
   apagados depois.
 - Migracao nova precisa ser aplicada em producao
   (`20260822210000_add_quote_price_adjustment`).
+
+## 2026-08-22 (mesmo dia) - Ambiente de dev/staging: mesma VPS, Postgres local
+
+O Yuri perguntou como criar um ambiente de dev/staging e se precisaria de
+uma VPS nova. Expliquei o trade-off e recomendei a mesma VPS (2 vCPU/4GB
+tem folga); ele confirmou e pediu pra desenhar o plano. Usei EnterPlanMode,
+perguntei (AskUserQuestion) Postgres local em Docker vs segundo projeto
+Supabase pro banco de dev - escolhido Postgres local.
+
+- Motivo real do ambiente: HTTPS de verdade pra testar o que dev local nao
+  consegue (Asaas rejeita callback nao-https, ja documentado).
+- Isolamento: pasta separada na VPS (clone irmao, nao a mesma pasta com
+  flags), subdominio proprio (dev.pricify3d.com), portas de host
+  diferentes (3011/3010/5433) amarradas a 127.0.0.1, segredos sempre
+  novos (JWT_SECRET/ASAAS_WEBHOOK_TOKEN/POSTGRES_PASSWORD), ASAAS_ENV
+  sempre sandbox, RESEND_API_KEY em branco por padrao.
+- Arquivos novos: docker-compose.dev.yml, .env.dev.example,
+  deploy/nginx-dev.conf.example - mesmo padrao dos equivalentes de
+  producao, nenhum arquivo de producao tocado.
+- Validado so sintaticamente (npx js-yaml, Docker nao disponivel neste
+  ambiente). Runbook completo documentado em Contextos/Ambientes.md, mas
+  ainda **nao executado na VPS** - depende do Yuri (DNS, SSH, decisao de
+  quando). Item registrado em Notas/TODO.md.

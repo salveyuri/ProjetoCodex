@@ -153,6 +153,62 @@ curl http://localhost:3000
 pro cenário de produção, com Nginx sempre na frente) — só mudar se **não**
 houver Nginx na frente (ex.: teste local direto nas portas do compose).
 
+## Ambiente de dev/staging (decidido em 2026-08-22)
+
+**Por quê**: o dev local (Windows, sem HTTPS público) não consegue testar o
+clique real de "Assinar" até o Checkout hospedado do Asaas — ver a
+limitação de `successUrl`/`cancelUrl` na seção seguinte. Decisão com o
+Yuri: **mesma VPS de produção** (não contratar uma nova — 2 vCPU/4GB tem
+folga pra um segundo stack pequeno), com **Postgres local em Docker** só
+pra dev (não um segundo projeto Supabase) — zero custo, zero dependência de
+rede externa, fácil de resetar. Ver `Contextos/Decisoes.md` (2026-08-22)
+pro raciocínio completo.
+
+**Isolamento**: segundo clone do repo numa pasta irmã da de produção (não
+a mesma pasta com flags diferentes — o nome do diretório vira o "project
+name" do Docker Compose automaticamente, então networks/volumes nunca
+colidem com os de produção). Subdomínio próprio (`dev.pricify3d.com`),
+portas de host diferentes (`3011`/`3010`/`5433` em vez de `3001`/`3000`),
+tudo amarrado a `127.0.0.1` (mesmo padrão de produção — `ufw` não precisa
+mudar). Banco, `JWT_SECRET`, `ASAAS_WEBHOOK_TOKEN` e chave do Asaas são
+**sempre diferentes** dos de produção; `ASAAS_ENV=sandbox` sempre.
+
+### Arquivos
+
+- `docker-compose.dev.yml` (raiz) — mesma forma do `docker-compose.yml` de
+  produção, com um serviço `postgres` a mais (Postgres 16, volume
+  `postgres_dev_data`, porta `127.0.0.1:5433:5432`) em vez de apontar pro
+  Supabase.
+- `.env.dev.example` (raiz) — mesmo formato do `.env.example` de produção,
+  com `POSTGRES_PASSWORD` novo (em vez de `DATABASE_URL` externa) e os
+  domínios/chaves trocados pro ambiente de dev.
+- `deploy/nginx-dev.conf.example` — cópia de `deploy/nginx.conf.example`
+  com `server_name dev.pricify3d.com` e `proxy_pass` pras portas de dev.
+
+### Runbook (na VPS, pasta separada da de produção)
+
+```bash
+git clone https://github.com/salveyuri/ProjetoCodex.git pricify3d-dev
+cd pricify3d-dev/3d-budget-saas
+cp .env.dev.example .env   # preencher POSTGRES_PASSWORD, JWT_SECRET,
+                            # ASAAS_API_KEY (sandbox), ASAAS_WEBHOOK_TOKEN
+docker compose -f docker-compose.dev.yml build
+docker compose -f docker-compose.dev.yml run --rm backend npx prisma migrate deploy
+docker compose -f docker-compose.dev.yml up -d
+curl http://127.0.0.1:3011/api/health
+```
+
+Depois: copiar `deploy/nginx-dev.conf.example` pra
+`/etc/nginx/sites-available/dev.pricify3d.com`, `ln -s` pra
+`sites-enabled`, `nginx -t && systemctl reload nginx`, e
+`certbot --nginx -d dev.pricify3d.com` (registro DNS `A` de
+`dev.pricify3d.com` pro mesmo IP da VPS precisa existir antes).
+
+**Ainda não executado de verdade** — plano desenhado e arquivos criados em
+2026-08-22, mas o Yuri ainda não rodou o runbook na VPS (precisa de DNS,
+acesso SSH e decisão de quando fazer). Atualizar esta nota quando isso
+acontecer.
+
 ## Variáveis de ambiente (backend)
 
 | Variável | Uso |

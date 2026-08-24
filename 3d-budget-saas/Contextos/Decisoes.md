@@ -2565,3 +2565,72 @@ Conta e dados de teste apagados depois.
 
 Migração nova precisa ser aplicada em produção
 (`20260822210000_add_quote_price_adjustment`).
+
+## 2026-08-22 (mesmo dia) - Ambiente de dev/staging: mesma VPS, Postgres local
+
+O Yuri perguntou como criar um ambiente de dev/staging e se dava pra usar a
+mesma VPS de produção ou precisaria contratar uma nova. Expliquei o
+trade-off (mesma VPS é mais barato e simples, mas compartilha blast radius
+de incidente; VPS separada isola de verdade mas custa mais e é mais um
+servidor pra manter) e recomendei mesma VPS, dado o tamanho atual do
+projeto - ele confirmou.
+
+### Por que mesma VPS
+
+2 vCPU / 4 GB RAM tem folga pra um segundo stack pequeno (backend + frontend
+Node + Postgres leve). O motivo real pra existir esse ambiente não é
+performance, é ter um domínio HTTPS de verdade pra testar o que dev local
+não consegue - o Asaas rejeita `successUrl`/`cancelUrl`/`expiredUrl` que não
+sejam `https://` (limitação já documentada em `Contextos/Ambientes.md`),
+então o clique real em "Assinar" até a página hospedada do Asaas nunca pôde
+ser testado localmente, só via chamada de API direta.
+
+### Por que Postgres local em Docker, não um segundo Supabase
+
+Pergunta feita ao Yuri (`AskUserQuestion`) antes de desenhar o resto:
+Postgres local (container Docker, zero custo, zero dependência de rede,
+fácil resetar) vs. segundo projeto Supabase (free tier, mesmo motor/versão
+de produção, mas mais uma conta pra gerenciar e o free tier pausa após uma
+semana sem uso). Escolhido Postgres local.
+
+### Isolamento (o que evita misturar dev com produção)
+
+- **Pasta separada na VPS** (clone irmão do de produção, não a mesma pasta
+  com flags diferentes) - o nome do diretório vira o "project name" do
+  Docker Compose automaticamente, então networks/volumes nunca colidem sem
+  precisar de `-p` manual.
+- **Subdomínio próprio** (`dev.pricify3d.com`) e **portas de host
+  diferentes** (`3011`/`3010`/`5433` em vez de `3001`/`3000`), tudo
+  amarrado a `127.0.0.1` - mesmo padrão de segurança que produção já usa
+  (nunca exposto direto pra internet, `ufw` não precisa mudar).
+- **Segredos sempre diferentes**: `JWT_SECRET`, `ASAAS_WEBHOOK_TOKEN`,
+  `POSTGRES_PASSWORD` gerados do zero pra esse ambiente - nunca copiados do
+  `.env` de produção.
+- **`ASAAS_ENV=sandbox` sempre** nesse ambiente (nunca a chave de
+  produção) - é justamente isso que resolve a limitação do checkout.
+- **`RESEND_API_KEY` em branco por padrão** no `.env.dev.example` - sem
+  chave, `resend-client.ts` já loga e não manda nada (mesmo comportamento
+  do dev local hoje), evitando disparar e-mail de teste real sem querer.
+  Pode preencher se quiser testar envio de verdade a partir de lá.
+
+### Arquivos novos (mesmo padrão dos equivalentes de produção)
+
+`docker-compose.dev.yml` (raiz) - igual ao `docker-compose.yml` de
+produção, com um serviço `postgres` a mais (Postgres 16, volume nomeado)
+em vez de apontar pro Supabase. `.env.dev.example` (raiz) - mesmo formato
+do `.env.example` de produção, com `POSTGRES_PASSWORD` no lugar de uma
+`DATABASE_URL` externa. `deploy/nginx-dev.conf.example` - cópia do
+`deploy/nginx.conf.example` com o hostname/portas trocados. Nenhum arquivo
+de produção foi tocado.
+
+### Verificação
+
+`npx js-yaml docker-compose.dev.yml` validado sintaticamente (mesma técnica
+já usada pro compose de produção em 2026-08-13 - Docker não está disponível
+neste ambiente de dev pra testar `docker compose config`/`up` de verdade).
+O runbook em si (DNS, clone na VPS, `docker compose up`, Nginx, Certbot)
+**ainda não foi executado** - só o desenho e os arquivos-base ficaram
+prontos nesta sessão; a execução na VPS depende do Yuri (acesso SSH, DNS,
+decisão de quando fazer). Ver `Contextos/Ambientes.md` ("Ambiente de
+dev/staging") pro runbook completo e `Notas/TODO.md` pro item de
+acompanhamento.

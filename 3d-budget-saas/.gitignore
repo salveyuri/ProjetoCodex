@@ -5,6 +5,7 @@
 .env.*
 !.env.example
 !**/.env.example
+!.env.dev.example
 
 # Chaves privadas, certificados TLS, tokens exportados
 *.pem

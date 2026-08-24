@@ -38,6 +38,16 @@ Passo") em 2026-08-12.
       produção nesse dia, ver `Contextos/Conhecimento.md`). CI/CD continua
       fora de escopo (deploy manual via `docker compose`, comandos
       informados a cada entrega).
+- [ ] **Ambiente de dev/staging — desenhado em 2026-08-22 (mesmo dia),
+      ainda não executado na VPS.** Mesma VPS de produção, Postgres local
+      em Docker (não Supabase), subdomínio `dev.pricify3d.com`, sempre
+      `ASAAS_ENV=sandbox`. Arquivos prontos: `docker-compose.dev.yml`,
+      `.env.dev.example`, `deploy/nginx-dev.conf.example`. Falta o Yuri
+      executar na VPS: registro DNS `A` de `dev.pricify3d.com`, clonar o
+      repo numa pasta separada, preencher o `.env`, subir o compose,
+      configurar Nginx + Certbot. Runbook completo em
+      `Contextos/Ambientes.md` ("Ambiente de dev/staging") e
+      `Contextos/Decisoes.md` (2026-08-22).
 
 ## PDF de orçamento (implementado em 2026-08-18)
 

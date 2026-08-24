@@ -188,10 +188,11 @@ mudar). Banco, `JWT_SECRET`, `ASAAS_WEBHOOK_TOKEN` e chave do Asaas são
 ### Runbook (na VPS, pasta separada da de produção)
 
 ```bash
-git clone https://github.com/salveyuri/ProjetoCodex.git pricify3d-dev
+git clone git@github.com:salveyuri/ProjetoCodex.git pricify3d-dev
 cd pricify3d-dev/3d-budget-saas
 cp .env.dev.example .env   # preencher POSTGRES_PASSWORD, JWT_SECRET,
-                            # ASAAS_API_KEY (sandbox), ASAAS_WEBHOOK_TOKEN
+                            # ASAAS_API_KEY (sandbox), ASAAS_WEBHOOK_TOKEN,
+                            # RESEND_API_KEY (obrigatoria - ver nota abaixo)
 docker compose -f docker-compose.dev.yml build
 docker compose -f docker-compose.dev.yml run --rm backend npx prisma migrate deploy
 docker compose -f docker-compose.dev.yml up -d
@@ -204,10 +205,26 @@ Depois: copiar `deploy/nginx-dev.conf.example` pra
 `certbot --nginx -d dev.pricify3d.com` (registro DNS `A` de
 `dev.pricify3d.com` pro mesmo IP da VPS precisa existir antes).
 
-**Ainda não executado de verdade** — plano desenhado e arquivos criados em
-2026-08-22, mas o Yuri ainda não rodou o runbook na VPS (precisa de DNS,
-acesso SSH e decisão de quando fazer). Atualizar esta nota quando isso
-acontecer.
+**Achado real ao executar (2026-08-24): `RESEND_API_KEY` é obrigatória
+aqui, apesar de ser "dev".** `docker-compose.dev.yml` seta
+`NODE_ENV=production` de propósito (cookies seguros, respostas de erro
+discretas - correto pra um domínio HTTPS público de verdade), mas
+`resolveResendApiKey()` em `backend/src/config/env.ts` trava o boot sem
+essa chave sempre que `NODE_ENV=production`, **sem olhar pro
+`ASAAS_ENV`**. A orientação original de deixar `RESEND_API_KEY` em
+branco no `.env.dev` estava errada - `.env.dev.example` já corrigido pra
+deixar isso claro. Solução: reusar a mesma `RESEND_API_KEY` de produção
+(o Resend não tem modo sandbox; e-mails de teste saem de verdade, mas
+quem testa esse ambiente é o próprio Yuri).
+
+**Execução real na VPS**: repo clonado (via SSH, `git@github.com:...` -
+a produção já usa SSH nesse mesmo usuário, então o clone do dev puxou a
+chave automaticamente sem configurar nada novo) em `~/app-dev` (irmã de
+`~/app`, onde a produção já roda). Postgres e frontend subiram de
+primeira; backend caiu em crash loop pelo motivo do parágrafo acima,
+corrigido no mesmo dia. Atualizar esta nota quando o runbook terminar
+(Nginx/HTTPS/webhook do Asaas/checkout de ponta a ponta ainda
+pendentes).
 
 ## Variáveis de ambiente (backend)
 

@@ -2634,3 +2634,43 @@ prontos nesta sessão; a execução na VPS depende do Yuri (acesso SSH, DNS,
 decisão de quando fazer). Ver `Contextos/Ambientes.md` ("Ambiente de
 dev/staging") pro runbook completo e `Notas/TODO.md` pro item de
 acompanhamento.
+
+## 2026-08-24 - Bug real no ambiente de dev: RESEND_API_KEY obrigatória mesmo em sandbox
+
+O Yuri começou a executar o runbook de dev/staging (entrada de 2026-08-22
+acima) na VPS. Clone via SSH funcionou de primeira (a produção já usa
+`git@github.com:...` nesse mesmo usuário, então a chave já existente
+autenticou o clone novo sem nenhuma configuração extra). Postgres e
+frontend subiram certos; o backend entrou em crash loop.
+
+### Causa
+
+`docker-compose.dev.yml` seta `NODE_ENV=production` de propósito (mesmo
+raciocínio de produção: `auth.controller.ts` só marca o cookie de refresh
+como `secure` quando `NODE_ENV=production`, e `error-handler.ts`/
+`health.service.ts` só escondem detalhe de erro/health nesse modo -
+comportamento correto pra um domínio HTTPS público de verdade, que é
+exatamente o caso do `dev.pricify3d.com`). Só que
+`resolveResendApiKey()` em `backend/src/config/env.ts` trava o boot sem
+`RESEND_API_KEY` sempre que `NODE_ENV=production` - **sem olhar pro
+`ASAAS_ENV`**. A orientação original de deixar essa variável em branco no
+`.env.dev` (pra não mandar e-mail de teste real por engano) estava errada
+- não é uma opção nesse ambiente, é obrigatória.
+
+Considerei mudar `NODE_ENV` do stack de dev pra algo diferente de
+`production` só pra contornar essa checagem, mas isso teria efeito
+colateral real: desligaria `secure` no cookie de refresh e deixaria
+erro/health mais verbosos num domínio HTTPS público de verdade -
+regressão de segurança pior que o problema que resolveria. Correção
+certa: `RESEND_API_KEY` é obrigatória mesmo em dev, ponto - reusar a
+mesma chave de produção (o Resend não tem modo sandbox, não existe uma
+chave "de teste" separada; quem testa cadastro/reset de senha nesse
+ambiente é o próprio Yuri, não um cliente real).
+
+### Correção
+
+`.env.dev.example`, `Contextos/Ambientes.md` e o runbook publicado (ver
+`Notas/TODO.md`) atualizados pra marcar `RESEND_API_KEY` como
+obrigatória, com a explicação do porquê. Nenhuma mudança de código - é
+um ajuste de documentação/orientação, o comportamento do backend
+(`env.ts`) está correto como está.

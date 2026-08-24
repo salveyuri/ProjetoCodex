@@ -38,16 +38,20 @@ Passo") em 2026-08-12.
       produção nesse dia, ver `Contextos/Conhecimento.md`). CI/CD continua
       fora de escopo (deploy manual via `docker compose`, comandos
       informados a cada entrega).
-- [ ] **Ambiente de dev/staging — desenhado em 2026-08-22 (mesmo dia),
-      ainda não executado na VPS.** Mesma VPS de produção, Postgres local
-      em Docker (não Supabase), subdomínio `dev.pricify3d.com`, sempre
-      `ASAAS_ENV=sandbox`. Arquivos prontos: `docker-compose.dev.yml`,
-      `.env.dev.example`, `deploy/nginx-dev.conf.example`. Falta o Yuri
-      executar na VPS: registro DNS `A` de `dev.pricify3d.com`, clonar o
-      repo numa pasta separada, preencher o `.env`, subir o compose,
-      configurar Nginx + Certbot. Runbook completo em
-      `Contextos/Ambientes.md` ("Ambiente de dev/staging") e
-      `Contextos/Decisoes.md` (2026-08-22).
+- [ ] **Ambiente de dev/staging — desenhado em 2026-08-22, execução em
+      andamento na VPS desde 2026-08-24.** Mesma VPS de produção,
+      Postgres local em Docker (não Supabase), subdomínio
+      `dev.pricify3d.com`, sempre `ASAAS_ENV=sandbox`. Repo já clonado em
+      `~/app-dev` (SSH, mesma chave da produção). Achado real: `RESEND_API_KEY`
+      é **obrigatória** mesmo em dev (`NODE_ENV=production` exige, sem
+      olhar pro `ASAAS_ENV`) — corrigido em `.env.dev.example` e
+      `Contextos/Ambientes.md`, ver `Contextos/Decisoes.md` (2026-08-24).
+      Falta terminar: Nginx + Certbot pro `dev.pricify3d.com`, cadastrar
+      o webhook do Asaas manualmente no painel sandbox (o script
+      `asaas:register-webhook` se recusa a rodar fora de
+      `ASAAS_ENV=production`), e testar o checkout de ponta a ponta.
+      Runbook completo em `Contextos/Ambientes.md` ("Ambiente de
+      dev/staging").
 
 ## PDF de orçamento (implementado em 2026-08-18)
 

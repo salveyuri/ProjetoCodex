@@ -2552,3 +2552,33 @@ Supabase pro banco de dev - escolhido Postgres local.
   ambiente). Runbook completo documentado em Contextos/Ambientes.md, mas
   ainda **nao executado na VPS** - depende do Yuri (DNS, SSH, decisao de
   quando). Item registrado em Notas/TODO.md.
+- Publiquei o runbook tambem como artifact HTML interativo (fases
+  numeradas, botao de copiar em cada comando, barra lateral de
+  navegacao), ja que e um documento longo que o Yuri ia querer consultar
+  enquanto executa na VPS.
+
+## 2026-08-24 - Execucao real do ambiente de dev + bug achado (RESEND_API_KEY)
+
+O Yuri comecou a executar o runbook na VPS. Ajudei a resolver a duvida de
+autenticacao do git clone (producao ja usa SSH nesse usuario -
+`git@github.com:...` -, entao o clone do dev so precisou trocar a URL de
+HTTPS pra SSH, sem configurar chave nova) e indiquei a pasta certa
+(`~/app-dev`, irma de `~/app` onde a producao roda).
+
+- Postgres e frontend subiram certos; backend entrou em crash loop.
+  Causa real: `docker-compose.dev.yml` seta `NODE_ENV=production` de
+  proposito (cookies seguros, erro/health discretos - certo pra um
+  dominio HTTPS publico de verdade), mas `resolveResendApiKey()` em
+  `env.ts` exige `RESEND_API_KEY` sempre que `NODE_ENV=production`, sem
+  olhar pro `ASAAS_ENV`. Minha orientacao original de deixar essa
+  variavel em branco no `.env.dev` estava errada.
+- Cogitei mudar `NODE_ENV` do stack de dev pra nao ser "production" so
+  pra contornar isso, mas decidi nao fazer - teria efeito colateral real
+  (desligaria `secure` no cookie de refresh, deixaria erro/health mais
+  verbosos num dominio HTTPS publico de verdade). Correcao certa:
+  `RESEND_API_KEY` e obrigatoria mesmo em dev - reusar a mesma chave de
+  producao (Resend nao tem modo sandbox).
+- `.env.dev.example`, `Contextos/Ambientes.md` e o artifact do runbook
+  atualizados com a orientacao certa + o motivo. Nenhuma mudanca de
+  codigo - `env.ts` esta correto como esta, foi so a minha documentacao
+  que errou.

@@ -3141,3 +3141,11 @@ Atualizei `Notas/TODO.md`: o item do webhook crítico virou `[x]`
 auditoria de `Company`/`Payment` órfãos anteriores a 2026-08-24 - ainda
 não feita, e é o único pedaço realmente pendente desse bug (clientes que
 pagaram de verdade antes da correção e cujo plano nunca ativou).
+
+**Auditoria concluída (2026-08-24, mesmo dia)**: Yuri confirmou -
+**nenhum caso encontrado**. Nenhum cliente pagou de verdade no Asaas
+entre a implementação do checkout (2026-08-13) e a correção do webhook
+(2026-08-24) sem o plano ativar. O bug era real (confirmado via teste de
+sandbox e via leitura do payload de um webhook de verdade), mas a janela
+não chegou a causar dano em produção - encerra o item, sem necessidade
+de reativação manual de plano pra nenhum cliente.

@@ -2756,3 +2756,7 @@ rodada (sem TWA/Play Store, isso fica pra depois se ele quiser).
   atualizada com tudo desta sessao. TODO.md atualizado: item do webhook
   critico virou [x], com item novo separado pra auditoria de
   Company/Payment orfaos anteriores a 2026-08-24 (ainda pendente).
+- 2026-08-24 (mesmo dia): Yuri confirmou a auditoria - nenhum caso
+  encontrado. Nenhum cliente pagou de verdade no Asaas entre 2026-08-13
+  (implementacao do checkout) e 2026-08-24 (correcao do webhook) sem o
+  plano ativar. Bug real, mas sem dano em producao. TODO.md fechado.

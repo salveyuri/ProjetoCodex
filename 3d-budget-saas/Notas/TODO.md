@@ -169,11 +169,11 @@ Passo") em 2026-08-12.
       deployado como efeito colateral do rebuild da recuperação do
       incidente de Docker Compose do mesmo dia — ver
       `Contextos/Decisoes.md`).
-- [ ] **Falta**: auditar produção por `Company`/`Payment` órfãos de antes
-      dessa correção — qualquer cliente que pagou de verdade no Asaas
-      antes de 2026-08-24 mas cujo plano nunca ativou (o bug existia
-      desde a implementação do checkout, 2026-08-13). Ver
-      `Contextos/Conhecimento.md`.
+- [x] Auditoria de produção por `Company`/`Payment` órfãos de antes dessa
+      correção — Yuri confirmou em 2026-08-24: **nenhum caso encontrado**.
+      Nenhum cliente pagou de verdade no Asaas entre a implementação do
+      checkout (2026-08-13) e a correção (2026-08-24) sem o plano
+      ativar. Bug era real mas não chegou a causar dano em produção.
 - [x] Tabela `Plan` administrável (preço, ciclo, limites, features) substitui
       o enum fixo `SubscriptionPlan`; `Company.planId` (FK). Tela
       `/admin/plans` (CRUD completo, protegida por `adminMiddleware`).

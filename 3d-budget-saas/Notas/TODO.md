@@ -485,16 +485,19 @@ Passo") em 2026-08-12.
 
 ## App mobile (PWA instalável, implementado em 2026-08-24)
 
-- [ ] **Instalável via Chrome (Android) — implementado, falta confirmar
-      no Chrome de verdade.** `manifest.ts`, ícones, `sw.js` (não-cacheia
-      quase nada de propósito — app é sempre-online), `offline.html`.
-      Verificado localmente que manifest/ícones/meta tags servem certo,
-      mas o registro do service worker não confirmou dentro do browser
-      automatizado desta sessão (suspeita forte de restrição do próprio
-      ambiente de automação, não do código — ver `Contextos/Decisoes.md`
-      2026-08-24). Depois do deploy no ambiente de dev, testar "Instalar
-      app"/"Adicionar à tela inicial" no Chrome do Android de verdade
-      contra `https://dev.pricify3d.com`.
+- [x] **Instalável via Chrome (Android) — confirmado ao vivo em
+      2026-08-24.** `manifest.ts`, ícones, `sw.js` (não-cacheia quase
+      nada de propósito — app é sempre-online), `offline.html`. Yuri
+      confirmou que "Instalar app" pelo menu do Chrome funciona contra
+      `https://dev.pricify3d.com`. O banner automático (mini-infobar) não
+      apareceu na primeira visita — esperado, depende do score de
+      engajamento do Chrome com o site, não é bug. Ver
+      `Contextos/Decisoes.md` (2026-08-24).
+- [ ] Botão "Instalar app" dentro da própria interface (escuta
+      `beforeinstallprompt`, mostra um botão quando o Chrome sinaliza que
+      está instalável) — deixaria menos dependente do usuário achar a
+      opção no menu do Chrome. Melhoria opcional, não implementada ainda;
+      Yuri avisado, decide se quer.
 - [ ] Publicar na Play Store (TWA) — deliberadamente fora desta rodada
       (decisão do Yuri). Exigiria conta Google Play Developer paga dele
       + Digital Asset Links + Bubblewrap. Revisitar se ele quiser.

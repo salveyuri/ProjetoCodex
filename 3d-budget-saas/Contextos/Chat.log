@@ -2670,3 +2670,8 @@ rodada (sem TWA/Play Store, isso fica pra depois se ele quiser).
   Turbopack/dev-mode e de CORS/protocolo, tudo aponta pra restricao do
   proprio ambiente de automacao. Falta o Yuri confirmar "Instalar
   app" de verdade no Chrome do Android contra dev.pricify3d.com.
+- **Confirmado pelo Yuri**: "Instalar app" pelo menu do Chrome funciona
+  de verdade. O banner automatico nao apareceu na primeira visita -
+  esperado (depende do score de engajamento do Chrome com o site, nao
+  e bug). Sugeri um botao "Instalar app" dentro da interface
+  (beforeinstallprompt) como melhoria opcional futura, nao implementado.

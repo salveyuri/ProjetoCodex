@@ -2835,18 +2835,10 @@ padronizado, funciona nos dois); ícones servem em `/icons/*.png` com o
 tamanho certo; `/sw.js` serve com `Content-Type: application/javascript`
 correto.
 
-**Não verificado nesta sessão**: o registro de verdade do service
-worker (`navigator.serviceWorker.register`) falhou tanto em `next dev`
-quanto em `next start` **especificamente dentro do browser automatizado
-desta ferramenta** (erro genérico "unknown error occurred when fetching
-the script", mesmo com o arquivo servindo certo via `fetch()` direto e
-content-type correto) - descartei bug de Turbopack/dev mode (mesma
-falha nos dois modos) e bug de CORS/protocolo/secure-context (tudo
-confirmado certo via JS: `isSecureContext: true`, top-level, `blob:`
-rejeitado do jeito esperado). Tudo aponta pra uma restrição do próprio
-ambiente de automação do navegador desta sessão (já tinha um precedente
-documentado: arquivo local fora da pasta do projeto também renderiza
-diferente nessa ferramenta). **Precisa confirmar no Chrome de verdade**
-- assim que o Yuri fizer o deploy no ambiente de dev, testar "Instalar
-app"/"Adicionar à tela inicial" no Chrome do próprio Android contra
-`https://dev.pricify3d.com`.
+**Confirmado ao vivo pelo Yuri (2026-08-24, mesmo dia)**: instalação
+funcionou de verdade no Chrome do Android contra `https://
+dev.pricify3d.com`. A falha de registro do service worker vista durante
+esta sessão era mesmo só do browser automatizado da ferramenta, não do
+código - descartada como preocupação (já tinha sido descartado bug de
+Turbopack/dev-mode e de CORS/protocolo/secure-context antes disso; só
+faltava a confirmação num Chrome de verdade).

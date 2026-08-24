@@ -2719,3 +2719,27 @@ rodada (sem TWA/Play Store, isso fica pra depois se ele quiser).
   "." no MEIO de um valor ja preenchido ("12") insere normal ("1.52"),
   nao apaga mais nada; PUT confirmado com os numeros certos no payload.
   Falta o Yuri confirmar no Android de verdade.
+- 2026-08-24 (mesmo dia): Yuri reportou "ainda parece funcionando da
+  mesma forma" - suspeita de que o dev nao estava atualizando. `git
+  pull` no ambiente de dev travou num conflito em docker-compose.dev.yml
+  - o `git diff` mostrou que a unica mudanca local era `name:
+  pricify3d-dev`, a correcao permanente do incidente de producao
+  documentado anteriormente. Errei ao concluir que ja estava commitada e
+  mandei descartar como redundante - na verdade nunca tinha sido
+  commitada de verdade, so existia como edicao manual na VPS (doc errada
+  em Conhecimento.md dizia o contrario). Descartar removeu a unica copia
+  da protecao: o build/up seguinte usou o project name default
+  (`3d-budget-saas`, igual a producao) e recriou os containers reais de
+  producao com a config de dev - producao caiu de novo (502), mesma
+  causa raiz do incidente anterior. Recuperado: `docker rm -f` nos
+  containers fantasmas (ficaram em Created, nunca rodaram - Postgres do
+  dev nao conseguiu porta 5433, ja ocupada pelo Postgres de dev de
+  verdade), rebuild --no-cache + up -d na pasta de producao (necessario
+  porque dev/producao compartilham os mesmos Dockerfiles do monorepo,
+  entao a tag de imagem pode ter sido sobrescrita com o
+  NEXT_PUBLIC_API_URL errado), confirmado 200 de volta. Daí sim restaurei
+  `name: pricify3d-dev` de verdade (commit 9a98129), Yuri deu pull,
+  rebuild sem cache + up no dev - voltou pro nome certo
+  (`pricify3d-dev-*`), producao intocada. Licao registrada em
+  Conhecimento.md e Decisoes.md: documentar uma correcao como aplicada so
+  vale se ela estiver de fato commitada.

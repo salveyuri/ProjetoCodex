@@ -504,8 +504,41 @@ nome default já criou containers com esses nomes.
 Correção permanente: todo `docker-compose*.yml` de um segundo
 ambiente **precisa** de um `name:` explícito no topo do arquivo (Compose
 Specification), nunca depender do nome do diretório. `docker-compose.dev.yml`
-já tem `name: pricify3d-dev` - se outro ambiente for criado no futuro,
+tem `name: pricify3d-dev` - se outro ambiente for criado no futuro,
 replicar isso desde o primeiro `up -d`, não depois de um incidente.
+
+### Reincidência (2026-08-24, mesmas horas): a correção nunca tinha sido commitada de verdade
+
+A frase acima ("já tem `name: pricify3d-dev`") foi escrita como se a
+correção estivesse no git - mas a linha só existia como edição manual
+aplicada direto na VPS durante a recuperação do incidente, nunca
+commitada. Meses (na prática, horas) depois, numa sessão diferente,
+sugeri descartar essa mesma linha como "mudança local redundante" (já
+que parecia bater com o que eu achava que já estava commitado) pra
+resolver um `git pull` travado - **derrubando produção pela segunda vez
+com a causa raiz idêntica**: sem o `name:`, o `docker compose up -d` do
+diretório de dev usou o nome de projeto default (`3d-budget-saas`, igual
+ao de produção) e recriou os containers `backend`/`frontend` de
+produção com a config de dev.
+
+Recuperação (mesmo padrão da primeira vez): `docker rm -f` nos
+containers fantasmas criados com nome errado (ficaram em `Created`,
+nunca chegaram a rodar - o Postgres do serviço `postgres` do dev nem
+conseguiu subir, porta 5433 já estava em uso pelo Postgres de dev de
+verdade, o que impediu backend/frontend de sequer iniciar), depois
+`docker compose build --no-cache && docker compose up -d` de dentro do
+diretório de produção pra reconstruir as imagens de produção do zero
+(rebuild sem cache é necessário aqui - o build do dev pode ter
+sobrescrito a mesma tag de imagem, já que produção e dev usam os mesmos
+`Dockerfile`s do monorepo).
+
+**Lição real**: documentação que descreve uma correção como já aplicada
+só vale alguma coisa se a correção estiver de fato no git. Uma edição
+feita à mão na VPS durante uma recuperação de incidente tem que ser
+commitada explicitamente na hora, com o mesmo cuidado que qualquer outra
+mudança - "já documentei que fiz" não é o mesmo que "já commitei". Ver
+`Contextos/Decisoes.md` (2026-08-24) pra o relato completo dessa
+reincidência.
 
 ## Asaas Checkout nunca propaga `externalReference` pro pagamento gerado
 

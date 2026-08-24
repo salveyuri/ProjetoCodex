@@ -3038,3 +3038,71 @@ no `dev` local:
 Fica pendente o Yuri confirmar no Android de verdade que sumiu de vez -
 a simulação via JS é fiel ao `onChange` do React, mas não reproduz 100%
 as particularidades de um teclado touch físico.
+
+## 2026-08-24 (mesmo dia) - Produção caiu de novo: a mesma correção do incidente anterior nunca tinha sido commitada
+
+Pedi pro Yuri rodar `git pull` no ambiente de dev pra levar a correção
+acima, e o pull travou:
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+        3d-budget-saas/docker-compose.dev.yml
+```
+
+O `git diff` mostrou que a única mudança local era `name: pricify3d-dev`
+- exatamente a correção permanente do incidente de produção documentado
+em `Contextos/Conhecimento.md` ("Docker Compose: pastas com o mesmo nome
+final colidem"). Concluí (errado) que já estava commitada e mandei
+descartar como redundante:
+
+```
+git checkout -- 3d-budget-saas/docker-compose.dev.yml
+git pull
+```
+
+**Isso estava errado.** A linha nunca tinha sido commitada de verdade -
+só existia como a edição manual aplicada direto na VPS na hora da
+recuperação do incidente anterior, e eu tinha documentado isso como se
+fosse commit (ver correção em `Contextos/Conhecimento.md`). Descartar o
+diff removeu a única cópia da proteção. O `docker compose build
+--no-cache && up -d` que rodou logo depois usou o nome de projeto
+default (`3d-budget-saas`, igual à pasta de produção) e **recriou os
+containers `backend`/`frontend` de produção** com a config de dev -
+`curl -I https://pricify3d.com` voltou 502.
+
+### Recuperação
+
+Mesmo padrão do incidente original:
+
+1. `docker rm -f 3d-budget-saas-frontend-1 3d-budget-saas-backend-1
+   3d-budget-saas-postgres-1` - os três ficaram em `Created` (nunca
+   chegaram a rodar: o Postgres do serviço `postgres` do dev tentou subir
+   na porta 5433, que já estava ocupada pelo Postgres de dev de verdade,
+   travando o resto da pilha antes de iniciar) - remoção seguro, sem
+   nenhum dado em risco.
+2. `cd ~/app/3d-budget-saas && docker compose build --no-cache &&
+   docker compose up -d` - rebuild sem cache foi necessário porque
+   produção e dev usam os mesmos `Dockerfile`s do monorepo
+   (`frontend/Dockerfile`/`backend/Dockerfile`), então o build de dev
+   pode ter sobrescrito a mesma tag de imagem com o `NEXT_PUBLIC_API_URL`
+   errado (apontando pra API de dev) - só reconstruir garante que
+   produção sobe com a config certa.
+3. Confirmado: `curl -I https://pricify3d.com` voltou 200, containers
+   `3d-budget-saas-backend-1`/`3d-budget-saas-frontend-1` `Up`/`healthy`
+   nas portas certas (3001/3000).
+4. Restaurei `name: pricify3d-dev` em `docker-compose.dev.yml` de
+   verdade desta vez (commit `9a98129`), Yuri deu `git pull` (confirmou
+   `9a98129` no `git log`), rebuild sem cache + `up -d` no ambiente de
+   dev - containers voltaram a ficar `pricify3d-dev-*` (não
+   `3d-budget-saas-*`), sem tocar em produção.
+
+### Lição
+
+Documentação que descreve uma correção como "já aplicada" só é confiável
+se a correção estiver realmente no git - não basta a intenção estar
+registrada em `Contextos/Conhecimento.md`. Uma mudança feita à mão
+direto na VPS durante uma recuperação de incidente precisa ser
+commitada explicitamente na hora (ou pelo menos antes de a sessão
+terminar), com o mesmo rigor de qualquer outra mudança - "documentei que
+fiz" não é o mesmo que "commitei". Ver `Contextos/Conhecimento.md`
+(seção do incidente original) pra o texto corrigido.

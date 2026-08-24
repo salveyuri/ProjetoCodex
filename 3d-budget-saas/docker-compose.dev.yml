@@ -1,3 +1,11 @@
+# project name explícito — sem isso, o Compose usa o nome do diretório
+# como project name por padrão, e como a pasta de produção também termina
+# em "3d-budget-saas", os dois ambientes colidem (nomes de container,
+# rede, volume) e um `up` num deles pode recriar os containers do outro.
+# Já causou queda de produção de verdade em 2026-08-24 — ver
+# Contextos/Conhecimento.md e Contextos/Decisoes.md.
+name: pricify3d-dev
+
 # Docker Compose de DEV/STAGING — roda numa pasta separada da de produção
 # na mesma VPS (ver Contextos/Ambientes.md, "Ambiente de dev/staging").
 # Diferente do docker-compose.yml de produção: usa Postgres LOCAL (serviço

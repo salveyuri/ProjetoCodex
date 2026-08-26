@@ -3149,3 +3149,57 @@ entre a implementação do checkout (2026-08-13) e a correção do webhook
 sandbox e via leitura do payload de um webhook de verdade), mas a janela
 não chegou a causar dano em produção - encerra o item, sem necessidade
 de reativação manual de plano pra nenhum cliente.
+
+## 2026-08-24 (mesmo dia) - RLS desabilitado em todas as tabelas (alerta do Supabase)
+
+Yuri recebeu um alerta automático do Supabase: `Table public.coupons is
+public, but RLS has not been enabled`. O linter do Supabase expõe
+automaticamente via PostgREST qualquer tabela do schema `public` sem Row
+Level Security, mesmo que a aplicação nunca use PostgREST.
+
+### Investigação
+
+Conferi se este projeto usa a API REST do Supabase ou o client JS
+(`@supabase/supabase-js`) em algum lugar - `grep` em `backend/src` e
+`frontend/src` por `supabase-js`/`SUPABASE_ANON_KEY`/`createClient`: zero
+resultados. O backend só acessa o banco via Prisma, com
+`DATABASE_URL` usando o role `postgres` do connection pooler do Supabase
+(dono das tabelas). Ou seja: a aplicação nunca dependeu de RLS pra nada -
+mas a API REST do Supabase continua ligada por padrão, e sem RLS,
+qualquer tabela do schema `public` fica de leitura/escrita livre por
+quem tiver a `anon key` do projeto (que fica em qualquer client-side
+Supabase típico, embora não seja o caso aqui - mesmo assim, é a
+superfície de exposição que o alerta aponta).
+
+Verifiquei o `schema.prisma`: são **21 tabelas** no total, todas
+igualmente sem RLS - `coupons` foi só a primeira que o Supabase alertou;
+as outras 20 provavelmente apareceriam uma a uma também.
+
+### Correção
+
+Role `postgres` (dono de tabela) faz **bypass automático de RLS** em
+Postgres, a menos que `FORCE ROW LEVEL SECURITY` esteja setado (não
+está, e não precisa estar). Isso significa: `ALTER TABLE ... ENABLE ROW
+LEVEL SECURITY` **sem nenhuma policy** é a correção certa e segura aqui -
+fecha o acesso via PostgREST (roles `anon`/`authenticated` passam a não
+enxergar nada, já que não têm nenhuma policy concedendo acesso) sem
+afetar em nada o Prisma/a aplicação (continua enxergando tudo
+normalmente, como dono das tabelas).
+
+Migração nova, cobrindo as 21 tabelas de uma vez (não só `coupons`):
+`backend/prisma/migrations/20260824220000_enable_rls_all_tables/migration.sql`.
+Formato igual às migrações já existentes do projeto - aplicada via
+`prisma migrate deploy`, mesmo fluxo já usado neste projeto (diferente
+do outro projeto do Yuri, `atendimentos_app`, onde migração é entregue
+manual - aqui é rastreada em `backend/prisma/migrations/` e aplicada via
+Prisma normalmente).
+
+### Onde aplicar
+
+- **Produção**: precisa, de verdade - é o banco Supabase real, exposto
+  via PostgREST publicamente.
+- **Dev/staging (VPS)**: opcional - usa Postgres LOCAL em Docker, sem
+  PostgREST/API REST nenhuma na frente, então não tem a mesma exposição.
+  Vale aplicar só por consistência do histórico de migração entre
+  ambientes, não por necessidade de segurança.
+- **Dev local (Windows)**: mesma lógica do dev/staging - opcional.

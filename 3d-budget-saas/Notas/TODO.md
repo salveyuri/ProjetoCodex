@@ -53,6 +53,21 @@ Passo") em 2026-08-12.
       Runbook completo em `Contextos/Ambientes.md` ("Ambiente de
       dev/staging").
 
+## Segurança: RLS desabilitado nas tabelas do Supabase (2026-08-24)
+
+- [ ] Yuri recebeu alerta do Supabase (`public.coupons` exposta via
+      PostgREST sem RLS) — na verdade **as 21 tabelas** do
+      `schema.prisma` estão sem RLS, não só essa. App não usa
+      PostgREST/client JS do Supabase em lugar nenhum (confirmado via
+      grep) — Prisma acessa com o role `postgres`, que faz bypass
+      automático de RLS. Migração já criada, habilitando RLS sem
+      nenhuma policy nas 21 tabelas (fecha o PostgREST, não afeta a
+      app): `backend/prisma/migrations/20260824220000_enable_rls_all_tables/`.
+      **Falta aplicar em produção**:
+      `docker compose run --rm backend npx prisma migrate deploy` em
+      `~/app/3d-budget-saas`, depois de `git pull`. Ver
+      `Contextos/Decisoes.md` (2026-08-24).
+
 ## PDF de orçamento (implementado em 2026-08-18)
 
 - [x] CNPJ/CPF, telefone e endereço no schema de `Company` (todos

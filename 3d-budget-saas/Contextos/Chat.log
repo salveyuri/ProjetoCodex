@@ -2760,3 +2760,14 @@ rodada (sem TWA/Play Store, isso fica pra depois se ele quiser).
   encontrado. Nenhum cliente pagou de verdade no Asaas entre 2026-08-13
   (implementacao do checkout) e 2026-08-24 (correcao do webhook) sem o
   plano ativar. Bug real, mas sem dano em producao. TODO.md fechado.
+- 2026-08-24 (mesmo dia): Yuri recebeu alerta do Supabase - tabela
+  public.coupons sem RLS habilitado, exposta via PostgREST. Confirmei
+  via grep que o app nunca usa a API REST/client JS do Supabase (so
+  Prisma com o role postgres, que faz bypass automatico de RLS por ser
+  dono das tabelas) - e que as 21 tabelas do schema.prisma estao
+  igualmente sem RLS, nao so coupons. Criei uma migracao so (formato
+  Prisma normal deste projeto) habilitando RLS sem nenhuma policy nas 21
+  - fecha o acesso via PostgREST sem afetar a aplicacao em nada.
+  `backend/prisma/migrations/20260824220000_enable_rls_all_tables/`.
+  Precisa aplicar em producao (Supabase real); dev/staging (Postgres
+  local em Docker, sem PostgREST) e opcional, so por consistencia.

@@ -17,6 +17,26 @@ sendo seguidos implicitamente no histórico do projeto.
 - Migrações Prisma ficam versionadas em `backend/prisma/migrations/`;
   aplicar com `npx prisma migrate deploy` (nunca editar uma migração já
   aplicada, criar uma nova).
+- **Toda tabela nova precisa habilitar RLS na própria migração que a cria**:
+  `ALTER TABLE "nome_da_tabela" ENABLE ROW LEVEL SECURITY;`, sem nenhuma
+  policy. O Supabase expõe automaticamente qualquer tabela do schema
+  `public` via PostgREST, mesmo que a aplicação nunca use PostgREST/o
+  client JS do Supabase (não usa — só Prisma, com o role `postgres`, que
+  faz bypass de RLS por ser dono das tabelas, então habilitar RLS sem
+  policy fecha o PostgREST sem afetar a aplicação). Sem isso, o Supabase
+  gera um alerta de segurança por tabela ("Table public.X is public, but
+  RLS has not been enabled"). Descoberto em 2026-08-24 já com 21 tabelas
+  sem RLS - corrigido numa migração retroativa
+  (`20260824220000_enable_rls_all_tables`); a partir de agora é regra
+  pra toda migração que cria tabela nova. Ver `Contextos/Decisoes.md`
+  (2026-08-24).
+- **`docker compose run --rm backend npx prisma migrate deploy` usa a
+  imagem já buildada** - `git pull` sozinho atualiza só o código-fonte no
+  disco, não a imagem Docker (as migrations são copiadas pra dentro da
+  imagem em tempo de build). Sempre `docker compose build backend` antes
+  de rodar uma migração nova em qualquer ambiente, ou o comando roda
+  contra os arquivos antigos silenciosamente (sem erro, só reporta
+  "no pending migrations" porque genuinamente não enxerga a nova).
 
 ## Multi-tenancy
 

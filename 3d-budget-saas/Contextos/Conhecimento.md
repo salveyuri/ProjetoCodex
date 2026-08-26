@@ -564,3 +564,42 @@ antes de confiar em qualquer suposição sobre o formato do webhook do
 Asaas - os testes automatizados que simulavam esse payload reproduziam
 a suposição errada do próprio código, não o formato real, e por isso
 nunca pegaram esse bug.
+
+## Supabase expõe toda tabela `public` sem RLS via PostgREST - mesmo sem usar PostgREST
+
+Alerta automático do Supabase (2026-08-24): `Table public.coupons is
+public, but RLS has not been enabled`. Esse app nunca usa a API
+REST/client JS do Supabase (confirmado via grep - só Prisma, com o role
+`postgres` do connection pooler), mas o Supabase expõe TODA tabela do
+schema `public` via PostgREST por padrão, independente de a aplicação
+usar isso ou não. Ao investigar, as **21 tabelas** do `schema.prisma`
+estavam igualmente sem RLS - `coupons` foi só a primeira que o Supabase
+alertou.
+
+Correção: `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` sem nenhuma
+policy, nas 21 de uma vez (migração
+`20260824220000_enable_rls_all_tables`). Funciona sem quebrar nada
+porque o role `postgres` (dono das tabelas) faz bypass automático de RLS
+em Postgres - só fecha o acesso via PostgREST pros roles `anon`/
+`authenticated`, que não têm nenhuma policy concedendo acesso. Virou
+convenção permanente em `Contextos/Convencoes.md`: toda tabela nova
+precisa disso na própria migração que a cria.
+
+### Pegadinha ao aplicar: `docker compose run` usa a imagem já buildada
+
+Ao tentar aplicar essa migração em produção, `docker compose run --rm
+backend npx prisma migrate deploy` reportou "No pending migrations to
+apply" mesmo com a migração nova já commitada e com `git pull` feito -
+sem erro, sem aviso, silenciosamente incorreto. Causa: as migrations são
+copiadas pra dentro da imagem Docker em tempo de **build**
+(`COPY --from=build /app/backend/prisma ./backend/prisma` no
+`backend/Dockerfile`) - `git pull` só atualiza o código-fonte no disco
+da VPS, não a imagem já construída. `docker compose run` usa a imagem
+existente, que ainda só conhecia as migrations de antes do pull.
+
+Diagnosticado comparando a contagem de pastas locais
+(`ls backend/prisma/migrations/*/ | wc -l`) com o "N migrations found"
+que o comando imprime - divergiam (32 local vs. 31 na imagem). Fix:
+sempre `docker compose build backend` antes de rodar uma migração nova,
+nunca só `git pull` sozinho. Reforçado em
+`Contextos/Convencoes.md`.

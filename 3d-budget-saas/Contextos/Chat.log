@@ -2771,3 +2771,17 @@ rodada (sem TWA/Play Store, isso fica pra depois se ele quiser).
   `backend/prisma/migrations/20260824220000_enable_rls_all_tables/`.
   Precisa aplicar em producao (Supabase real); dev/staging (Postgres
   local em Docker, sem PostgREST) e opcional, so por consistencia.
+- 2026-08-24 (mesmo dia): Yuri tentou aplicar a migracao de RLS em
+  producao mas o alerta do Supabase continuou. Diagnostico: `docker
+  compose run --rm backend npx prisma migrate deploy` reportava "no
+  pending migrations" mesmo com git pull feito - erro meu na instrucao,
+  faltou `docker compose build backend` antes (migrations sao copiadas
+  pra dentro da imagem so em build-time, git pull sozinho nao atualiza a
+  imagem ja construida). Confirmado comparando contagem de pastas local
+  (32) vs. "migrations found" da imagem (31). Corrigido: build + migrate
+  deploy rodou certo dessa vez ("Applying migration..."), Yuri confirmou
+  resolvido no Supabase. Pediu pra registrar como convencao permanente:
+  toda tabela nova precisa habilitar RLS na propria migracao que a cria.
+  Adicionado em Contextos/Convencoes.md (regra de RLS + regra de sempre
+  rebuildar antes de migrar) e Contextos/Conhecimento.md (licoes
+  completas, com a pegadinha do docker compose run).

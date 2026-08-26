@@ -101,12 +101,22 @@ sendo seguidos implicitamente no histórico do projeto.
   completo).
 - **Correção (2026-08-12):** o repositório Git existe sim — raiz em
   `D:\ProjetoCodex` (um nível acima de `3d-budget-saas/`), remoto GitHub
-  `salveyuri/ProjetoCodex` — ver detalhes e o estado atual (poucos commits,
-  muito trabalho não commitado) em `Contextos/Ambientes.md`. **Nunca rode
-  `git add`/`commit`/`push` por conta própria** — como no `atendimentos_app`,
-  operações de Git exigem confirmação explícita do Yuri antes de executar.
-  Ainda não existe uma convenção de mensagem de commit/branch definida por
-  ele; perguntar antes de assumir um padrão.
+  `salveyuri/ProjetoCodex` — ver detalhes e o estado atual em
+  `Contextos/Ambientes.md`.
+- **Atualizado (2026-08-26):** ao contrário do que a versão anterior desta
+  linha dizia, o Yuri confirmou que o fluxo é **auto-commit ao fechar cada
+  tarefa** — não pedir confirmação a cada commit. Convenção em uso desde
+  então (diferente do `atendimentos_app`, onde é SVN manual e cada
+  commit/versão exige aprovação explícita — não confundir os dois
+  projetos): `git add` sempre com arquivos explícitos (nunca `-A`/`.`),
+  descartar churn rotineiro tipo `frontend/next-env.d.ts`, atualizar
+  `Contextos/Decisoes.md`/`Chat.log`/`Notas/TODO.md` antes de commitar
+  (no estilo já existente de cada arquivo), commitar, e ao final informar
+  os comandos exatos de `git push` + deploy (incluindo passo de migração
+  só quando uma migração nova foi adicionada). Operação de banco em si
+  (rodar a migração de verdade contra um banco real) continua exigindo
+  confirmação explícita antes — é o Yuri quem roda esses comandos na VPS,
+  nunca eu diretamente.
 - Ao terminar uma tarefa, resuma para o Yuri: o que mudou, quais comandos de
   validação rodaram e com que resultado, e quais pendências ficaram (via
   `Notas/TODO.md`).

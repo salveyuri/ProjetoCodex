@@ -490,7 +490,11 @@ export default function AdminEmailTemplatesPage() {
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-foreground">{template.name}</p>
                             <span className="rounded-md border border-border bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted">
-                              {template.language === "en" ? "EN" : "PT"}
+                              {template.language === "en"
+                                ? "EN"
+                                : template.language === "es"
+                                  ? "ES"
+                                  : "PT"}
                             </span>
                           </div>
                           <p className="text-xs text-muted">{template.key}</p>

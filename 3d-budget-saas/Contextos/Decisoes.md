@@ -3203,3 +3203,124 @@ Prisma normalmente).
   Vale aplicar só por consistência do histórico de migração entre
   ambientes, não por necessidade de segurança.
 - **Dev local (Windows)**: mesma lógica do dev/staging - opcional.
+
+## 2026-08-26 - Espanhol como terceiro idioma do sistema, com preço de assinatura em dólar
+
+Yuri pediu tradução completa do sistema pro espanhol, com o valor de
+assinatura aparecendo em dólar pros usuários em espanhol.
+
+### Moeda: já funcionava, não precisou de lógica nova
+
+A moeda da assinatura já era decidida por **país** (`currencyForCountry`
+em `shared/src/index.ts`, `code === "BR" ? "BRL" : "USD"`), não por
+idioma - qualquer país de língua espanhola já cai em USD automaticamente,
+sem mudança nenhuma nessa lógica. Confirmado ao vivo: cadastro com
+idioma espanhol + país Argentina mostra "Cobro de la suscripción
+mostrado en dólares (USD)" e o plano Pro na tela de faturamento em
+"US$ 9,90/mes".
+
+**Achado à parte, não corrigido (fora de escopo)**: o plano Enterprise
+aparece em R$ mesmo pra esse usuário, porque `Plan.priceUsd` (nullable)
+não está preenchido pra ele no banco - só o Pro tem. Isso é lacuna de
+dado (preenchimento em `/admin/plans`), não bug de código; a
+infraestrutura de exibição em USD funciona corretamente sempre que o
+campo está preenchido. Registrado em `Notas/TODO.md`.
+
+### Moeda da UI geral (preços de orçamento, analytics): mesmo padrão do "en"
+
+Separado da moeda de assinatura: o app também formata dinheiro **da
+própria ferramenta** (preços de orçamento, dashboard, analytics) via
+`formatMoney` em `LanguageContext.tsx`, historicamente
+`language === "en" ? USD : BRL` (troca só de exibição, sem conversão
+real - ver decisão de 2026-08-17). Estendido pro espanhol seguindo a
+mesma regra que já valia pro inglês: só `pt-BR` mostra BRL, qualquer
+outro idioma da UI (agora `en` ou `es`) mostra USD. Extraídos dois
+helpers novos em `shared/src/index.ts` (`localeForLanguage`,
+`currencyForLanguage`) reaproveitados tanto no frontend quanto no
+backend, pra não repetir esse `language === "pt-BR" ? ... : ...` em
+cada lugar - eram 5+ pontos com essa mesma lógica duplicada
+(`LanguageContext.tsx`, `analytics/page.tsx`,
+`settings/formulas/page.tsx`, `email.service.ts`, `quote-pdf.service.ts`).
+Locale de número/data do espanhol: `es-419` (espanhol latino-americano -
+escolhido em vez de `es-ES` por ser o público mais provável pra um SaaS
+brasileiro expandindo, embora isso só afete separador decimal/formato de
+data, nunca o símbolo da moeda, que já é forçado por `currency: "USD"`).
+
+### O que precisou de tradução de verdade
+
+- **`SupportedLanguage`**: `"pt-BR" | "en" | "es"` (`shared/src/index.ts`).
+- **Dicionário do frontend**: `frontend/src/lib/i18n/es.ts` (novo,
+  ~565 chaves, tipado `Record<TranslationKey, string>` igual ao `en.ts` -
+  o TypeScript já garante que nenhuma chave fica faltando, foi usado como
+  checklist de verdade durante a tradução).
+- **Lista de países**: `CountryOption` ganhou `nameEs`; as ~250 linhas de
+  `COUNTRY_ROWS` ganharam uma 4ª coluna com o nome em espanhol
+  (`shared/src/index.ts`). `countryName()` virou switch de 3 vias.
+- **Descrições de variáveis de fórmula** (vêm do backend, não do
+  dicionário client-side - ver decisão de 2026-08-20):
+  `systemVariableMeta`/`customVariableDescriptions` em
+  `formula.service.ts`, 20 descrições técnicas traduzidas.
+- **PDF de orçamento**: `pdfStrings.es` novo em `quote-pdf.service.ts`,
+  mesma estrutura de `pt-BR`/`en`. `resolveTerms` (texto customizado de
+  termos por empresa) foi ajustado pra virar 3 vias - espanhol **não**
+  tem campo `Company.customTermsEs` (só `customTerms`/`customTermsEn`
+  existem), então sempre cai nos termos padrão embutidos em `pdfStrings.es`.
+  Registrado como limitação conhecida, não implementado o campo novo
+  (seria migração + UI em Perfil só pra isso - fora do escopo pedido).
+- **E-mails transacionais**: migração nova
+  (`20260826150000_add_spanish_email_templates`) semeando a versão `es`
+  dos 7 templates que já tinham pt-BR+en (`ACCOUNT_CREATED`,
+  `PASSWORD_RESET`, `SUBSCRIPTION_CONFIRMED`, `SUBSCRIPTION_RENEWED`,
+  `SUBSCRIPTION_EXPIRING`, `QUOTE_SUMMARY`, `PAYMENT_OVERDUE`) - mesmo
+  padrão HTML dos existentes. `COUPON_REVERT_FAILED` continua só
+  `pt-BR` de propósito (é notificação interna pro admin, nunca vai pro
+  cliente - ver `email.service.ts`).
+- **Erros de API traduzidos no client** (`frontend/src/lib/api-error.ts`):
+  as ~28 mensagens de `KNOWN_ERROR_MESSAGES` + o fallback genérico
+  ganharam a versão `es`.
+- **Seletor de idioma**: opção "Espanhol"/"Español" adicionada nos dois
+  lugares que já tinham o seletor (`RegisterForm.tsx`,
+  `settings/page.tsx` aba Perfil) - chave `common.spanish` nova.
+  `detectBrowserLanguage` também passou a reconhecer `navigator.language`
+  começando com "es".
+- **`supportedLanguageSchema`** (Zod, `auth.validator.ts`): `z.enum(["pt-BR",
+  "en", "es"])` - usado tanto no cadastro quanto na atualização de perfil.
+- **Badge de idioma na tela admin de templates**
+  (`admin/email-templates/page.tsx`): virou 3 vias (EN/ES/PT) - a tela em
+  si continua só em português de propósito (admin fica fora do escopo de
+  tradução, ver decisão de 2026-08-17), só o badge precisava reconhecer a
+  linha nova.
+
+### O que ficou deliberadamente fora (dados admin-only, não é texto de UI)
+
+`Plan.description` e `Formula.name`/`SystemFormula.name` são texto livre
+cadastrado pelo admin (não vêm do dicionário) - continuam aparecendo no
+idioma em que foram cadastrados (hoje, português) pra qualquer visitante,
+independente do idioma da UI. Isso já era assim pro inglês antes desta
+mudança; não é regressão, é característica do modelo de dado (conteúdo
+administrativo de texto livre, não string traduzível). Confirmado ao
+vivo: fórmula padrão do sistema aparece como "Formula Padrao do Sistema"
+mesmo com toda a UI em espanhol ao redor.
+
+### Verificação
+
+`tsc`/lint/build limpos nos 3 pacotes (`shared`/`backend`/`frontend`) -
+o TypeScript pegou automaticamente qualquer `Record<SupportedLanguage,
+...>` com a chave `es` faltando, então a cobertura de tradução foi
+verificada pelo compilador, não só por inspeção visual. 148/148 testes
+do backend passando. Testado ao vivo (dev local): cadastro com espanhol
++ Argentina, dashboard/faturamento/configurações/fórmulas todos
+renderizando em espanhol corretamente, incluindo as descrições de
+variável vindas do backend. `US$ 9,90/mes` confirmado na tela de
+faturamento pro plano Pro.
+
+**Achado à parte, não é regressão**: apareceu um erro de hidratação do
+React ("Hydration failed because the server rendered text...") ao
+navegar com idioma `es` salvo. Confirmei que o **mesmo erro já
+acontecia com `en`** antes desta mudança (testado trocando
+manualmente o `localStorage` pra `en` e recarregando) - é uma
+característica pré-existente da arquitetura (`LanguageContext.tsx`
+renderiza `pt-BR` no server, já que `window`/`localStorage` não existem
+no SSR, e corrige pro idioma real só depois de hidratar no client -
+qualquer idioma diferente de `pt-BR` dispara isso, não é específico do
+espanhol). Fora do escopo desta tarefa; não corrigido.

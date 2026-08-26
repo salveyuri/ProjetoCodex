@@ -82,11 +82,44 @@ const KNOWN_ERROR_MESSAGES: Record<SupportedLanguage, Record<string, string>> = 
     COUPON_NOT_FOUND: "Coupon not found.",
     COUPON_CODE_TAKEN: "A coupon with this code already exists.",
   },
+  es: {
+    INVALID_CREDENTIALS: "Correo o contraseña invalidos.",
+    EMAIL_ALREADY_EXISTS: "Correo ya registrado.",
+    ACCOUNT_INACTIVE: "Cuenta desactivada. Contacte al soporte.",
+    VALIDATION_ERROR: "Revise los campos completados e intente de nuevo.",
+    PLAN_LIMIT_REACHED: "Se alcanzo el limite del plan actual.",
+    PLAN_FEATURE_UNAVAILABLE: "Esta funcion no esta disponible en el plan actual.",
+    SUBSCRIPTION_PAST_DUE: "Suscripcion morosa. Regularice el pago para continuar.",
+    RATE_LIMIT_GLOBAL: "Demasiadas solicitudes. Espere un momento e intente de nuevo.",
+    RATE_LIMIT_LOGIN: "Demasiados intentos. Espere un minuto e intente de nuevo.",
+    RATE_LIMIT_REGISTER: "Demasiados intentos. Espere un minuto e intente de nuevo.",
+    RATE_LIMIT_REFRESH: "Demasiados intentos. Espere un minuto e intente de nuevo.",
+    RATE_LIMIT_CALCULATION: "Demasiadas solicitudes. Espere un momento e intente de nuevo.",
+    PLAN_NOT_FOUND: "Este plan ya no esta disponible.",
+    PLAN_IN_USE:
+      "Este plan esta en uso por empresas y no puede eliminarse. Desactivelo en su lugar.",
+    PLAN_CODE_TAKEN: "Ya existe un plan con este codigo.",
+    ASAAS_API_ERROR: "La pasarela de pago no respondio. Intente de nuevo en instantes.",
+    PASSWORD_RESET_TOKEN_INVALID:
+      "Este enlace de restablecimiento de contraseña es invalido o ya expiro. Solicite uno nuevo.",
+    EMAIL_TEMPLATE_NOT_FOUND: "Esta plantilla de correo no fue encontrada.",
+    RATE_LIMIT_FORGOT_PASSWORD: "Demasiados intentos. Espere 15 minutos e intente de nuevo.",
+    RATE_LIMIT_RESET_PASSWORD: "Demasiados intentos. Espere un minuto e intente de nuevo.",
+    CURRENT_PASSWORD_INVALID: "La contraseña actual es incorrecta.",
+    RATE_LIMIT_CHANGE_PASSWORD: "Demasiados intentos. Espere un minuto e intente de nuevo.",
+    SYSTEM_FORMULA_NOT_FOUND: "Esta formula del sistema no fue encontrada.",
+    SYSTEM_FORMULA_DEFAULT_DELETE_BLOCKED:
+      "La formula predeterminada no puede eliminarse. Haga otra formula predeterminada primero.",
+    COUPON_INVALID: "Cupon invalido o inactivo.",
+    COUPON_NOT_FOUND: "Cupon no encontrado.",
+    COUPON_CODE_TAKEN: "Ya existe un cupon con este codigo.",
+  },
 };
 
 const DEFAULT_FALLBACK: Record<SupportedLanguage, string> = {
   "pt-BR": "Nao foi possivel completar esta acao. Tente novamente em instantes.",
   en: "Could not complete this action. Try again shortly.",
+  es: "No fue posible completar esta accion. Intente de nuevo en instantes.",
 };
 
 // Mirrors the setApiAuthorization pattern in AuthContext.tsx — module-level

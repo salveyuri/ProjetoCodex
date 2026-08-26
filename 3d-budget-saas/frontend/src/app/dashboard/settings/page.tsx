@@ -774,6 +774,7 @@ export default function SettingsPage() {
                   >
                     <option value="pt-BR">{t("common.portuguese")}</option>
                     <option value="en">{t("common.english")}</option>
+                    <option value="es">{t("common.spanish")}</option>
                   </select>
                 </label>
               </div>

@@ -1,7 +1,7 @@
 import { isValidCountryCode } from "@3d-budget/shared";
 import { z } from "zod";
 
-export const supportedLanguageSchema = z.enum(["pt-BR", "en"]);
+export const supportedLanguageSchema = z.enum(["pt-BR", "en", "es"]);
 
 export const countryCodeSchema = z
   .string()

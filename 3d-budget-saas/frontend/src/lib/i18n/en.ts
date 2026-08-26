@@ -15,6 +15,7 @@ export const en: Record<TranslationKey, string> = {
   "common.language": "Language",
   "common.portuguese": "Portuguese",
   "common.english": "English",
+  "common.spanish": "Spanish",
 
   "nav.dashboard": "Dashboard",
   "nav.quotes": "Quotes",

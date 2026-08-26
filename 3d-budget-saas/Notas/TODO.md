@@ -538,6 +538,31 @@ Passo") em 2026-08-12.
       de verdade** e já deployado em produção (2026-08-24). Ver
       `Contextos/Decisoes.md` (2026-08-24).
 
+## Idioma espanhol (implementado em 2026-08-26)
+
+- [x] Sistema traduzido pro espanhol (UI, PDF de orçamento, e-mails
+      transacionais, erros de API, lista de países) - moeda de
+      assinatura em USD pra qualquer país não-Brasil (já funcionava por
+      país, não precisou de lógica nova). Ver `Contextos/Decisoes.md`
+      (2026-08-26).
+- [ ] **Plano Enterprise sem `priceUsd` preenchido** - a tela de
+      faturamento mostra R$ pro Enterprise mesmo pra usuário de país não
+      -Brasil, porque só o plano Pro tem o preço de referência em dólar
+      cadastrado. Lacuna de dado, não bug de código - preencher em
+      `/admin/plans`.
+- [ ] `Company.customTermsEs` não existe (só `customTerms`/
+      `customTermsEn`) - PDFs de orçamento em espanhol sempre usam os
+      termos padrão embutidos, empresas não conseguem personalizar como
+      já fazem em português/inglês. Precisaria de coluna nova + migração
+      + campo em Configurações > Perfil. Não implementado (fora do
+      escopo pedido).
+- [ ] Erro de hidratação do React pré-existente quando o idioma salvo
+      não é `pt-BR` (`LanguageContext.tsx` renderiza `pt-BR` no SSR,
+      corrige só depois de hidratar) - confirmado que já acontecia com
+      `en` antes desta mudança, não é regressão do espanhol. Não
+      corrigido (mudança de arquitetura maior: cookie de idioma no SSR
+      ou similar).
+
 ## Próximo passo geral
 
 Pós-MVP: preparar deploy, seeds, testes automatizados, monitoramento externo

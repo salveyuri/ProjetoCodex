@@ -1,6 +1,7 @@
 "use client";
 
 import type { UserAnalyticsOverview } from "@3d-budget/shared";
+import { localeForLanguage } from "@3d-budget/shared";
 import {
   Bar,
   BarChart,
@@ -71,7 +72,7 @@ export default function AnalyticsPage() {
   const formatMonth = useCallback(
     (month: string): string => {
       const [year, monthIndex] = month.split("-").map(Number);
-      return new Intl.DateTimeFormat(language === "en" ? "en-US" : "pt-BR", {
+      return new Intl.DateTimeFormat(localeForLanguage(language), {
         month: "short",
         year: "2-digit",
         timeZone: "UTC",

@@ -8,6 +8,7 @@ import type {
   FormulaVariable,
   ProductionSettings,
 } from "@3d-budget/shared";
+import { localeForLanguage } from "@3d-budget/shared";
 import axios from "axios";
 import {
   AlertTriangle,
@@ -1215,7 +1216,7 @@ const SubstitutedExpression = ({
   const tokens = expression
     .split(/([a-zA-Z_][a-zA-Z0-9_]*|[()+\-*/^])/g)
     .filter(Boolean);
-  const numberLocale = language === "en" ? "en-US" : "pt-BR";
+  const numberLocale = localeForLanguage(language);
 
   return (
     <pre className="min-h-12 max-w-full whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground">

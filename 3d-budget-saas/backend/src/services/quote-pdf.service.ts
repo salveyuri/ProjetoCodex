@@ -129,6 +129,50 @@ const pdfStrings = {
     currency: { locale: "en-US", currency: "USD" },
     dateLocale: "en-US",
   },
+  es: {
+    docTitlePrefix: "Presupuesto",
+    docSubjectPrefix: "Presupuesto para",
+    contactLabel: "Contacto:",
+    taxIdLabel: "NIF/CUIT:",
+    taxIdUnknown: "NIF/CUIT: no informado",
+    phoneLabel: "Telefono:",
+    quoteHeading: "PRESUPUESTO",
+    statusLabel: "Estado:",
+    clientLabel: "Cliente",
+    issuedLabel: "Emitido el",
+    validUntilLabel: "Validez",
+    sectionItems: "Mesas de impresion",
+    columns: {
+      piece: "Pieza",
+      qty: "Cant.",
+      material: "Material",
+      machine: "Maquina",
+      weightTime: "Peso/Tiempo",
+      value: "Precio",
+    },
+    subtotal: "Subtotal",
+    discounts: "Descuentos",
+    surcharge: "Recargo",
+    total: "Valor total",
+    formulaApplied: "Formula aplicada:",
+    defaultFormulaName: "Formula Predeterminada del Sistema",
+    totalWeight: (value: string) => `Peso total: ${value} g`,
+    totalTime: (value: string) => `Tiempo total: ${value} h`,
+    termsHeading: "Terminos y observaciones",
+    terms: [
+      "Garantia limitada a defectos de fabricacion del servicio de impresion.",
+      "El plazo de entrega estimado se confirmara tras la aprobacion y disponibilidad de produccion.",
+      "Cambios de archivo, escala, material o acabado pueden requerir un nuevo presupuesto.",
+    ],
+    validUntilNote: (date: string) => `Presupuesto valido hasta ${date}.`,
+    footer: (companyName: string) =>
+      `${companyName} - Documento generado por 3D Budget SaaS`,
+    filenamePrefix: "Presupuesto",
+    filenameFallback: "Cliente",
+    filenameSummarySuffix: "_Resumen",
+    currency: { locale: "es-419", currency: "USD" },
+    dateLocale: "es-419",
+  },
 } as const satisfies Record<SupportedLanguage, unknown>;
 
 type PdfStrings = (typeof pdfStrings)[SupportedLanguage];
@@ -591,13 +635,21 @@ const drawFinancialSummarySimple = (
 // the matching language via Settings > Perfil. Deliberately does NOT fall
 // back to the other language's custom text if only one is set — mixing a
 // company's own pt-BR wording into an English PDF (or vice versa) would be
-// worse than just falling back to the standard localized terms.
+// worse than just falling back to the standard localized terms. Spanish has
+// no dedicated customTermsEs column (see SupportedLanguage) — always falls
+// back to the built-in Spanish terms below.
 const resolveTerms = (
   quote: QuotePdfRecord,
   strings: PdfStrings,
   language: SupportedLanguage,
 ): string[] => {
-  const custom = (language === "en" ? quote.company.customTermsEn : quote.company.customTerms)?.trim();
+  const customSource =
+    language === "en"
+      ? quote.company.customTermsEn
+      : language === "pt-BR"
+        ? quote.company.customTerms
+        : null;
+  const custom = customSource?.trim();
 
   if (!custom) {
     return [...strings.terms];

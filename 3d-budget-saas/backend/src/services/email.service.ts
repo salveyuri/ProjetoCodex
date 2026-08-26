@@ -1,4 +1,5 @@
 import type { EmailSendStatus, SupportedLanguage } from "@3d-budget/shared";
+import { currencyForLanguage, localeForLanguage } from "@3d-budget/shared";
 import { prisma } from "../config/prisma";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
@@ -15,26 +16,21 @@ export const PASSWORD_RESET_TOKEN_TTL_MINUTES = 30;
 // Display-only formatting swap (no real currency conversion) — see
 // Contextos/Decisoes.md, 2026-08-17.
 const toMoney = (value: number, language: SupportedLanguage): string =>
-  language === "en"
-    ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
-    : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  new Intl.NumberFormat(localeForLanguage(language), {
+    style: "currency",
+    currency: currencyForLanguage(language),
+  }).format(value);
 
 const toDateLabel = (date: Date, language: SupportedLanguage): string =>
-  language === "en"
-    ? new Intl.DateTimeFormat("en-US", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(date)
-    : new Intl.DateTimeFormat("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(date);
+  new Intl.DateTimeFormat(localeForLanguage(language), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
 
 const triggerLabels: Record<"EXPORTED" | "APPROVED", Record<SupportedLanguage, string>> = {
-  APPROVED: { "pt-BR": "aprovado", en: "approved" },
-  EXPORTED: { "pt-BR": "exportado", en: "exported" },
+  APPROVED: { "pt-BR": "aprovado", en: "approved", es: "aprobado" },
+  EXPORTED: { "pt-BR": "exportado", en: "exported", es: "exportado" },
 };
 
 // Best-effort deep link, not a verified exact route — same public host the

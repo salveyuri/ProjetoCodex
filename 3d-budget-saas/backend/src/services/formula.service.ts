@@ -55,6 +55,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Soma do peso de todas as mesas do orcamento, em gramas.",
       en: "Sum of the weight of every table in the quote, in grams.",
+      es: "Suma del peso de todas las mesas del presupuesto, en gramos.",
     },
     type: "FLOAT",
     previewValue: 100,
@@ -63,6 +64,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Soma do tempo de impressao de todas as mesas, em horas.",
       en: "Sum of the print time of every table, in hours.",
+      es: "Suma del tiempo de impresion de todas las mesas, en horas.",
     },
     type: "FLOAT",
     previewValue: 2,
@@ -71,6 +73,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Custo total de material somado de todas as mesas do orcamento.",
       en: "Total material cost, summed across every table in the quote.",
+      es: "Costo total de material, sumado de todas las mesas del presupuesto.",
     },
     type: "FLOAT",
     previewValue: 10,
@@ -79,6 +82,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Custo total de energia somado de todas as mesas do orcamento.",
       en: "Total energy cost, summed across every table in the quote.",
+      es: "Costo total de energia, sumado de todas las mesas del presupuesto.",
     },
     type: "FLOAT",
     previewValue: 0.24,
@@ -87,6 +91,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Custo de depreciacao somado de todas as mesas do orcamento.",
       en: "Depreciation cost, summed across every table in the quote.",
+      es: "Costo de depreciacion, sumado de todas las mesas del presupuesto.",
     },
     type: "FLOAT",
     previewValue: 6,
@@ -95,6 +100,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Custo de manutencao somado de todas as mesas do orcamento.",
       en: "Maintenance cost, summed across every table in the quote.",
+      es: "Costo de mantenimiento, sumado de todas las mesas del presupuesto.",
     },
     type: "FLOAT",
     previewValue: 3,
@@ -104,6 +110,7 @@ const systemVariableMeta: Record<
       "pt-BR":
         "Custo total do orcamento: material + energia (com taxa de erro aplicada) + depreciacao + manutencao, somados de todas as mesas. Calculado uma unica vez pro orcamento inteiro, nao por mesa.",
       en: "Total quote cost: material + energy (with the error rate applied) + depreciation + maintenance, summed across every table. Calculated once for the whole quote, not per table.",
+      es: "Costo total del presupuesto: material + energia (con la tasa de error aplicada) + depreciacion + mantenimiento, sumados de todas las mesas. Calculado una unica vez para todo el presupuesto, no por mesa.",
     },
     type: "FLOAT",
     previewValue: 19.24,
@@ -112,6 +119,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Margem como taxa. No teste, digite 30 para simular 0.30.",
       en: "Margin as a rate. In the test, type 30 to simulate 0.30.",
+      es: "Margen como tasa. En la prueba, escriba 30 para simular 0.30.",
     },
     type: "PERCENTAGE",
     previewValue: 30,
@@ -120,6 +128,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Custo monetario do kWh.",
       en: "Monetary cost per kWh.",
+      es: "Costo monetario del kWh.",
     },
     type: "FLOAT",
     previewValue: 1,
@@ -129,6 +138,7 @@ const systemVariableMeta: Record<
       "pt-BR":
         "Taxa de cartao configurada em Configuracoes. Nao entra mais em taxas_percentuais - e aplicada automaticamente por cima do preco quando o orcamento marca 'Pagamento Cartao'. So referencie esta variavel direto numa formula customizada se quiser aplica-la sempre, independente dessa marcacao. No teste, digite 5 para simular 0.05.",
       en: "Card fee rate from Settings. No longer part of taxas_percentuais - it's applied automatically on top of the price when the quote has 'Card Payment' checked. Only reference this variable directly in a custom formula if you want it always applied, regardless of that checkbox. In the test, type 5 to simulate 0.05.",
+      es: "Tasa de tarjeta configurada en Configuracion. Ya no forma parte de taxas_percentuales - se aplica automaticamente sobre el precio cuando el presupuesto marca 'Pago con Tarjeta'. Solo referencie esta variable directo en una formula personalizada si quiere aplicarla siempre, sin depender de esa marca. En la prueba, escriba 5 para simular 0.05.",
     },
     type: "PERCENTAGE",
     previewValue: 5,
@@ -137,6 +147,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Taxa administrativa. No teste, digite 2 para simular 0.02.",
       en: "Administrative fee rate. In the test, type 2 to simulate 0.02.",
+      es: "Tasa administrativa. En la prueba, escriba 2 para simular 0.02.",
     },
     type: "PERCENTAGE",
     previewValue: 2,
@@ -146,6 +157,7 @@ const systemVariableMeta: Record<
       "pt-BR":
         "Hoje e igual a taxa_administrativa (taxa de cartao saiu daqui - ver taxa_cartao). Nao inclui taxa de erro (essa ja entra dentro de custo_base). No teste, digite 2 para simular 0.02.",
       en: "Today it equals taxa_administrativa (card fee moved out of this bundle - see taxa_cartao). Does not include the error rate (that's already inside custo_base). In the test, type 2 to simulate 0.02.",
+      es: "Hoy equivale a taxa_administrativa (la tasa de tarjeta salio de aqui - vea taxa_cartao). No incluye la tasa de error (esa ya esta dentro de custo_base). En la prueba, escriba 2 para simular 0.02.",
     },
     type: "PERCENTAGE",
     previewValue: 2,
@@ -154,6 +166,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Soma do consumo (kW) das maquinas de todas as mesas do orcamento.",
       en: "Sum of the machines' power consumption (kW) across every table in the quote.",
+      es: "Suma del consumo (kW) de las maquinas de todas las mesas del presupuesto.",
     },
     type: "FLOAT",
     previewValue: 0.12,
@@ -162,6 +175,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Horas totais estimadas para pintura do orcamento inteiro (nao por mesa).",
       en: "Total estimated painting hours for the whole quote (not per table).",
+      es: "Horas totales estimadas para pintura de todo el presupuesto (no por mesa).",
     },
     type: "FLOAT",
     previewValue: 1,
@@ -170,6 +184,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Valor monetario cobrado por hora de pintura.",
       en: "Monetary rate charged per hour of painting.",
+      es: "Valor monetario cobrado por hora de pintura.",
     },
     type: "FLOAT",
     previewValue: 35,
@@ -179,6 +194,7 @@ const systemVariableMeta: Record<
       "pt-BR":
         "Horas totais estimadas para acabamento ou lixamento do orcamento inteiro (nao por mesa).",
       en: "Total estimated finishing/sanding hours for the whole quote (not per table).",
+      es: "Horas totales estimadas para acabado o lijado de todo el presupuesto (no por mesa).",
     },
     type: "FLOAT",
     previewValue: 1.5,
@@ -187,6 +203,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Valor monetario cobrado por hora de acabamento.",
       en: "Monetary rate charged per hour of finishing.",
+      es: "Valor monetario cobrado por hora de acabado.",
     },
     type: "FLOAT",
     previewValue: 30,
@@ -195,6 +212,7 @@ const systemVariableMeta: Record<
     description: {
       "pt-BR": "Quantidade de mesas/itens dentro do orcamento.",
       en: "Number of tables/items in the quote.",
+      es: "Cantidad de mesas/items dentro del presupuesto.",
     },
     type: "INTEGER",
     previewValue: 2,
@@ -204,6 +222,7 @@ const systemVariableMeta: Record<
       "pt-BR":
         "Taxa de erro/desperdicio, aplicada so sobre material+energia (nunca sobre depreciacao/manutencao) e ja embutida em custo_base. Se nao preenchida (0), nao afeta o calculo. No teste, digite 3 para simular 0.03.",
       en: "Error/waste rate, applied only to material+energy (never to depreciation/maintenance) and already baked into custo_base. If unset (0), it doesn't affect the calculation. In the test, type 3 to simulate 0.03.",
+      es: "Tasa de error/desperdicio, aplicada solo sobre material+energia (nunca sobre depreciacion/mantenimiento) y ya incluida en custo_base. Si no esta definida (0), no afecta el calculo. En la prueba, escriba 3 para simular 0.03.",
     },
     type: "PERCENTAGE",
     previewValue: 3,
@@ -214,14 +233,17 @@ const customVariableDescriptions: Record<CustomVariableType, Record<SupportedLan
   PERCENTAGE: {
     "pt-BR": "Variavel customizada percentual. O parser recebe valor / 100.",
     en: "Custom percentage variable. The parser receives value / 100.",
+    es: "Variable personalizada porcentual. El parser recibe valor / 100.",
   },
   FLOAT: {
     "pt-BR": "Variavel customizada salva em custos fixos.",
     en: "Custom variable saved under fixed costs.",
+    es: "Variable personalizada guardada en costos fijos.",
   },
   INTEGER: {
     "pt-BR": "Variavel customizada salva em custos fixos.",
     en: "Custom variable saved under fixed costs.",
+    es: "Variable personalizada guardada en costos fijos.",
   },
 };
 

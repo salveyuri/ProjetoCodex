@@ -13,6 +13,7 @@ export const pt = {
   "common.language": "Idioma",
   "common.portuguese": "Portugues",
   "common.english": "Ingles",
+  "common.spanish": "Espanhol",
 
   "nav.dashboard": "Dashboard",
   "nav.quotes": "Orcamentos",

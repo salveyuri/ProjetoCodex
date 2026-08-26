@@ -1,6 +1,7 @@
 "use client";
 
 import type { SupportedLanguage } from "@3d-budget/shared";
+import { currencyForLanguage, localeForLanguage } from "@3d-budget/shared";
 import {
   createContext,
   useCallback,
@@ -16,7 +17,7 @@ import { dictionaries, type TranslationKey } from "@/lib/i18n";
 const LANGUAGE_KEY = "app_language";
 
 const isSupportedLanguage = (value: string | null): value is SupportedLanguage =>
-  value === "pt-BR" || value === "en";
+  value === "pt-BR" || value === "en" || value === "es";
 
 // Used before the user is authenticated (register page) and as the
 // fallback default at signup — the browser's own language is the best
@@ -26,7 +27,17 @@ const detectBrowserLanguage = (): SupportedLanguage => {
     return "pt-BR";
   }
 
-  return navigator.language.toLowerCase().startsWith("en") ? "en" : "pt-BR";
+  const browserLanguage = navigator.language.toLowerCase();
+
+  if (browserLanguage.startsWith("en")) {
+    return "en";
+  }
+
+  if (browserLanguage.startsWith("es")) {
+    return "es";
+  }
+
+  return "pt-BR";
 };
 
 const readInitialLanguage = (): SupportedLanguage => {
@@ -93,18 +104,18 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
 
   const formatMoney = useCallback(
     (value: number): string =>
-      language === "en"
-        ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
-        : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value),
+      new Intl.NumberFormat(localeForLanguage(language), {
+        style: "currency",
+        currency: currencyForLanguage(language),
+      }).format(value),
     [language],
   );
 
   const formatDate = useCallback(
     (value: Date | string): string => {
       const date = typeof value === "string" ? new Date(value) : value;
-      const locale = language === "en" ? "en-US" : "pt-BR";
 
-      return new Intl.DateTimeFormat(locale, {
+      return new Intl.DateTimeFormat(localeForLanguage(language), {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
@@ -115,7 +126,7 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
 
   const formatNumber = useCallback(
     (value: number, options?: Intl.NumberFormatOptions): string =>
-      new Intl.NumberFormat(language === "en" ? "en-US" : "pt-BR", options).format(value),
+      new Intl.NumberFormat(localeForLanguage(language), options).format(value),
     [language],
   );
 

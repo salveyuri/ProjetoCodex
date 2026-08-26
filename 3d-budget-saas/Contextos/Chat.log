@@ -2785,3 +2785,26 @@ rodada (sem TWA/Play Store, isso fica pra depois se ele quiser).
   Adicionado em Contextos/Convencoes.md (regra de RLS + regra de sempre
   rebuildar antes de migrar) e Contextos/Conhecimento.md (licoes
   completas, com a pegadinha do docker compose run).
+- 2026-08-26: Yuri pediu traducao completa do sistema pro espanhol, com
+  valor de assinatura em dolar pros usuarios em espanhol. A moeda ja
+  funcionava sozinha (currencyForCountry decide por pais, nao por
+  idioma - qualquer pais de lingua espanhola ja cai em USD). Trabalho
+  real foi traducao: SupportedLanguage virou "pt-BR"|"en"|"es",
+  frontend/src/lib/i18n/es.ts novo (~565 chaves, tipado contra
+  TranslationKey - typescript garantiu cobertura completa), lista de
+  paises ganhou nameEs (~250 linhas), descricoes de variavel de formula
+  (backend, 20 traducoes), pdfStrings.es no PDF de orcamento (sem
+  customTermsEs - cai nos termos padrao, ver Decisoes.md), migracao nova
+  semeando 7 templates de e-mail em espanhol
+  (20260826150000_add_spanish_email_templates), erros de API traduzidos
+  no client (~28 codigos), seletor de idioma com opcao Espanhol nos dois
+  lugares (registro + perfil), validator Zod atualizado. Extraidos
+  localeForLanguage/currencyForLanguage em shared/src/index.ts pra nao
+  repetir a logica "so pt-BR e BRL, resto e USD" em 5+ lugares
+  diferentes. tsc/lint/build limpos nos 3 pacotes, 148/148 testes do
+  backend passando, testado ao vivo (cadastro es+Argentina, dashboard/
+  faturamento/configuracoes/formulas todos em espanhol, US$ 9,90/mes
+  confirmado no plano Pro). Achados fora de escopo registrados no
+  TODO.md: plano Enterprise sem priceUsd preenchido (lacuna de dado, nao
+  bug), erro de hidratacao do React pre-existente (mesmo com "en", nao e
+  regressao do espanhol).

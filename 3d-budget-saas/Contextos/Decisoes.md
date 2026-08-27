@@ -3324,3 +3324,34 @@ renderiza `pt-BR` no server, já que `window`/`localStorage` não existem
 no SSR, e corrige pro idioma real só depois de hidratar no client -
 qualquer idioma diferente de `pt-BR` dispara isso, não é específico do
 espanhol). Fora do escopo desta tarefa; não corrigido.
+
+## 2026-08-27 - Landing page pública tem preço fixo no código, separado do preço real do plano
+
+Yuri mudou o preço do plano Pro em `/admin/plans` (R$ 39,90 → R$ 29,90)
+e reportou que "o site" continuava mostrando o valor antigo. Mandou
+print de duas páginas diferentes: `/dashboard/billing` (dentro do app,
+já mostrando R$ 29,90 certo) e `pricify3d.com/#planos` (landing page
+pública, ainda em R$ 39,90).
+
+### Causa
+
+São duas telas completamente separadas, só uma busca do banco:
+
+- `/dashboard/billing` - busca via `GET /plans`, reflete `Plan.price`
+  em tempo real, sem cache.
+- `frontend/src/app/page.tsx` (`pricify3d.com/`, seção `#planos`) - é a
+  **landing page de marketing**, estática, com o preço **escrito
+  direto no JSX** (`R$ 39,90`, texto fixo). Nunca consultou o banco -
+  por isso não acompanhou a mudança feita no admin.
+
+### Correção
+
+Atualizado o texto fixo pra `R$ 29,90` (bater com o valor real
+configurado). Deixei um comentário no código explicando que esse preço
+**não é dinâmico** e precisa ser atualizado à mão sempre que o preço do
+plano Pro mudar em `/admin/plans` - não tem como esquecer de novo sem
+perceber, já que agora está documentado ali mesmo.
+
+**Nota pro Yuri**: da próxima vez que mudar o preço de um plano, lembrar
+de checar `frontend/src/app/page.tsx` (seção "Planos" da home) também -
+não é automático.

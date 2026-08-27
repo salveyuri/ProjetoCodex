@@ -502,7 +502,13 @@ export default function LandingPage() {
                 <h3>Pro</h3>
                 <div className={styles.sub}>Pra quem já vive de imprimir</div>
                 <div className={styles.priceAmount}>
-                  <span className={styles.num}>R$ 39,90</span>
+                  {/* Texto fixo, não vem do banco — esta landing page é
+                      estática. O preço de verdade (cobrado de fato) vive em
+                      Plan.price, editável em /admin/plans e mostrado ao
+                      vivo em /dashboard/billing. Se o preço do plano Pro
+                      mudar lá, atualizar aqui também à mão (ver
+                      Contextos/Decisoes.md, 2026-08-27). */}
+                  <span className={styles.num}>R$ 29,90</span>
                   <span className={styles.period}>/mês</span>
                 </div>
                 <div className={styles.priceNote}>Cancele quando quiser</div>

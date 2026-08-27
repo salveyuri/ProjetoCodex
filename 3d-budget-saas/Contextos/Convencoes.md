@@ -91,6 +91,12 @@ sendo seguidos implicitamente no histórico do projeto.
   para soma/preview, não para o campo em si.
 - Autoridade de acesso a telas admin é sempre o `403` da API — nunca a role
   cacheada no client.
+- **O preço do plano Pro na landing page pública (`frontend/src/app/page.tsx`,
+  seção `#planos`) é texto fixo, não vem do banco** — ao contrário de
+  `/dashboard/billing`, que busca `Plan.price` via `GET /plans` em tempo
+  real. Sempre que o preço de um plano mudar em `/admin/plans`, atualizar
+  esse texto manualmente também (achado real em 2026-08-27, ver
+  `Contextos/Decisoes.md`).
 
 ## Processo de entrega
 

@@ -2808,3 +2808,12 @@ rodada (sem TWA/Play Store, isso fica pra depois se ele quiser).
   TODO.md: plano Enterprise sem priceUsd preenchido (lacuna de dado, nao
   bug), erro de hidratacao do React pre-existente (mesmo com "en", nao e
   regressao do espanhol).
+- 2026-08-27: Yuri mudou o preco do plano Pro em /admin/plans (39,90 ->
+  29,90) e reportou que "o site" continuava com o valor antigo, com
+  print de duas paginas diferentes. Achado: /dashboard/billing busca do
+  banco (ja estava certo), mas a landing page publica
+  (frontend/src/app/page.tsx, secao #planos) tem o preco escrito direto
+  no JSX, estatico, nunca consultou o banco. Corrigido o texto fixo pra
+  R$ 29,90 e deixado comentario no codigo avisando que precisa
+  atualizar a mao sempre que o preco do Pro mudar no admin. Build/lint
+  limpos, confirmado ao vivo no navegador.

@@ -61,10 +61,10 @@ export const Header = ({ onToggleSidebar }: HeaderProps) => {
             title={t("header.logout")}
             aria-label={t("header.logout")}
             onClick={handleLogout}
-            className="hidden h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-muted transition hover:border-danger hover:text-danger sm:inline-flex"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-muted transition hover:border-danger hover:text-danger"
           >
             <LogOut className="h-4 w-4" />
-            {t("header.logout")}
+            <span className="hidden sm:inline">{t("header.logout")}</span>
           </button>
         </div>
       </div>

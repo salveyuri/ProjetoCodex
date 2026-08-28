@@ -3355,3 +3355,50 @@ perceber, já que agora está documentado ali mesmo.
 **Nota pro Yuri**: da próxima vez que mudar o preço de um plano, lembrar
 de checar `frontend/src/app/page.tsx` (seção "Planos" da home) também -
 não é automático.
+
+## 2026-08-27 (mesmo dia) - Dois bugs no mobile: "Entrar" sumia da landing page, "Sair" sumia do app
+
+Yuri reportou pelo celular: (1) a landing page só mostrava "Começar
+grátis" no cabeçalho, sem jeito de chegar no login; (2) dentro do app
+logado, não tinha botão de deslogar.
+
+### Causa 1: `.navCta .btnGhost { display: none; }`
+
+`frontend/src/app/landing.module.css`, dentro do
+`@media (max-width: 880px)` que já escondia os links de âncora do menu
+(Funcionalidades/Como funciona/etc - isso continua escondido, sem
+hambúrguer substituindo, mas não foi o que o Yuri reportou). Essa regra
+também escondia especificamente o botão "Entrar" (estilo `.btnGhost`),
+deixando só "Começar grátis" (`.btnPrimary`) visível - um usuário
+existente não tinha como logar a partir da home no celular.
+
+### Causa 2: mesmo padrão do botão "Instalar app" (2026-08-24)
+
+`frontend/src/components/layout/Header.tsx` - o botão "Sair" tinha
+`hidden ... sm:inline-flex`, escondido em telas <640px. Esse padrão já
+tinha sido notado (e corrigido pro botão "Instalar app" que foi
+adicionado depois) mas o "Sair" ficou pra trás, sem ninguém perceber até
+agora.
+
+### Correção
+
+- Landing page: removida a regra que escondia `.btnGhost`; ambos os
+  botões ficam visíveis no mobile, com padding/font-size/gap reduzidos
+  dentro do mesmo media query pra caberem ao lado da logo em telas
+  estreitas (confirmado ao vivo em 375px - "Entrar" e "Começar grátis"
+  cabem lado a lado sem quebrar linha).
+- `Header.tsx`: mesmo tratamento já usado no botão "Instalar app" -
+  sempre visível (`inline-flex`), só o texto (`{t("header.logout")}`)
+  vira ícone-só abaixo de `sm:` (`hidden sm:inline` no `<span>`), ícone
+  `LogOut` sempre visível. Handler de clique (`handleLogout`) não foi
+  tocado.
+
+### Verificação
+
+`tsc`/lint/build limpos. Confirmado ao vivo em viewport 375px: "Entrar"
+visível e clicável ao lado de "Começar grátis" na home; botão "Sair"
+(ícone-só) presente e com o `ref`/label certo (`button "Sair"`) dentro
+do app logado, no header. Não foi possível clicar de fato no botão
+dentro da ferramenta de automação (mesma limitação de pane já
+documentada nesta sessão), mas o handler é o mesmo já usado e testado
+em produção há tempos - só a visibilidade CSS mudou.

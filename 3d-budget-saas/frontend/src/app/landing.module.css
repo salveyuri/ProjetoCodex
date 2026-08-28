@@ -215,8 +215,16 @@ html {
   .navLinks {
     display: none;
   }
-  .navCta .btnGhost {
-    display: none;
+  /* "Entrar" ficava escondido aqui, sobrando só "Comecar gratis" - sem
+     jeito nenhum de chegar no login pelo celular (achado real em
+     2026-08-27, ver Contextos/Decisoes.md). Mantém os dois botoes, so
+     aperta o espacamento pra caber ao lado da logo em telas estreitas. */
+  .navCta {
+    gap: 8px;
+  }
+  .navCta .btn {
+    padding: 9px 14px;
+    font-size: 13px;
   }
 }
 

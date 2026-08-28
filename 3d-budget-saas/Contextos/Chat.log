@@ -2817,3 +2817,15 @@ rodada (sem TWA/Play Store, isso fica pra depois se ele quiser).
   R$ 29,90 e deixado comentario no codigo avisando que precisa
   atualizar a mao sempre que o preco do Pro mudar no admin. Build/lint
   limpos, confirmado ao vivo no navegador.
+- 2026-08-27 (mesmo dia): Yuri reportou dois bugs no mobile - landing
+  page so mostrava "Comecar gratis" (sem "Entrar"), e dentro do app
+  logado nao tinha botao de deslogar. Causa 1: landing.module.css
+  escondia especificamente o botao "Entrar" (.btnGhost) no media query
+  mobile, so "Comecar gratis" ficava. Causa 2: Header.tsx tinha o mesmo
+  padrao "hidden sm:inline-flex" que o botao Instalar app tinha antes de
+  ser corrigido em 2026-08-24 - o Sair ficou pra tras na mesma limpeza.
+  Corrigido os dois: landing page mantem os dois botoes visiveis (com
+  padding/gap reduzido pra caber), Header.tsx aplicou o mesmo tratamento
+  icone-sempre-visivel/texto-so-a-partir-de-sm ja usado no Instalar app.
+  tsc/lint/build limpos, confirmado ao vivo em 375px (Entrar visivel na
+  home, botao Sair presente no header do app).
